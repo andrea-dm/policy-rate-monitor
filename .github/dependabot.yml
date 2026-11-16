@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Actions only. Python dependency *security* updates come from the repo
+  # setting (Settings -> Code security -> Dependabot security updates); version
+  # bumps stay a deliberate, manual act.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns:
+          - "*"
