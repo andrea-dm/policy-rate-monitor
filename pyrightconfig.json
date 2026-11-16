@@ -1,0 +1,54 @@
+{
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Linux",
+  "useLibraryCodeForTypes": true,
+  "stubPath": "stubs",
+  "reportMissingModuleSource": "none",
+
+  "reportUnreachable": "error",
+  "reportUnnecessaryComparison": "error",
+  "reportPropertyTypeMismatch": "error",
+  "reportUninitializedInstanceVariable": "error",
+  "reportImplicitOverride": "error",
+  "reportMissingSuperCall": "error",
+  "reportUnnecessaryTypeIgnoreComment": "warning",
+  "deprecateTypingAliases": true,
+
+  "reportUnusedCallResult": "none",
+  "reportImplicitStringConcatenation": "none",
+  "reportCallInDefaultInitializer": "none",
+
+  "include": ["src", "tests", "housekeeping", ".github/utils"],
+  "exclude": ["**/.*", "**/__pycache__", "**/node_modules", "notebooks", "tmp"],
+  "executionEnvironments": [
+    {
+      "root": "tests",
+      "extraPaths": ["./src", "."],
+      "reportUnknownMemberType": false,
+      "reportPrivateUsage": false,
+      "reportUnknownLambdaType": false,
+      "reportUnusedFunction": false,
+      "reportImplicitOverride": "none",
+      "reportUninitializedInstanceVariable": "none",
+      "reportMissingSuperCall": "none",
+      "reportUnnecessaryComparison": "none"
+    },
+    {
+      "root": "housekeeping",
+      "extraPaths": ["./housekeeping"],
+      "reportUninitializedInstanceVariable": "none",
+      "reportMissingSuperCall": "none"
+    },
+    {
+      "root": ".github/utils",
+      "extraPaths": ["./.github/utils"],
+      "reportUninitializedInstanceVariable": "none",
+      "reportMissingSuperCall": "none"
+    },
+    {
+      "root": ".",
+      "extraPaths": ["./src"]
+    }
+  ]
+}

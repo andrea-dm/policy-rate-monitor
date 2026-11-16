@@ -1,0 +1,17 @@
+# Tach — module boundaries. Layering (top -> bottom): higher layers may import
+# lower; lower MUST NOT import higher. `core` is the foundation (no internal
+# deps); `config` sits directly above it. Add a [[modules]] entry per new
+# top-level subpackage of `policy_rate_monitor`.
+#
+# Run: uv run tach check
+
+source_roots = ["src"]
+exclude = ["tests", "notebooks", "**/__pycache__"]
+
+[[modules]]
+path = "policy_rate_monitor.config"
+depends_on = ["policy_rate_monitor.core"]
+
+[[modules]]
+path = "policy_rate_monitor.core"
+depends_on = []
