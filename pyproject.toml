@@ -14,6 +14,7 @@ classifiers = [
 ]
 # Add runtime dependencies with `uv add <pkg>`; deptry (pre-push) checks they match the imports.
 dependencies = [
+    "matplotlib>=3.11.2",
     "pandas>=3.1.1",
 ]
 
@@ -261,6 +262,11 @@ docstring-code-format = true
 [tool.deptry]
 known_first_party = ["policy_rate_monitor"]
 
+[tool.deptry.per_rule_ignores]
+# TEMPORARY: runtime deps declared ahead of the code that imports them. Remove each entry as
+# soon as src/ imports it (pandas: M2 transform; matplotlib: M4 report).
+DEP002 = ["pandas", "matplotlib"]
+
 # ══════════════════════════════════════════════════════════════════════ UV CONFIG ═══ #
 
 [tool.uv]
@@ -290,7 +296,6 @@ dev = [
 jupyter = [
     "ipykernel>=7.2.0",
     "jupyterlab>=4.5.5",
-    "matplotlib>=3.11.2",
 ]
 
 docs = [
