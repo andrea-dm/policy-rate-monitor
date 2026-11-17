@@ -31,6 +31,7 @@ include = [
     "tests/**/*.py",
     "housekeeping/**/*.py",
     ".github/utils/**/*.py",
+    "diagnostics/**/*.py",
 ]
 
 [tool.ruff.lint]
@@ -233,6 +234,9 @@ runtime-evaluated-decorators = ["pydantic.validate_call", "pydantic.dataclasses.
     "S101",
     "SLF001",
     "T20",
+]
+"diagnostics/**" = [
+    "T20", # spikes and benchmarks report their findings with print()
 ]
 ".github/utils/**" = [
     "E402",
