@@ -36,8 +36,8 @@ jobs:
           - name: tach
             command: uv run tach check
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: ${{ env.PY_VERSION }}
           enable-cache: true
@@ -51,8 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: ${{ env.PY_VERSION }}
           enable-cache: true
@@ -65,8 +65,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: ${{ env.PY_VERSION }}
           enable-cache: true
