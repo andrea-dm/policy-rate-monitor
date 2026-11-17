@@ -236,6 +236,8 @@ housekeeping/
 logs/
 outputs/
 notebooks/
+# EDA notebooks are work in progress (README stays tracked)
+diagnostics/*.ipynb
 *.pptx
 bkp/
 resources/

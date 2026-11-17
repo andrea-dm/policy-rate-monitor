@@ -22,4 +22,5 @@ imports from here, and ruff, pyright and tach do not check it.
 The notebook finds the repository root by itself. A full run takes about 30 s, and loading the file
 needs about 100 MB of memory.
 
-The notebook is committed **without outputs**, to keep diffs readable and the repository small.
+Notebooks in this folder are **gitignored** while they are being worked on; only this README is
+tracked.
