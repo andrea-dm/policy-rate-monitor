@@ -192,11 +192,11 @@ in parallel with M1 and M2.
 - `out/summary.csv` and `out/summary.json`. Every requested area gets a row, including failed ones
   with their status. Rows carry series metadata references. The JSON adds provenance: source URL,
   file version, download time and generation time.
-- `out/policy_rates.png`: daily rate levels over the requested period, drawn as step lines, because
-  policy rates change in discrete steps.
-- `out/report.md`:
+- `out/policy_rates.png`: daily rate levels over the requested period, drawn with matplotlib as
+  step lines, because policy rates change in discrete steps.
+- `out/report.html`:
   - summary table
-  - chart
+  - interactive Plotly chart (the same figure the web front end shows)
   - description of the source data
   - method and assumptions
   - data-quality findings
@@ -254,6 +254,7 @@ optional work begins.
   - summary for a list of countries
   - time series for one country
   - starting fetch and transform as background jobs, with a job-status endpoint
+  - the policy-rate chart as Plotly figure JSON, built by the same code as the HTML report
 - Endpoints call the same service layer as the CLI. No logic is duplicated.
 
 **Done when.** API tests pass and the endpoints return the same numbers as the CLI outputs.
@@ -269,12 +270,13 @@ without a UI, and it has to be in place before the front end can be built.
 
 **Scope.**
 
+- React with Vite, kept to a few small components.
 - Country selection.
 - Buttons to run retrieval, transformation and report generation, with processing status and
   readable error messages.
 - A table of latest rates.
-- An interactive history chart.
-- The front end talks only to the M6 API.
+- An interactive history chart, rendered with `react-plotly.js` from figure JSON that the API sends.
+- The front end computes nothing and talks only to the M6 API.
 
 **Done when.** One documented command starts the API and the UI, and the full workflow can be run
 from the browser.

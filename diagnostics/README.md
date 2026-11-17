@@ -11,7 +11,7 @@ imports from here, and ruff, pyright and tach do not check it.
 
 1. Put the unzipped bulk file at `resources/WS_CBPOL_csv_flat.csv`. `resources/` is gitignored.
    Get the file from <https://data.bis.org/bulkdownload> under *Central bank policy rates (CSV, flat)*.
-2. Sync the environment (pandas is a runtime dependency; matplotlib and JupyterLab come from the
+2. Sync the environment (pandas and matplotlib are runtime dependencies; JupyterLab comes from the
    `jupyter` group), then start Jupyter from the repository root:
 
    ```bash
