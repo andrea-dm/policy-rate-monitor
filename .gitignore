@@ -238,6 +238,7 @@ outputs/
 notebooks/
 *.pptx
 bkp/
+resources/
 
 # Local Claude Code settings (machine/session-specific permission allowlists)
 /.claude/
