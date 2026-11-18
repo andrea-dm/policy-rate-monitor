@@ -104,24 +104,26 @@ code depends on them.
     and the retrieval time (for the bulk provider: URL, ETag, checksum, fetch time)
 - Configuration models (dataset, source, structure, columns, rules, snapshot parameters, output
   fields), validated when they are loaded.
-- The `ConfigSource` interface, plus a file implementation that reads the policy-rate dataset's
-  JSON configuration shipped with the package.
+- The `ConfigSource` interface, plus a file implementation. The policy-rate dataset's JSON
+  configuration lives in `configs/`, outside the package: the package holds only the models
+  that validate it, and a JSON Schema generated from them.
 - The canonical observations schema, derived from the structure section of the configuration.
 - The `DataProvider` interface (lifecycle and query methods) and an in-memory **fake provider**
   for tests.
 - The `observations` contract: at most one row per series and date, sorted by date within each
   series, with the validity flag set. Shared interface tests check it, and every provider must
   pass them.
-- Typed errors and the CLI exit-code convention.
-- The `bis-prates` entry point with the three subcommands stubbed, and a `--dataset` option that
-  selects the configuration.
+- Typed errors in `core`, and the CLI's documented exit codes (`ExitCode`), which map them.
+- The `bis-prates` entry point (the `cli` package) with the three subcommands stubbed. Options
+  are resolved in the order flag, environment variable, configuration file: `--config` selects
+  the configuration, and `--source` and `--data-dir` override where data comes from and goes.
 - A `tach` module entry for each subpackage, enforcing the layering.
 
 **Done when.**
 
 - `bis-prates --help` lists `fetch`, `transform` and `report`.
-- The shipped configuration loads and validates. A malformed configuration fails with a clear
-  message.
+- The configuration in `configs/` loads and validates. A malformed or missing configuration
+  fails with a clear message and its own exit code.
 - The fake provider passes the shared interface tests.
 - All checks pass.
 
