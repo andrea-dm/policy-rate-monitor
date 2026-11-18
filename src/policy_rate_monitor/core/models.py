@@ -2,22 +2,28 @@
 
 Providers produce ``SeriesMetadata``, ``DataQualityIssue`` and ``SourceRelease``;
 analytics produces ``DataSnapshot``; reporting and the API serialise them. All models
-are frozen pydantic models whose invariants are checked when they are built, so an
-inconsistent object cannot exist.
+are frozen pydantic models whose invariants are checked whenever they are built through
+the constructor or ``model_validate``/``model_validate_json``. pydantic's
+``model_copy(update=...)`` and ``model_construct`` skip validation by design: derive a
+changed object with ``Model.model_validate({**obj.model_dump(), "field": value})``.
 
 Rates are ``Decimal`` end to end. In JSON they are written as numbers, not as strings
-(pydantic's default for ``Decimal``), so ``summary.json`` and the API stay numeric.
+(pydantic's default for ``Decimal``), so ``summary.json`` and the API stay numeric. A
+JSON number is a double, so a rate is limited to 15 significant digits, which a double
+carries exactly: the JSON then reads back as an equal object.
 """
 
 from __future__ import annotations
 
 # pydantic resolves the annotations at runtime, so ``date`` is a runtime import.
+from collections.abc import Iterator, Mapping
 from datetime import date  # noqa: TC003
 from decimal import Decimal
 from enum import StrEnum, auto
-from typing import Annotated, Self
+from typing import Annotated, Self, override
 
 from pydantic import (
+    AfterValidator,
     AwareDatetime,
     BaseModel,
     ConfigDict,
@@ -33,6 +39,7 @@ __all__ = [
     "DataQualitySeverity",
     "DataSnapshot",
     "Rate",
+    "ReadOnlyAttributes",
     "SeriesMetadata",
     "SnapshotFlag",
     "SnapshotStatus",
@@ -52,13 +59,90 @@ _JsonNumber = PlainSerializer(
     _decimal_to_json_number, return_type=float, when_used="json"
 )
 
-Rate = Annotated[Decimal, Field(allow_inf_nan=False), _JsonNumber]
+# strict: Python callers must pass a Decimal. A float would carry its binary rounding
+# into a value the model then treats as exact. JSON text (model_validate_json) still
+# accepts JSON numbers; already-parsed JSON (model_validate(response.json())) holds
+# floats and is rejected, so read API responses with model_validate_json. Revisit
+# (a context-gated BeforeValidator on this type) if a request body ever carries rates.
+# max_digits: what a JSON double carries exactly (module docstring); it also rejects
+# values outside the double range, which JSON would write as null.
+_EXACT_DECIMAL = Field(strict=True, allow_inf_nan=False, max_digits=15)
+
+Rate = Annotated[Decimal, _EXACT_DECIMAL, _JsonNumber]
 """A policy rate in per cent, exact. Serialised to JSON as a number."""
 
-BasisPoints = Annotated[Decimal, Field(allow_inf_nan=False), _JsonNumber]
+BasisPoints = Annotated[Decimal, _EXACT_DECIMAL, _JsonNumber]
 """A rate difference in basis points (1 percentage point = 100 bps), exact."""
 
 NonEmptyStr = Annotated[str, Field(min_length=1)]
+
+
+class ReadOnlyAttributes(Mapping[str, str]):
+    """An immutable, hashable mapping of source attributes, sorted by name.
+
+    A frozen model's ``dict`` field could still be changed in place, and it makes the
+    model unhashable. This mapping cannot be changed, hashes by its items, and copies
+    and pickles like any value.
+
+    Examples:
+        >>> attributes = ReadOnlyAttributes({"UNIT_MULT": "0", "DECIMALS": "4"})
+        >>> list(attributes)
+        ['DECIMALS', 'UNIT_MULT']
+        >>> attributes["DECIMALS"] = "2"
+        Traceback (most recent call last):
+            ...
+        TypeError: 'ReadOnlyAttributes' object does not support item assignment
+    """
+
+    __slots__ = ("_items",)
+
+    def __init__(self, items: Mapping[str, str] | None = None) -> None:
+        """Copies *items*, sorted by key."""
+        super().__init__()
+        self._items: dict[str, str] = dict(sorted((items or {}).items()))
+
+    @override
+    def __getitem__(self, key: str) -> str:
+        """Returns the attribute value for *key*."""
+        return self._items[key]
+
+    @override
+    def __iter__(self) -> Iterator[str]:
+        """Iterates over the attribute names, in sorted order."""
+        return iter(self._items)
+
+    @override
+    def __len__(self) -> int:
+        """Returns the number of attributes."""
+        return len(self._items)
+
+    @override
+    def __hash__(self) -> int:
+        """Hashes by the items, so equal mappings hash equal."""
+        return hash(tuple(self._items.items()))
+
+    @override
+    def __repr__(self) -> str:
+        """Shows the items, e.g. ``ReadOnlyAttributes({'A': '1'})``."""
+        return f"{type(self).__name__}({self._items!r})"
+
+
+def _read_only(value: Mapping[str, str]) -> ReadOnlyAttributes:
+    return value if isinstance(value, ReadOnlyAttributes) else ReadOnlyAttributes(value)
+
+
+def _plain_dict(value: Mapping[str, str]) -> dict[str, str]:
+    return dict(value)
+
+
+Attributes = Annotated[
+    Mapping[str, str],
+    AfterValidator(_read_only),
+    PlainSerializer(_plain_dict, return_type=dict[str, str]),
+]
+"""Source attributes by name: read-only, sorted by name, serialised as an object."""
+
+_NO_ATTRIBUTES = ReadOnlyAttributes()
 
 
 class _FrozenModel(BaseModel):
@@ -85,9 +169,9 @@ class SeriesMetadata(_FrozenModel):
     ref_area_name: NonEmptyStr
     frequency: NonEmptyStr
     title: NonEmptyStr
-    unit: str | None = None
+    unit: NonEmptyStr | None = None
     decimals: Annotated[int, Field(ge=0)] | None = None
-    attributes: dict[str, str] = Field(default_factory=dict[str, str])
+    attributes: Attributes = _NO_ATTRIBUTES
 
 
 class SnapshotStatus(StrEnum):
@@ -131,9 +215,49 @@ class DataSnapshot(_FrozenModel):
         change_bps: ``(latest_value - prior_value) * 100``, exactly.
         status: The outcome; see ``SnapshotStatus``.
         flags: Warnings, sorted and without duplicates.
+
+    Examples:
+        A 25 bp hike, exact (in floats, ``(4.10 - 3.85) * 100`` is 24.999999999999957):
+
+        >>> from datetime import date
+        >>> from decimal import Decimal
+        >>> series = SeriesMetadata(
+        ...     series_key="D.CH",
+        ...     ref_area="CH",
+        ...     ref_area_name="Switzerland",
+        ...     frequency="D",
+        ...     title="Policy rate, Switzerland, daily",
+        ... )
+        >>> snapshot = DataSnapshot(
+        ...     requested_ref_area="ch",
+        ...     ref_area="CH",
+        ...     series=series,
+        ...     latest_date=date(2026, 11, 10),
+        ...     latest_value=Decimal("4.10"),
+        ...     target_date=date(2025, 11, 10),
+        ...     prior_date=date(2025, 11, 7),
+        ...     prior_value=Decimal("3.85"),
+        ...     change_bps=Decimal("25.00"),
+        ...     status=SnapshotStatus.OK,
+        ... )
+        >>> snapshot.change_bps
+        Decimal('25.00')
+        >>> snapshot.model_dump(mode="json")["change_bps"]
+        25.0
+
+        A change that does not match the rates is rejected when the object is built:
+
+        >>> from pydantic import ValidationError
+        >>> try:
+        ...     DataSnapshot.model_validate(
+        ...         {**snapshot.model_dump(), "change_bps": Decimal("24.99")}
+        ...     )
+        ... except ValidationError as error:
+        ...     print(error.errors()[0]["msg"])
+        Value error, change_bps 24.99 != (latest - prior) * 100 = 25.00
     """
 
-    requested_ref_area: str
+    requested_ref_area: NonEmptyStr
     ref_area: NonEmptyStr
     series: SeriesMetadata | None = None
     latest_date: date | None = None
@@ -177,9 +301,11 @@ class DataSnapshot(_FrozenModel):
             case SnapshotStatus.INSUFFICIENT_HISTORY:
                 self._require_present("latest_date", "latest_value", "target_date")
                 self._require_absent("prior_date", "prior_value", "change_bps")
+                self._check_dates()
             case SnapshotStatus.OK:
                 self._require_present(*self._value_fields())
-                self._check_ok_values()
+                self._check_dates()
+                self._check_change()
         self._check_flags()
         return self
 
@@ -211,16 +337,19 @@ class DataSnapshot(_FrozenModel):
             raise ValueError(msg)
         return value
 
-    def _check_ok_values(self) -> None:
-        prior_date = self._present("prior_date", self.prior_date)
-        target_date = self._present("target_date", self.target_date)
-        latest_date = self._present("latest_date", self.latest_date)
-        if not prior_date <= target_date <= latest_date:
+    def _check_dates(self) -> None:
+        # prior_date <= target_date <= latest_date, for whichever of them are present.
+        present = [
+            d for d in (self.prior_date, self.target_date, self.latest_date) if d
+        ]
+        if present != sorted(present):
             msg = (
                 "dates must satisfy prior_date <= target_date <= latest_date, got "
-                f"{prior_date}, {target_date}, {latest_date}"
+                f"{self.prior_date}, {self.target_date}, {self.latest_date}"
             )
             raise ValueError(msg)
+
+    def _check_change(self) -> None:
         latest = self._present("latest_value", self.latest_value)
         prior = self._present("prior_value", self.prior_value)
         expected = (latest - prior) * _BASIS_POINTS_PER_PERCENT
@@ -278,6 +407,6 @@ class SourceRelease(_FrozenModel):
     """
 
     location: NonEmptyStr
-    version_id: str | None = None
+    version_id: NonEmptyStr | None = None
     checksum_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
     retrieved_at: AwareDatetime
