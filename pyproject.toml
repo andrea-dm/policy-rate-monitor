@@ -312,8 +312,14 @@ docs = [
 # ════════════════════════════════════════════════════════════════════════ Testing ═══ #
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Doctests: the `>>>` examples in docstrings under src/ run with the suite. Collection
+# imports every module under src/, so a module must have no import-time side effects
+# and every import it makes must be installed (else the whole run stops); see
+# tests/conftest.py, which also marks doctests `unit`.
+testpaths = ["tests", "src"]
 pythonpath = ["."]
+addopts = ["--doctest-modules"]
+doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 markers = [
     "unit: Quick tests, no I/O, no external dependencies.",
     "contract: Tests that mock external boundaries (e.g., APIs, DBs).",

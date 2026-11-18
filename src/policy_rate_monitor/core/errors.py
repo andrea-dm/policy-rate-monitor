@@ -3,6 +3,15 @@
 The errors describe *what* went wrong in domain terms and carry no exit codes or HTTP
 statuses: the CLI (``cli.exit_codes``) and the API map them, so ``core`` imports nothing
 from the layers above it. Anything that is not a ``PolicyRateMonitorError`` is a bug.
+
+Examples:
+    Callers catch the base class to tell an error raised on purpose from a bug:
+
+    >>> try:
+    ...     raise MissingInputError("no cached ZIP: run `bis-prates fetch` first")
+    ... except PolicyRateMonitorError as error:
+    ...     print(type(error).__name__, "-", error)
+    MissingInputError - no cached ZIP: run `bis-prates fetch` first
 """
 
 from __future__ import annotations
