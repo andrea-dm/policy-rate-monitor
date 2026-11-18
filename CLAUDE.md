@@ -30,7 +30,8 @@ uv run pytest
 - Ruff (strict rule set, see `pyproject.toml`), Pyright strict, deptry, tach (module layering in `tach.toml`).
 - `from __future__ import annotations`; heavy imports under `TYPE_CHECKING`.
 - Google-style docstrings on public API; comments only when the WHY is non-obvious.
-- Pytest markers: `unit`, `contract`, `integration`, `whitebox`, `slow`.
+- Pytest markers: `unit`, `contract`, `integration`, `whitebox`, `slow`. Docstring `>>>` examples
+  under `src/` run as doctests (marked `unit`); modules must import cleanly with no side effects.
 
 ## Layout
 
