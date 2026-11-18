@@ -109,8 +109,10 @@ def test_ok_snapshot_accepts_prior_on_the_target_date() -> None:
 
 @pytest.mark.unit
 def test_ok_snapshot_rejects_a_change_inconsistent_with_the_rates() -> None:
+    inconsistent = Decimal("25.01")
+
     with pytest.raises(ValidationError, match="change_bps"):
-        _ok(change_bps=Decimal("25.01"))
+        _ok(change_bps=inconsistent)
 
 
 @pytest.mark.unit
@@ -140,11 +142,13 @@ def test_insufficient_history_cannot_carry_a_prior_rate() -> None:
 
 @pytest.mark.unit
 def test_no_valid_data_carries_no_values() -> None:
+    series = _series()
+
     with pytest.raises(ValidationError, match="latest_date"):
         DataSnapshot(
             requested_ref_area="CH",
             ref_area="CH",
-            series=_series(),
+            series=series,
             latest_date=LATEST,
             status=SnapshotStatus.NO_VALID_DATA,
         )
@@ -156,12 +160,13 @@ def test_unknown_area_has_neither_series_nor_values() -> None:
         requested_ref_area="ZZ", ref_area="ZZ", status=SnapshotStatus.UNKNOWN_AREA
     )
     assert snapshot.series is None
+    zz_series = _series("ZZ")
 
     with pytest.raises(ValidationError, match="series"):
         DataSnapshot(
             requested_ref_area="ZZ",
             ref_area="ZZ",
-            series=_series("ZZ"),
+            series=zz_series,
             status=SnapshotStatus.UNKNOWN_AREA,
         )
 
@@ -198,13 +203,16 @@ def test_flags_are_sorted_and_deduplicated() -> None:
 
 @pytest.mark.unit
 def test_stale_prior_needs_a_prior_observation() -> None:
+    series = _series()
+    latest_value = Decimal("4.00")
+
     with pytest.raises(ValidationError, match="STALE_PRIOR"):
         DataSnapshot(
             requested_ref_area="CH",
             ref_area="CH",
-            series=_series(),
+            series=series,
             latest_date=LATEST,
-            latest_value=Decimal("4.00"),
+            latest_value=latest_value,
             target_date=TARGET,
             status=SnapshotStatus.INSUFFICIENT_HISTORY,
             flags=(SnapshotFlag.STALE_PRIOR,),
@@ -293,15 +301,18 @@ def test_any_four_decimal_rates_give_an_exact_change(
 @pytest.mark.unit
 def test_models_are_frozen() -> None:
     snapshot = _ok()
+    new_value = Decimal(5)
 
     with pytest.raises(ValidationError, match="frozen"):
-        snapshot.latest_value = Decimal(5)
+        snapshot.latest_value = new_value
 
 
 @pytest.mark.unit
 def test_unknown_fields_are_rejected() -> None:
+    rate = Decimal(4)
+
     with pytest.raises(ValidationError, match="extra"):
-        _ok(latest_rate=Decimal(4))
+        _ok(latest_rate=rate)
 
 
 # --- SeriesMetadata, DataQualityIssue, SourceRelease ---
@@ -364,7 +375,7 @@ def test_source_release_checksum_is_sha256_hex() -> None:
     )
     assert release.version_id == '"abc123"'
 
+    now = datetime.now(tz=UTC)
+
     with pytest.raises(ValidationError, match="pattern"):
-        SourceRelease(
-            location="f.zip", checksum_sha256="ABC", retrieved_at=datetime.now(tz=UTC)
-        )
+        SourceRelease(location="f.zip", checksum_sha256="ABC", retrieved_at=now)
