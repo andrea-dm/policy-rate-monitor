@@ -227,6 +227,7 @@ experimental/*.xlsx
 # GitHub
 .github/*
 !.github/workflows/
+!.github/actions/
 !.github/ISSUE_TEMPLATE/
 !.github/PULL_REQUEST_TEMPLATE/
 AGENTS.md
