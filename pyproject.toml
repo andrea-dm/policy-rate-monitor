@@ -11,6 +11,8 @@ authors = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 # Add runtime dependencies with `uv add <pkg>`; deptry (pre-push) checks they match the imports.
 dependencies = [
