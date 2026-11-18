@@ -215,6 +215,8 @@ old/
 *.tmp
 tmp/
 temp/*
+# Issue and PR payloads read by .github/utils/*.py
+work_in_progress/
 
 
 # Misc
