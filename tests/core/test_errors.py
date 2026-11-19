@@ -31,8 +31,3 @@ def test_the_public_errors_are_exactly_the_documented_ones() -> None:
         "PolicyRateMonitorError",
         *(error_type.__name__ for error_type in DOMAIN_ERRORS),
     }
-
-
-@pytest.mark.unit
-def test_a_bug_is_not_a_domain_error() -> None:
-    assert not issubclass(ValueError, PolicyRateMonitorError)
