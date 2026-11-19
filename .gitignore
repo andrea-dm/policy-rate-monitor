@@ -236,6 +236,8 @@ AGENTS.md
 # Project-specific ignores:
 # Agent-run check runners (kept local only)
 housekeeping/
+# Design manifests written and read by the agents (kept local only)
+manifests/
 logs/
 outputs/
 notebooks/

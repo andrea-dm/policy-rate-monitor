@@ -17,4 +17,5 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
 nav:
   - Home: index.md
+  - Configuration: configuration.md
   - Milestones: milestones.md

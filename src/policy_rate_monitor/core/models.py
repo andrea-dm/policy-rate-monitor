@@ -34,6 +34,7 @@ from pydantic import (
 )
 
 __all__ = [
+    "BASIS_POINTS_PER_PERCENT",
     "BasisPoints",
     "DataQualityIssue",
     "DataQualitySeverity",
@@ -46,7 +47,8 @@ __all__ = [
     "SourceRelease",
 ]
 
-_BASIS_POINTS_PER_PERCENT = Decimal(100)
+BASIS_POINTS_PER_PERCENT = Decimal(100)
+"""Basis points in one percentage point; a rate change times this is ``BasisPoints``."""
 
 
 def _decimal_to_json_number(value: Decimal) -> float:
@@ -352,7 +354,7 @@ class DataSnapshot(_FrozenModel):
     def _check_change(self) -> None:
         latest = self._present("latest_value", self.latest_value)
         prior = self._present("prior_value", self.prior_value)
-        expected = (latest - prior) * _BASIS_POINTS_PER_PERCENT
+        expected = (latest - prior) * BASIS_POINTS_PER_PERCENT
         if self.change_bps != expected:
             msg = f"change_bps {self.change_bps} != (latest - prior) * 100 = {expected}"
             raise ValueError(msg)
