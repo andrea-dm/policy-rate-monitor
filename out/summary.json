@@ -1,0 +1,146 @@
+{
+  "generated_at": "2026-11-19T22:45:01+00:00",
+  "source": {
+    "location": "https://data.bis.org/static/bulk/WS_CBPOL_csv_flat.zip",
+    "version_id": null,
+    "checksum_sha256": "79f614ab22c21d172694cd48e9a9d551c7196f53c525008bc7ea4da8831d6494",
+    "retrieved_at": "2026-11-19T22:44:41.308601Z"
+  },
+  "dataset": {
+    "id": "bis_cbpol",
+    "title": "Central bank policy rates"
+  },
+  "snapshots": [
+    {
+      "requested_ref_area": "US",
+      "ref_area": "US",
+      "series": {
+        "series_key": "D.US",
+        "ref_area": "US",
+        "ref_area_name": "United States",
+        "frequency": "D",
+        "title": "Central bank policy rates - United States - Daily - End of period",
+        "unit": "Per cent per year",
+        "decimals": 4,
+        "attributes": {
+          "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+          "SOURCE_REF": "US Federal Reserve System",
+          "UNIT_MULT": "0"
+        }
+      },
+      "latest_date": "2026-11-17",
+      "latest_value": 3.875,
+      "target_date": "2025-11-17",
+      "prior_date": "2025-11-17",
+      "prior_value": 3.875,
+      "change_bps": 0.0,
+      "status": "ok",
+      "flags": []
+    },
+    {
+      "requested_ref_area": "EA",
+      "ref_area": "XM",
+      "series": {
+        "series_key": "D.XM",
+        "ref_area": "XM",
+        "ref_area_name": "Euro area",
+        "frequency": "D",
+        "title": "Central bank policy rates - Euro area - Daily - End of period",
+        "unit": "Per cent per year",
+        "decimals": 4,
+        "attributes": {
+          "COMPILATION": "From 18 Sep 2024 onwards: official central bank steering rate is the deposit facility rate, fixed rate; from 15 Oct 2008 to 17 Sep 2024: official central bank liquidity providing, main refinancing operations, fixed rate; from 28 Jun 2000 to 14 Oct 2008: official central bank liquidity providing, main refinancing operations, minimum bid rate; from 5 Jan 1999 to 27 Jun 2000: official central bank liquidity providing, main refinancing operations, fixed rate.",
+          "SOURCE_REF": "European Central Bank",
+          "UNIT_MULT": "0"
+        }
+      },
+      "latest_date": "2026-11-17",
+      "latest_value": 2.5,
+      "target_date": "2025-11-17",
+      "prior_date": "2025-11-17",
+      "prior_value": 2.0,
+      "change_bps": 50.0,
+      "status": "ok",
+      "flags": []
+    },
+    {
+      "requested_ref_area": "GB",
+      "ref_area": "GB",
+      "series": {
+        "series_key": "D.GB",
+        "ref_area": "GB",
+        "ref_area_name": "United Kingdom",
+        "frequency": "D",
+        "title": "Central bank policy rates - United Kingdom - Daily - End of period",
+        "unit": "Per cent per year",
+        "decimals": 4,
+        "attributes": {
+          "COMPILATION": "From 3 Aug 2006 onwards: official bank rate; from 6 May 1997 to 2 Aug 2006: repo rate; from 20 Aug 1981 to 5 May 1997: minimum Bank of England Band 1 dealing rate; from 16 Oct 1972 to 19 Aug 1981: minimum lending rate; from 1 Jan 1946 to 15 Oct 1972: bank rate.",
+          "SOURCE_REF": "Bank of England",
+          "UNIT_MULT": "0"
+        }
+      },
+      "latest_date": "2026-11-16",
+      "latest_value": 4.0,
+      "target_date": "2025-11-16",
+      "prior_date": "2025-11-14",
+      "prior_value": 4.0,
+      "change_bps": 0.0,
+      "status": "ok",
+      "flags": []
+    },
+    {
+      "requested_ref_area": "JP",
+      "ref_area": "JP",
+      "series": {
+        "series_key": "D.JP",
+        "ref_area": "JP",
+        "ref_area_name": "Japan",
+        "frequency": "D",
+        "title": "Central bank policy rates - Japan - Daily - End of period",
+        "unit": "Per cent per year",
+        "decimals": 4,
+        "attributes": {
+          "COMPILATION": "From 24 Sep 2026: the BOJ encourages the uncollateralized overnight call rate to remain at around 1.25 percent; From 17 Jun 2026 to 23 Sep 2026: the BOJ encourages the uncollateralized overnight call rate to remain at around 1.00 percent; From 22 Dec 2025 to 16 Jun 2026: the BOJ encourages the uncollateralized overnight call rate to remain at around 0.75 percent; From 27 Jan 2025 to 21 Dec 2025: the BOJ encourages the uncollateralized overnight call rate to remain at around 0.50 percent; From 1 Aug 2024 to 26 Jan 2025: the BOJ encouraged the UOCR to remain at around 0.25% ; From 21 Mar 2024 to 31 July: the BOJ encouraged the UOCR to remain at around 0 to 0.1 %; from 21 Sep 2016 to 20 Mar 2024: the BOJ set the guideline for market operations which specifies a short-term policy interest rate at minus 0.1% and a target level of 10-year JGB yields at around 0%. Short-term policy interest rate; from 4 Apr 2013 to 20 Sep 2016: no policy rate; from 5 Oct 2010 to 3 Apr 2013: the BOJ encouraged the UOCR to remain at around 0 to 0.1%; from 19 Dec 2008 to 4 Oct 2010: the BOJ encouraged the UOCR to remain at around 0. %; from 31 Oct 2008 to 18 Dec 2008: the BOJ encouraged the UOCR to remain at around 0.3%; before 30 Oct 2008, refer to https://data.bis.org/topics/CBPOL",
+          "SOURCE_REF": "Bank of Japan",
+          "SUPP_INFO_BREAKS": "For details see: http://www.bis.org/statistics/cbpol/cbpol_doc.pdf  ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_1998/k980909c.htm ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_1999/k990212c.htm ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2000/k000811.htm ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2001/k010228a.htm ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2006/k060309.htm ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2006/k060714.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2007/k070221.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2008/k081031.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2008/k081219.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2010/k101005.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2016/k160921a.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2024/k240319a.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2024/mpr240731c.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2025/mpr250124a.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2025/k251219a.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2026/k260616a.pdf ; https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2026/k260918a.pdf",
+          "UNIT_MULT": "0"
+        }
+      },
+      "latest_date": "2026-11-17",
+      "latest_value": 1.25,
+      "target_date": "2025-11-17",
+      "prior_date": "2025-11-17",
+      "prior_value": 0.5,
+      "change_bps": 75.0,
+      "status": "ok",
+      "flags": []
+    },
+    {
+      "requested_ref_area": "CH",
+      "ref_area": "CH",
+      "series": {
+        "series_key": "D.CH",
+        "ref_area": "CH",
+        "ref_area_name": "Switzerland",
+        "frequency": "D",
+        "title": "Central bank policy rates - Switzerland - Daily - End of period",
+        "unit": "Per cent per year",
+        "decimals": 4,
+        "attributes": {
+          "COMPILATION": "From 13 June 2019 onwards SNB Policy rate; From 1 Jan 2000 to 12 June 2019 mid-point of the SNB target range; from 1 Jan 1946 to 31 Dec 1999: discount rate.",
+          "SOURCE_REF": "Swiss National Bank",
+          "UNIT_MULT": "0"
+        }
+      },
+      "latest_date": "2026-11-17",
+      "latest_value": 0.0,
+      "target_date": "2025-11-17",
+      "prior_date": "2025-11-17",
+      "prior_value": 0.0,
+      "change_bps": 0.0,
+      "status": "ok",
+      "flags": []
+    }
+  ]
+}
