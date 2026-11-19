@@ -184,14 +184,12 @@ Exit codes:
 | 0 | success | - |
 | 1 | no requested area has a complete result (status `ok`); the outputs are still written | check the area codes and the statuses in the summary |
 | 2 | invalid arguments | fix the command line |
-| 3 | an internal error of the package | report a bug (rerun with `--debug`) |
+| 3 | an unexpected error, i.e. a bug; the traceback is logged | report it |
 | 4 | invalid configuration | fix the configuration file |
 | 5 | a step's input is missing | run the previous step (e.g. `transform` before `report`) |
 | 6 | source unavailable | retry later |
 | 7 | unexpected source format | check the BIS file; the configuration may need updating |
 | 8 | the outputs cannot be written | check the output folder |
-
-An unexpected Python exception (a bug) is not mapped: it ends with Python's traceback.
 
 ### Reproducing `out/` from a clean clone
 
@@ -424,4 +422,8 @@ See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+The code is licensed under the Apache License 2.0 (see [LICENSE](LICENSE)). The policy-rate data
+and the outputs derived from it in `out/` come from the Bank for International Settlements and are
+subject to the BIS [terms of permitted use of BIS statistics](https://www.bis.org/terms_statistics.htm);
+the BIS is the source of the statistics. This project is not affiliated with or endorsed by the
+BIS.
