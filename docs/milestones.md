@@ -12,10 +12,10 @@ everywhere after.
 - **Config-driven.** Everything specific to a dataset, a source or an environment is declared in
   configuration, not written into the code. That covers the source location, column roles,
   encodings, validity rules, data-quality rules, thresholds, area aliases and output fields. The
-  configuration is nested JSON. It is read through a `ConfigSource` interface: from a file shipped
-  with the package today, and potentially from a REST service or a NoSQL store later. Pydantic
-  models validate it when it is loaded. Rule *implementations* are Python code; the configuration
-  only selects them and sets their parameters.
+  configuration is nested JSON. It is read through a `ConfigSource` interface: today from a JSON
+  file in `configs/`, outside the package, and potentially from a REST service or a NoSQL store
+  later. Pydantic models validate it when it is loaded. Rule *implementations* are Python code; the
+  configuration only selects them and sets their parameters.
 - **Source-agnostic.** The backend reads data only through a `DataProvider` interface, and every
   provider returns the same **canonical data**: one observations table with a schema derived from
   the configuration, plus series metadata, data-quality findings and provenance. Today's provider
