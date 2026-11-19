@@ -514,30 +514,39 @@ def _one_series(
 
     ref_area, ref_area_name = _split(row[bound.ref_area], separator)
     frequency, _ = _split(row[bound.frequency], separator)
-    unit = row.get(bound.unit or "", "").strip()
-    if bound.unit in coded:
-        unit_code, unit_label = _split(unit, separator)
-        unit = unit_label or unit_code
-    decimals = cell(bound.decimals)
-
     bound_ids = {bound.title, bound.unit, bound.decimals}
-    attributes: dict[str, str] = {}
-    for concept in config.structure.series_attributes:
-        value = cell(concept.id)
-        if concept.id not in bound_ids and value:
-            attributes[concept.id] = value
+    values = {c.id: cell(c.id) for c in config.structure.series_attributes}
     return SeriesMetadata(
         series_key=series_key,
         ref_area=ref_area,
         ref_area_name=ref_area_name or ref_area,
         frequency=frequency,
         title=cell(bound.title) or series_key,
-        unit=unit or None,
-        decimals=_whole_numbers([decimals], bound.decimals or "")[0]
-        if decimals
-        else None,
-        attributes=attributes,
+        unit=_unit(row, bound.unit, separator, coded=bound.unit in coded),
+        decimals=_decimals(cell(bound.decimals), bound.decimals),
+        attributes={
+            key: value
+            for key, value in values.items()
+            if key not in bound_ids and value
+        },
     )
+
+
+def _unit(
+    row: dict[str, str], concept_id: str | None, separator: str | None, *, coded: bool
+) -> str | None:
+    """The unit's label for a coded unit ("368: Per cent per year"), else its text."""
+    unit = row.get(concept_id or "", "").strip()
+    if coded:
+        code, label = _split(unit, separator)
+        unit = label or code
+    return unit or None
+
+
+def _decimals(text: str, concept_id: str | None) -> int | None:
+    if not text:
+        return None
+    return _whole_numbers([text], concept_id or "")[0]
 
 
 def _split(value: str, separator: str | None) -> tuple[str, str]:
