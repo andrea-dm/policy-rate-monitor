@@ -3,7 +3,7 @@ name = "policy-rate-monitor"
 version = "0.1.0"
 description = "Monitor of central-bank policy rates."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.15"
 license = "Apache-2.0"
 authors = [
     { name = "Andrea Del Monaco", email = "***@gmail.com" },
@@ -18,9 +18,13 @@ classifiers = [
 dependencies = [
     "matplotlib>=3.11.2",
     "pandas>=3.1.1",
+    "pyarrow>=26.0.1",
     "pydantic>=2.14.3",
     "pydantic-core>=2.50.4",
 ]
+
+[project.scripts]
+bis-prates = "policy_rate_monitor.cli.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -269,11 +273,6 @@ docstring-code-format = true
 
 [tool.deptry]
 known_first_party = ["policy_rate_monitor"]
-
-[tool.deptry.per_rule_ignores]
-# TEMPORARY: runtime deps declared ahead of the code that imports them. Remove each entry as
-# soon as src/ imports it (pandas: M2 transform; matplotlib: M4 report).
-DEP002 = ["pandas", "matplotlib"]
 
 # ══════════════════════════════════════════════════════════════════════ UV CONFIG ═══ #
 
