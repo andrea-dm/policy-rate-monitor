@@ -173,7 +173,7 @@ def _validation_message(error: ValidationError, raw: object, origin: str) -> str
     details = error.errors(include_url=False)
     noun = "error" if len(details) == 1 else "errors"
     lines = [f"{origin}: invalid configuration ({len(details)} {noun})"]
-    lines.extend(f"  {_describe(detail, raw)}" for detail in details)
+    lines += [f"  {_describe(detail, raw)}" for detail in details]
     return "\n".join(lines)
 
 
