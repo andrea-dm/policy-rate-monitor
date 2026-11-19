@@ -273,8 +273,6 @@ on small hand-made observation tables, in parallel with M1 and M2.
   - limitations
 
   It is written for a reader who has not seen the code.
-- `out/report.html`: the same report with an interactive Plotly chart (the same figure the web
-  front end shows). It follows the Markdown report.
 
 **Done when.**
 
@@ -333,6 +331,9 @@ optional work begins.
   - time series for one country
   - starting fetch and transform as background jobs, with a job-status endpoint
   - the policy-rate chart as Plotly figure JSON, built by the same code as the HTML report
+- `out/report.html`: the same report as `report.md` with an interactive Plotly chart (the same
+  figure the chart endpoint returns and the web front end shows), both pages rendered from
+  templates.
 - Endpoints call the same service layer as the CLI, which reads data through the provider
   interface. No logic is duplicated.
 - The `config validate` and `config schema` commands, and options also read from environment
