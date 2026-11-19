@@ -15,3 +15,7 @@ depends_on = ["policy_rate_monitor.core"]
 [[modules]]
 path = "policy_rate_monitor.core"
 depends_on = []
+
+[[modules]]
+path = "policy_rate_monitor.fetch"
+depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
