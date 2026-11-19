@@ -255,7 +255,7 @@ def test_every_model_round_trips_through_its_own_json() -> None:
         assert type(model).model_validate_json(model.model_dump_json()) == model
 
 
-# --- Immutability ---------------------------------------------------
+# --- Immutability -------------------------------------------------
 
 
 @pytest.mark.unit
