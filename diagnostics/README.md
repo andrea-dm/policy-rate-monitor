@@ -13,6 +13,7 @@ DuckDB, which are not installed by `uv sync`; that is why the commands below use
 | `spike_pyarrow_dtypes.py` | How pandas 3 behaves with pyarrow-backed `decimal128` and `date32` columns. Evidence for the pyarrow backend. |
 | `bench_snapshot.py` | Benchmark of five ways to compute the 12-month look-back for every series, at 1×, 10× and 50× the real data. Evidence for the look-back engine. |
 | `repro_pyarrow_join_asof_pre1970.py` | Minimal reproduction of a pyarrow `join_asof` bug: no match when any key is before 1970. |
+| `bench_kernels.py` | Trial of pure Python, Numba and Cython on one kernel: the 12-month change in basis points for every valid observation of every series, in exact integer arithmetic. Reads `data/staged/observations.parquet` (written by `bis-prates transform`). |
 
 All of them read the unzipped bulk file at `resources/WS_CBPOL_csv_flat.csv` (gitignored). Get it
 from <https://data.bis.org/bulkdownload> under *Central bank policy rates (CSV, flat)*. Each one finds
@@ -30,6 +31,9 @@ uv run --with pyarrow python diagnostics/repro_pyarrow_join_asof_pre1970.py
 # duckdb is used only by this benchmark and is not a project dependency
 uv run --with pyarrow --with duckdb python diagnostics/bench_snapshot.py prep    # writes tmp/bench_base.parquet
 uv run --with pyarrow --with duckdb python diagnostics/bench_snapshot.py run searchsorted_np 1
+
+# numba and cython are used only by this trial; a version that is not installed is skipped
+uv run --with numba --with cython python diagnostics/bench_kernels.py
 ```
 
 Approaches: `bisect_py`, `searchsorted_np`, `pandas_merge_asof`, `arrow_join_asof`, `duckdb_asof`. The
@@ -96,3 +100,22 @@ Other limits of `join_asof` found in the same spike:
 The approach was rejected for these reasons. The benchmark's version uses workarounds for all of
 them (shifted keys, a row index, a tolerance wider than the whole history), only so it can be
 compared with the others.
+
+## Findings (2026-11-19): pure Python vs Numba vs Cython (`bench_kernels.py`)
+
+Environment: 4 cores, Python 3.12, numpy 2.5.5, Numba 0.68.1, Cython 3.3.1. Input: the real staged
+data, 639,926 valid daily observations in 49 series. Best of 5 runs; two runs of the script.
+
+| Version | One-off cost | Run | Speed-up |
+|---|---|---|---|
+| Pure Python | none | 330–490 ms | 1× |
+| Numba | 1.0 s compile on first call, in every new process | 3.9–5.9 ms | ~55–125× |
+| Cython | 8–11 s build (C compiler needed) | 2.9–5.5 ms | ~90–110× |
+
+All three give identical results. Numba and Cython are equally fast here: the difference between
+them is within run-to-run noise. They differ in what they cost the project:
+
+- Numba is a decorator on the same Python loop: no build step, and the package stays pure Python.
+  The compile cost is paid once per process; `cache=True` keeps the compiled code on disk.
+- Cython needs a compiler and a build step, so the package would ship compiled wheels per platform
+  and Python version, with a different build backend than hatchling and matching CI jobs.

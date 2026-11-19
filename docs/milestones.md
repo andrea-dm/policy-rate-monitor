@@ -16,14 +16,14 @@ everywhere after.
   file in `configs/`, outside the package, and potentially from a REST service or a NoSQL store
   later. Pydantic models validate it when it is loaded. Rule *implementations* are Python code; the
   configuration only selects them and sets their parameters.
-- **Source-agnostic.** The backend reads data only through a `DataProvider` interface, and every
-  provider returns the same **canonical data**: one observations table with a schema derived from
-  the configuration, plus series metadata, data-quality findings and provenance. Today's provider
-  reads the BIS bulk download. Other providers can be added without changing analytics, reporting or
-  the API: a query engine such as DuckDB or Spark, or another REST API such as the BIS SDMX data
-  API.
+- **Source-agnostic.** Every source yields the same **canonical data**: one observations table
+  with a schema derived from the configuration, plus series metadata, data-quality findings and
+  provenance. The first release reads the BIS bulk download and stores the canonical data as
+  parquet, which the snapshot and the report read. M5 puts a `DataProvider` interface in front of
+  it, so that other providers can be added without changing analytics, reporting or the API: a
+  query engine such as DuckDB or Spark, or another REST API such as the BIS SDMX data API.
 
-The `DataProvider` interface has two kinds of methods:
+The `DataProvider` interface (M5) has two kinds of methods:
 
 | Kind | Methods | Purpose |
 |---|---|---|
@@ -47,8 +47,8 @@ Four principles shaped the split:
    That way a failure points to one place, and each milestone gets the tests its risk calls for.
 3. **Follow the data flow.** The core milestones M1 to M4 follow the pipeline stages: a cached
    source file, then canonical data, then snapshots, then output files. Each handoff is a stable
-   contract, so a stage can also be built against a fake of the stage before it (M3 uses data from
-   the fake provider).
+   contract, so a stage can also be built against a fake of the stage before it (M3 is tested on
+   small hand-made observation tables).
 4. **Every milestone is verifiable on its own.** Each one ends with a working CLI command or
    function, tests that run without the network, and every repository check passing (ruff,
    pyright, deptry, tach, pytest).
@@ -66,8 +66,8 @@ flowchart LR
     M5 --> M8[M8 SDMX validation]
 ```
 
-M3 depends only on M0. Its input is canonical data, so it can be built and tested with data from
-the M0 fake provider and with generated series, in parallel with M1 and M2.
+M3 depends only on M0. Its input is canonical data, so it can be built and tested on small
+hand-made observation tables, in parallel with M1 and M2.
 
 ## Overview
 
@@ -76,12 +76,12 @@ API metadata) are the two optional extensions in its §5.
 
 | Milestone | Delivers | Brief requirement | Track |
 |---|---|---|---|
-| M0 Foundations | Contracts: domain and configuration models, `ConfigSource`, `DataProvider` and a fake provider, canonical schema, CLI entry point | §2 Option A | Core |
-| M1 Acquisition | `bis-prates fetch`: the bulk provider's discovery, cache and failure handling | §1.1 | Core |
-| M2 Canonical data & quality | `bis-prates transform`: canonical daily observations, series metadata, configurable data-quality rules, query methods | §1.2, §3.3 (missing values, duplicates) | Core |
+| M0 Foundations | Contracts: domain and configuration models, `ConfigSource` | §2 Option A | Core |
+| M1 Acquisition | The `bis-prates` entry point; `bis-prates fetch`: discovery, cache and failure handling | §1.1 | Core |
+| M2 Canonical data & quality | `bis-prates transform`: canonical daily observations, series metadata, configurable data-quality rules | §1.2, §3.3 (missing values, duplicates) | Core |
 | M3 Snapshot calculation | Latest rate, rate 12 months earlier, change in basis points | §1.3, §3.3 (12-month change) | Core |
 | M4 Reporting | `bis-prates report`: the four output files | §1.4, §3.2 | Core |
-| M5 Core release | README (with the AI-usage note), documentation, verified outputs, tag `v0.1.0` | §3.1, §3.4 | Core |
+| M5 Core release | README (with the AI-usage note), documentation, verified outputs, `DataProvider` interface, tag `v0.1.0` | §3.1, §3.4 | Core |
 | M6 HTTP API | FastAPI endpoints over the same service layer | §2 Option B, Ext. 1 | Extension |
 | M7 Web front end | React interface driving the workflow | Ext. 1 | Extension |
 | M8 SDMX validation | Data-quality rules and country-code checks against BIS structural metadata | Ext. 2 | Extension |
@@ -101,30 +101,19 @@ code depends on them.
     `INSUFFICIENT_HISTORY`) and `SnapshotFlag` (`STALE_LATEST`, `STALE_PRIOR`)
   - `DataQualityIssue` and `DataQualitySeverity`
   - `SourceRelease`, which identifies a version of the source: its location, a version identifier
-    and the retrieval time (for the bulk provider: URL, ETag, checksum, fetch time)
+    and the retrieval time (for the BIS bulk download: URL, checksum, fetch time)
 - Configuration models (dataset, source, structure, columns, rules, snapshot parameters, output
   fields), validated when they are loaded.
 - The `ConfigSource` interface, plus a file implementation. The policy-rate dataset's JSON
   configuration lives in `configs/`, outside the package: the package holds only the models
   that validate it, and a JSON Schema generated from them.
-- The canonical observations schema, derived from the structure section of the configuration.
-- The `DataProvider` interface (lifecycle and query methods) and an in-memory **fake provider**
-  for tests.
-- The `observations` contract: at most one row per series and date, sorted by date within each
-  series, with the validity flag set. Shared interface tests check it, and every provider must
-  pass them.
-- Typed errors in `core`, and the CLI's documented exit codes (`ExitCode`), which map them.
-- The `bis-prates` entry point (the `cli` package) with the three subcommands stubbed. Options
-  are resolved in the order flag, environment variable, configuration file: `--config` selects
-  the configuration, and `--source` and `--data-dir` override where data comes from and goes.
+- Typed errors in `core`.
 - A `tach` module entry for each subpackage, enforcing the layering.
 
 **Done when.**
 
-- `bis-prates --help` lists `fetch`, `transform` and `report`.
 - The configuration in `configs/` loads and validates. A malformed or missing configuration
-  fails with a clear message and its own exit code.
-- The fake provider passes the shared interface tests.
+  fails with a clear message.
 - All checks pass.
 
 **Why it is its own milestone.** Every later milestone exchanges these types and depends on these
@@ -135,29 +124,32 @@ approach be enforced from the first line of feature code instead of being retrof
 
 ## M1 — Acquisition (`fetch`)
 
-**Goal.** In the bulk provider, reliably obtain the latest "Central bank policy rates (CSV, flat)"
-ZIP, and download it again only when it has changed.
+**Goal.** Reliably obtain the latest "Central bank policy rates (CSV, flat)" ZIP, and download it
+again only when the cached copy is older than the cache lifetime.
 
 **Scope.**
 
 - Every source detail (discovery page, link pattern, fallback URL, cache lifetime) comes from the
   configuration.
 - Find the download link on the BIS bulk-download page, with the configured fallback URL.
-- Local cache plus a sidecar file holding the URL, `ETag`, `Last-Modified`, checksum and fetch
-  time.
-- A cache lifetime, then conditional requests: a `304 Not Modified` response means no download.
+- Local cache plus a sidecar file holding the URL, checksum and fetch time.
+- A cache lifetime: within it, no request is made.
 - Download to a temporary file, validate it (a real ZIP with exactly one CSV), then replace the
   cached copy atomically.
 - Bounded retries on transient errors, and explicit timeouts.
 - Clear errors for an unavailable source and for an unexpected format. If the network fails but a
   cached copy exists, use it and print a warning.
+- The `bis-prates` entry point (the `cli` package) with `fetch`, `transform` and `report`.
+  `--config` selects the configuration and `--data-dir` where the data is stored. Each typed error
+  of `core` has its own documented exit code (`ExitCode`).
 
 **Done when.**
 
-- A second `fetch` makes no download.
-- Each of these failure modes has a defined outcome, covered by tests against a mocked HTTP layer:
-  server error, HTML returned instead of a ZIP, truncated archive, a ZIP without exactly one CSV,
-  discovery link not found (fallback URL used), and network down with and without a cached copy.
+- `bis-prates --help` lists `fetch`, `transform` and `report`.
+- A second `fetch` within the cache lifetime makes no request.
+- Each of these failure modes has a defined outcome, covered by tests against a stand-in for HTTP:
+  a response that is not a ZIP holding exactly one CSV, discovery link not found (fallback URL
+  used), and network down with and without a cached copy.
 
 **Why it is its own milestone.** This is the only component that talks to the outside world, so its
 failure modes are different in kind from the rest. Building it first also gives transform,
@@ -167,8 +159,8 @@ reporting and the end-to-end tests a fast, offline, repeatable input.
 
 ## M2 — Canonical data & quality (`transform`)
 
-**Goal.** Turn the raw file into validated canonical data, with the series metadata kept, and make
-it available through the provider's query methods.
+**Goal.** Turn the raw file into validated canonical data, with the series metadata kept, and store
+it as parquet for the next stages.
 
 **Scope.**
 
@@ -186,27 +178,25 @@ it available through the provider's query methods.
 - Missing values are kept and marked invalid, using the configured encoding. The source encodes
   them as `NaN` with status `M`. A value is valid only when the status is not `M` **and** the value
   is a valid number.
-- A **data-quality layer**. Rules are Python functions registered by name, and all report through
-  the same `DataQualityIssue` model. The configuration chooses which ones apply, with what severity
-  and which parameters. Checks on canonical data are source-independent and run in a shared layer;
-  checks that need the raw file run inside each provider:
-  - inside the bulk provider: required columns, unparseable dates or numbers, more decimals than
-    the series declares
-  - in the shared layer: duplicates (exact repeats dropped, conflicting repeats resolved by the
-    configured rule and recorded), plausible ranges, metadata constant within a series, attribute
-    values that differ from the configured expected values (source drift)
+- **Data-quality rules**, each reporting through the same `DataQualityIssue` model, with the
+  severity and parameters set in the configuration:
+  - unparseable dates or numbers
+  - duplicates: exact repeats dropped, conflicting repeats resolved by the configured rule and
+    recorded
+  - attribute values that differ from the configured expected values (source drift)
+
+  The other rules named in the configuration (more decimals than the series declares, plausible
+  ranges, metadata constant within a series) come with M5.
 - Every rule result is written to a machine-readable data-quality report.
-- The bulk provider stores the canonical data as parquet and serves it through the query methods
-  `list_series`, `series_metadata`, `observations`, `data_quality_issues` and `source_release`.
+- The canonical data is stored as parquet: a raw copy of the source file as loaded, then the
+  staged daily observations and the series metadata. The observations hold at most one row per
+  series and date, sorted by date within each series.
 
 **Done when.**
 
 - Running on the real file produces the canonical data and the data-quality report.
-- The bulk provider passes the same shared interface tests as the fake provider.
-- Unit tests on small synthetic files cover missing values, duplicates, invalid values, excess
-  decimals, implausible values, series metadata that changes within a series, and a changed
-  schema.
-- A test enables, disables and re-parameterises a rule through the configuration alone.
+- Unit tests on small synthetic files cover missing values, duplicates, invalid values, the daily
+  selection and the series metadata kept.
 
 **Why it is its own milestone.** The brief ranks data correctness first, and nearly every quirk of
 the source data surfaces here. The canonical data it produces is the stable contract that the
@@ -222,8 +212,8 @@ change in basis points.
 **Scope.**
 
 - The calculation is a pure function, `compute_snapshots(observations, requests)`, returning one
-  `DataSnapshot` per requested area. The service layer reads the observations through the
-  provider's query methods and passes them in.
+  `DataSnapshot` per requested area. The `report` command reads the staged
+  observations and passes them in.
 - Take the parameters from the configuration: look-back length, staleness thresholds, area aliases.
 - Normalise the requested codes: case, whitespace, aliases, duplicates.
 - Latest **valid** observation per series. Each series uses its own latest date, since areas do not
@@ -231,8 +221,8 @@ change in basis points.
 - Target date = the latest date minus 12 calendar months. The prior rate is the most recent valid
   observation on or before the target date. This covers weekends, holidays and series that only
   have business days.
-- The lookup is a binary search on each series' sorted dates, relying on the `observations`
-  contract from M0.
+- The lookup is a binary search on each series' sorted dates, relying on the order of the
+  observations that M2 guarantees.
 - The change in basis points is computed in decimal arithmetic, so a move from `3.75` to `4.00` is
   exactly `25` bp.
 - Unknown areas, series with no valid data and series with too little history each return a status.
@@ -241,7 +231,7 @@ change in basis points.
 
 **Done when.**
 
-- Unit tests and property-based tests pass for these cases:
+- Unit tests pass for these cases:
   - the target date falls on a weekend
   - 29 February
   - negative rates
@@ -253,11 +243,10 @@ change in basis points.
   - the euro-area alias
   - stale latest and stale prior flags
   - requested codes with mixed case, whitespace and duplicates
-- On generated series, the calculation matches a deliberately simple reference implementation.
 
 **Why it is its own milestone.** This is the headline calculation, and an error here would be the
 most visible. It is a pure function over canonical observations, so it can be tested exhaustively
-on generated series and fake-provider data, in parallel with M1 and M2.
+on small hand-made observation tables, in parallel with M1 and M2.
 
 ---
 
@@ -268,26 +257,29 @@ on generated series and fake-provider data, in parallel with M1 and M2.
 **Scope.**
 
 - The metadata fields included in the outputs are chosen by the configuration.
-- Data-quality findings and provenance are read through the provider's query methods.
+- Data-quality findings and provenance are read from the files `fetch` and `transform` write.
 - `out/summary.csv` and `out/summary.json`. Every requested area gets a row, including failed ones
   with their status. Rows carry selected series metadata. The JSON adds the full metadata and the
   provenance from the `SourceRelease` (source location, version identifier, retrieval time),
   plus the generation time.
 - `out/policy_rates.png`: daily rate levels over the requested period, drawn with matplotlib as
   step lines, because policy rates change in discrete steps.
-- `out/report.html`:
+- `out/report.md`:
   - summary table
-  - interactive Plotly chart (the same figure the web front end shows)
+  - the chart of `out/policy_rates.png`
   - description of the source data
   - method and assumptions
   - data-quality findings
   - limitations
 
   It is written for a reader who has not seen the code.
+- `out/report.html`: the same report with an interactive Plotly chart (the same figure the web
+  front end shows). It follows the Markdown report.
 
 **Done when.**
 
-- `bis-prates report --countries "US,EA,GB,JP,CH" --start 2015-01-01` produces all four files.
+- `bis-prates report --countries "US,EA,GB,JP,CH" --start 2015-01-01` produces `summary.csv`,
+  `summary.json`, `policy_rates.png` and `report.md`.
 - An end-to-end test, from a fixture ZIP to the output files, passes.
 
 **Why it is its own milestone.** The report is what users actually read. Its concerns are wording,
@@ -314,6 +306,11 @@ checkpoint.
 - Documentation pages: architecture, configuration reference, data model and assumptions, CLI
   reference.
 - Manual check of a few computed values against the BIS Data Portal, recorded in the docs.
+- The `DataProvider` interface in front of the canonical data, an in-memory **fake provider** for
+  tests, and shared interface tests that every provider passes: at most one row per series and
+  date, sorted by date within each series, with the validity flag set.
+- The remaining data-quality rules of M2, the `config validate` and `config schema` commands, and
+  CLI options also read from environment variables and the configuration file.
 - Committed outputs in `out/` and a `v0.1.0` tag.
 
 **Done when.** A fresh clone, following only the README, reproduces `out/`, and every deliverable
@@ -407,7 +404,7 @@ the user experience without being needed for correctness.
 ## Alternatives considered
 
 - **Thin end-to-end slice first.** This means wiring all three commands with placeholder logic, then
-  deepening each. It was not chosen. M0 provides the contracts and a fake provider, so each stage
+  deepening each. It was not chosen. M0 provides the contracts, so each stage
   can be built and tested alone, and a placeholder pipeline would add little confidence.
 - **Merging transform and snapshot.** Rejected. Data cleaning and the calculation fail in different
   ways and need different tests. Keeping them apart also keeps the calculation a pure function.
@@ -415,10 +412,10 @@ the user experience without being needed for correctness.
   keeps each pull request reviewable. It also makes the backend/frontend boundary explicit, which
   is the part of the extension that matters most.
 - **Building an SDMX data provider up front.** Rejected: with only one real source, the provider
-  interface would be guessed before a second implementation exists. The interface is defined in M0
-  and proven by the bulk provider and the fake provider. An SDMX data provider is one possible later
-  provider, alongside a query engine or another REST API, and could be added without changing the
-  rest of the backend.
+  interface would be guessed before a second implementation exists. The interface is defined in M5,
+  once the BIS bulk download works, and proven by the bulk provider and the fake provider. An SDMX
+  data provider is one possible later provider, alongside a query engine or another REST API, and
+  could be added without changing the rest of the backend.
 
 ## Tracking
 

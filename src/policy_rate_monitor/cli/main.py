@@ -1,0 +1,178 @@
+"""The ``bis-prates`` command: fetch, transform and report on the policy-rate data.
+
+Each subcommand runs one step of the pipeline. Errors raised on purpose end the
+command with a one-line message and the exit code of ``exit_codes``; ``--debug``
+adds the traceback.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+from datetime import date
+from pathlib import Path
+
+from policy_rate_monitor.cli.exit_codes import ExitCode, exit_code_for
+from policy_rate_monitor.config import FileConfigSource
+from policy_rate_monitor.core.errors import PolicyRateMonitorError
+from policy_rate_monitor.core.models import SnapshotStatus
+from policy_rate_monitor.fetch import fetch, read_release
+from policy_rate_monitor.report import Report, ReportArgs
+from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
+from policy_rate_monitor.transform import (
+    load_data_quality,
+    load_observations,
+    load_series,
+    transform,
+)
+
+__all__ = ["main"]
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_CONFIG = Path("configs/bis_cbpol.json")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Runs one ``bis-prates`` command.
+
+    Args:
+        argv: The arguments after the program name; ``None`` reads ``sys.argv``.
+
+    Returns:
+        The exit code (see ``ExitCode``).
+    """
+    args = _parser().parse_args(argv)
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stderr,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    try:
+        return args.command(args)
+    except PolicyRateMonitorError as error:
+        if args.debug:
+            logger.exception("the command failed")
+        sys.stderr.write(f"error: {error}\n")
+        return exit_code_for(error)
+    except OSError as error:
+        if args.debug:
+            logger.exception("the command failed")
+        sys.stderr.write(f"error: cannot write the output: {error}\n")
+        return ExitCode.OUTPUT_ERROR
+
+
+def _parser() -> argparse.ArgumentParser:
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG,
+        help=f"the dataset configuration (default: {DEFAULT_CONFIG})",
+    )
+    common.add_argument(
+        "--data-dir",
+        type=Path,
+        help="the data directory (default: dataset.data_dir in the configuration)",
+    )
+    common.add_argument(
+        "--debug", action="store_true", help="show the traceback of an error"
+    )
+
+    parser = argparse.ArgumentParser(
+        prog="bis-prates", description="Monitor central-bank policy rates."
+    )
+    commands = parser.add_subparsers(title="commands", required=True)
+
+    fetch_cmd = commands.add_parser(
+        "fetch", parents=[common], help="download the source ZIP, or use the cache"
+    )
+    fetch_cmd.set_defaults(command=_fetch)
+
+    transform_cmd = commands.add_parser(
+        "transform", parents=[common], help="build the staged tables from the ZIP"
+    )
+    transform_cmd.set_defaults(command=_transform)
+
+    report_cmd = commands.add_parser(
+        "report", parents=[common], help="write the snapshot report"
+    )
+    report_cmd.add_argument(
+        "--countries",
+        required=True,
+        help='comma-separated area codes, e.g. "US,EA,GB"',
+    )
+    report_cmd.add_argument(
+        "--start",
+        type=date.fromisoformat,
+        help="first date of the chart, YYYY-MM-DD (default: the whole history)",
+    )
+    report_cmd.add_argument(
+        "--out",
+        type=Path,
+        default=Path("out"),
+        help="the output directory (default: out)",
+    )
+    report_cmd.set_defaults(command=_report)
+    return parser
+
+
+def _fetch(args: argparse.Namespace) -> int:
+    config = FileConfigSource(args.config).load()
+    data_dir = args.data_dir or config.dataset.data_dir
+    release = fetch(config.source, data_dir)
+    sys.stdout.write(f"{release.location} (sha256 {release.checksum_sha256})\n")
+    return ExitCode.OK
+
+
+def _transform(args: argparse.Namespace) -> int:
+    config = FileConfigSource(args.config).load()
+    data_dir = args.data_dir or config.dataset.data_dir
+    summary = transform(config, data_dir)
+    sys.stdout.write(
+        f"{summary.rows_read} rows read, {summary.observations} observations of "
+        f"{summary.series} series kept, {summary.issues} data-quality findings\n"
+    )
+    return ExitCode.OK
+
+
+def _report(args: argparse.Namespace) -> int:
+    config = FileConfigSource(args.config).load()
+    data_dir = args.data_dir or config.dataset.data_dir
+    observations = load_observations(data_dir)
+    series = load_series(data_dir)
+    issues = load_data_quality(data_dir)
+    release = read_release(config.source, data_dir)
+
+    ref_area_id = config.structure.series_metadata.ref_area
+    ref_area_column = next(
+        dim.column for dim in config.structure.dimensions if dim.id == ref_area_id
+    )
+    snapshots = compute_snapshots(
+        SnapshotArgs(
+            observations=observations,
+            series=series,
+            requested=args.countries.split(","),
+            settings=config.snapshot,
+            area_aliases=config.area_aliases,
+            ref_area_column=ref_area_column,
+        )
+    )
+    paths = Report(config).export(
+        ReportArgs(
+            snapshots=snapshots,
+            observations=observations,
+            series=series,
+            issues=issues,
+            release=release,
+            out_dir=args.out,
+            start=args.start,
+        )
+    )
+    for path in paths:
+        sys.stdout.write(f"{path}\n")
+    if not any(item.status == SnapshotStatus.OK for item in snapshots):
+        sys.stderr.write("no requested area has a complete snapshot\n")
+        return ExitCode.NO_RESULT
+    return ExitCode.OK
