@@ -35,6 +35,21 @@ def test_an_error_maps_to_its_exit_code() -> None:
 
 
 @pytest.mark.contract
+def test_a_bug_ends_with_the_internal_error_code(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def broken_fetch(*_args: object) -> None:
+        raise KeyError("ref_area")
+
+    monkeypatch.setattr("policy_rate_monitor.cli.main.fetch", broken_fetch)
+
+    code = main(["fetch", "--config", str(CONFIG)])
+
+    assert code == ExitCode.INTERNAL_ERROR
+    assert "error: KeyError: 'ref_area'" in capsys.readouterr().err
+
+
+@pytest.mark.contract
 def test_report_before_transform_gives_a_one_line_error(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -273,8 +273,6 @@ on small hand-made observation tables, in parallel with M1 and M2.
   - limitations
 
   It is written for a reader who has not seen the code.
-- `out/report.html`: the same report with an interactive Plotly chart (the same figure the web
-  front end shows). It follows the Markdown report.
 
 **Done when.**
 
@@ -309,8 +307,7 @@ checkpoint.
 - The `DataProvider` interface in front of the canonical data, an in-memory **fake provider** for
   tests, and shared interface tests that every provider passes: at most one row per series and
   date, sorted by date within each series, with the validity flag set.
-- The remaining data-quality rules of M2, the `config validate` and `config schema` commands, and
-  CLI options also read from environment variables and the configuration file.
+- The remaining data-quality rules of M2.
 - Committed outputs in `out/` and a `v0.1.0` tag.
 
 **Done when.** A fresh clone, following only the README, reproduces `out/`, and every deliverable
@@ -334,8 +331,14 @@ optional work begins.
   - time series for one country
   - starting fetch and transform as background jobs, with a job-status endpoint
   - the policy-rate chart as Plotly figure JSON, built by the same code as the HTML report
+- `out/report.html`: the same report as `report.md` with an interactive Plotly chart (the same
+  figure the chart endpoint returns and the web front end shows), both pages rendered from
+  templates.
 - Endpoints call the same service layer as the CLI, which reads data through the provider
   interface. No logic is duplicated.
+- The `config validate` and `config schema` commands, and options also read from environment
+  variables and the configuration file, so the CLI and the API are configured the same way.
+- Follow-ups of the configuration package: clearer messages, earlier checks, less duplicated code.
 
 **Done when.** API tests pass against the fake provider, and on the same canonical data the
 endpoints return the same numbers as `bis-prates report`.

@@ -2,7 +2,8 @@
 
 Each subcommand runs one step of the pipeline. Errors raised on purpose end the
 command with a one-line message and the exit code of ``exit_codes``; ``--debug``
-adds the traceback.
+adds the traceback. Any other error is a bug: it is logged with its traceback and
+ends the command with ``INTERNAL_ERROR``.
 """
 
 from __future__ import annotations
@@ -61,6 +62,10 @@ def main(argv: list[str] | None = None) -> int:
             logger.exception("the command failed")
         sys.stderr.write(f"error: cannot write the output: {error}\n")
         return ExitCode.OUTPUT_ERROR
+    except Exception as error:
+        logger.exception("unexpected error, please report it")
+        sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
+        return ExitCode.INTERNAL_ERROR
 
 
 def _parser() -> argparse.ArgumentParser:

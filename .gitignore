@@ -202,7 +202,7 @@ metadata/
 
 # Data
 data/*
-out/*
+# out/ is committed: the generated outputs are a deliverable
 
 # Test files
 rules/temp.json
