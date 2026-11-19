@@ -98,6 +98,8 @@ def raise_problems(title: str, problems: Sequence[Problem]) -> None:
     """
     if not problems:
         return
+    # TODO(andrea-dm): drop the title: inside a validator pydantic-core replaces it.
+    # https://github.com/andrea-dm/policy-rate-monitor/issues/8
     raise ValidationError.from_exception_data(
         title,
         [
@@ -119,9 +121,17 @@ def closest(name: str, candidates: Iterable[str]) -> str | None:
         candidates: The names it could have meant.
 
     Returns:
-        The closest candidate, by ``difflib`` similarity of at least 0.6.
+        A candidate that differs from *name* only in case, else the closest one by
+        ``difflib`` similarity of at least 0.6.
     """
-    matches = difflib.get_close_matches(name, list(candidates), n=1, cutoff=0.6)
+    choices = list(candidates)
+    # Ids are case-sensitive, so "area" matches no declared "AREA"; it is still the
+    # likeliest meaning, which difflib's case-sensitive ratio would miss.
+    folded = name.casefold()
+    for choice in choices:
+        if choice.casefold() == folded:
+            return choice
+    matches = difflib.get_close_matches(name, choices, n=1, cutoff=0.6)
     return matches[0] if matches else None
 
 
@@ -233,6 +243,10 @@ UNMAPPED_IS_DECLARED: Final = Template(
     "unmapped_is_declared",
     "'{id}' is declared in structure, so it is mapped and cannot be listed as unmapped",
 )
+UNMAPPED_CASE_CLASH: Final = Template(
+    "unmapped_case_clash",
+    "'{id}' differs from the declared concept '{declared}' only in case",
+)
 OPTIONAL_UNDECLARED: Final = Template(
     "optional_undeclared", "'{id}' is not a declared concept{hint}"
 )
@@ -271,6 +285,7 @@ TEMPLATES: Final = (
     NOT_A_SERIES_ATTRIBUTE,
     NOT_A_CODED_SERIES_ATTRIBUTE,
     UNMAPPED_IS_DECLARED,
+    UNMAPPED_CASE_CLASH,
     OPTIONAL_UNDECLARED,
     OPTIONAL_IS_NEEDED,
     OUTPUT_FIELD_UNBOUND,

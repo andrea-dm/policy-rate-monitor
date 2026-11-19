@@ -73,6 +73,7 @@ from policy_rate_monitor.config._problems import (
     SELECTION_NOT_SELECTABLE,
     SELECTION_REF_AREA,
     UNKNOWN_ENCODING,
+    UNMAPPED_CASE_CLASH,
     UNMAPPED_IS_DECLARED,
     Loc,
     Problem,
@@ -89,6 +90,7 @@ __all__ = [
     "DatasetConfig",
     "DatasetSection",
     "Dimension",
+    "Loc",
     "Measure",
     "MetadataConcepts",
     "MetadataField",
@@ -129,8 +131,9 @@ PositiveInt = Annotated[int, Field(gt=0)]
 PositiveFloat = Annotated[float, Field(gt=0)]
 
 # Two dates whose day, month and year all differ, so a pattern that loses or swaps
-# one of them cannot give both back.
-_ROUND_TRIP_DATES: Final = (date(2001, 2, 3), date(2004, 11, 30))
+# one of them cannot give both back. 1950 lies outside strptime's two-digit-year
+# window (1969-2068), so "%y" fails instead of reading 1950 as 2050.
+_ROUND_TRIP_DATES: Final = (date(1950, 2, 3), date(2004, 11, 30))
 
 
 def _check_local_path(value: object) -> object:
@@ -138,6 +141,8 @@ def _check_local_path(value: object) -> object:
     if isinstance(value, str):
         if not value:
             raise PATH_EMPTY.error()
+        # TODO(andrea-dm): also reject a NUL character and a path of spaces only.
+        # https://github.com/andrea-dm/policy-rate-monitor/issues/8
         if value.startswith("~"):
             raise PATH_TILDE.error(path=value)
         if "$" in value:
@@ -151,6 +156,8 @@ def _check_date_format(pattern: str) -> str:
             # Python 3.13+ warns when a pattern has a day but no year. Such a pattern
             # fails the round trip anyway; under -W error the warning would escape
             # as an exception instead of this validation error.
+            # TODO(andrea-dm): catch_warnings is not thread-safe; catch the warning.
+            # https://github.com/andrea-dm/policy-rate-monitor/issues/8
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", DeprecationWarning)
                 parsed = datetime.strptime(day.strftime(pattern), pattern).replace(
@@ -180,6 +187,8 @@ def _unique[T](values: tuple[T, ...]) -> tuple[T, ...]:
     problems: list[Problem] = []
     for index, value in enumerate(values):
         if value in first:
+            # TODO(andrea-dm): put "value" last: fields are filled in this order.
+            # https://github.com/andrea-dm/policy-rate-monitor/issues/8
             context = {"value": str(value), "first": first[value]}
             problems.append(Problem(LISTED_TWICE, (index,), value, context))
         else:
@@ -224,6 +233,8 @@ AreaAliases = Annotated[
 ]
 
 
+# TODO(andrea-dm): one "first at" format for every repeat message (not the parser's).
+# https://github.com/andrea-dm/policy-rate-monitor/issues/8
 def _where(loc: Loc) -> str:
     """Renders a location inside ``structure`` the way the parser does."""
     text = "structure"
@@ -247,6 +258,8 @@ class DatasetSection(_ConfigModel):
 
     id: DatasetId
     """Identifier in snake_case, used in provenance and log lines."""
+    # TODO(andrea-dm): reject a title, description or attribution of whitespace only.
+    # https://github.com/andrea-dm/policy-rate-monitor/issues/8
     title: Text
     """Heading of the report."""
     description: Text
@@ -279,6 +292,8 @@ class SourceSection(_ConfigModel):
 
     @model_validator(mode="after")
     def _check_fallback_name(self) -> Self:
+        # TODO(andrea-dm): compare file_name with the decoded segment.
+        # https://github.com/andrea-dm/policy-rate-monitor/issues/8
         last = (self.fallback_url.path or "").rsplit("/", 1)[-1]
         if last != self.file_name:
             context = {"last": last, "file_name": self.file_name}
@@ -322,6 +337,8 @@ class Measure(_ConfigModel):
 
     id: ConceptId
     """Concept id of the value."""
+    # TODO(andrea-dm): take the 15-digit cap from a public constant in core.
+    # https://github.com/andrea-dm/policy-rate-monitor/issues/8
     precision: Annotated[int, Field(ge=1, le=15)]
     """Total significant digits of the stored decimal value (at most 15, what an
     exact rate allows)."""
@@ -559,6 +576,8 @@ class ColumnsSection(_ConfigModel):
 
     encoding: Annotated[str, AfterValidator(_check_encoding)]
     """Text encoding of the file, as Python names it, e.g. 'utf-8'."""
+    # TODO(andrea-dm): reject a line break and '"' as the delimiter.
+    # https://github.com/andrea-dm/policy-rate-monitor/issues/8
     delimiter: Annotated[str, Field(min_length=1, max_length=1)]
     """Field delimiter, one character."""
     header_label_separator: Text | None
@@ -688,16 +707,19 @@ class DatasetConfig(_ConfigModel):
 
     def _unmapped_problems(self) -> list[Problem]:
         declared = {concept_id for _loc, concept_id, _role in self.structure.concepts()}
-        return [
-            Problem(
-                UNMAPPED_IS_DECLARED,
-                ("columns", "unmapped", index),
-                concept_id,
-                {"id": concept_id},
-            )
-            for index, concept_id in enumerate(self.columns.unmapped)
-            if concept_id in declared
-        ]
+        by_case = {concept_id.casefold(): concept_id for concept_id in declared}
+        problems: list[Problem] = []
+        for index, concept_id in enumerate(self.columns.unmapped):
+            loc = ("columns", "unmapped", index)
+            if concept_id in declared:
+                context = {"id": concept_id}
+                problems.append(Problem(UNMAPPED_IS_DECLARED, loc, concept_id, context))
+            elif (match := by_case.get(concept_id.casefold())) is not None:
+                # Ids are case-sensitive, so "area" next to a declared "AREA" would be
+                # a second, unmapped column: almost certainly a mistake, so rejected.
+                context = {"id": concept_id, "declared": match}
+                problems.append(Problem(UNMAPPED_CASE_CLASH, loc, concept_id, context))
+        return problems
 
     def _needed_columns(self) -> dict[str, str]:
         """Maps each concept whose column the pipeline reads to the reason."""
