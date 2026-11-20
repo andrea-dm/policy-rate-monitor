@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from policy_rate_monitor import __version__
 from policy_rate_monitor.bulk import BulkFileProvider
 from policy_rate_monitor.cli.exit_codes import ExitCode, exit_code_for
 from policy_rate_monitor.cli.main import main
@@ -16,19 +17,122 @@ from policy_rate_monitor.core.errors import (
 )
 from policy_rate_monitor.core.models import SeriesMetadata
 from policy_rate_monitor.providers import InMemoryProvider
+from policy_rate_monitor.settings import CONFIG_VARIABLE, DATA_DIR_VARIABLE
 
-CONFIG = Path(__file__).parents[1] / "configs" / "bis_cbpol.json"
+ROOT = Path(__file__).parents[1]
+CONFIG = ROOT / "configs" / "bis_cbpol.json"
+CHOOSE_ANOTHER = f"choose another file with --config or {CONFIG_VARIABLE}"
 
 
 @pytest.mark.unit
-def test_help_lists_the_three_commands(capsys: pytest.CaptureFixture[str]) -> None:
+def test_help_lists_the_commands(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exit_info:
         main(["--help"])
 
     assert exit_info.value.code == 0
     out = capsys.readouterr().out
-    for command in ("fetch", "transform", "report"):
+    for command in ("fetch", "transform", "report", "config"):
         assert command in out
+
+
+@pytest.mark.unit
+def test_version_prints_the_package_version(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--version"])
+
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out == f"bis-prates {__version__}\n"
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize(
+    ("argv", "environ", "where"),
+    [
+        (["--config", str(CONFIG)], {}, "given with --config"),
+        ([], {CONFIG_VARIABLE: str(CONFIG)}, f"given with {CONFIG_VARIABLE}"),
+        ([], {}, "the default"),
+    ],
+    ids=["flag", "variable", "default"],
+)
+def test_config_validate_names_the_file_it_checked(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
+    environ: dict[str, str],
+    where: str,
+) -> None:
+    monkeypatch.chdir(ROOT)
+
+    code = main(["config", "validate", *argv], environ)
+
+    assert code == ExitCode.OK
+    assert capsys.readouterr().out.endswith(f"bis_cbpol.json: valid ({where})\n")
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize("content", [None, "{"], ids=["missing", "malformed"])
+@pytest.mark.parametrize(
+    ("argv", "environ", "note"),
+    [
+        (["--config", "bad.json"], {}, "bad.json: given with --config"),
+        ([], {CONFIG_VARIABLE: "bad.json"}, f"bad.json: given with {CONFIG_VARIABLE}"),
+        ([], {}, f"bis_cbpol.json: the default; {CHOOSE_ANOTHER}"),
+    ],
+    ids=["flag", "variable", "default"],
+)
+def test_a_bad_configuration_says_where_its_path_came_from(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    content: str | None,
+    argv: list[str],
+    environ: dict[str, str],
+    note: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    if content is not None:
+        (tmp_path / "bad.json").write_text(content)
+        (tmp_path / "configs").mkdir()
+        (tmp_path / "configs" / "bis_cbpol.json").write_text(content)
+
+    code = main(["config", "validate", *argv], environ)
+
+    assert code == ExitCode.CONFIG_ERROR
+    err = capsys.readouterr().err
+    assert err.startswith("error: ")
+    assert err.rstrip().endswith(note)
+    assert "Traceback" not in err
+
+
+@pytest.mark.contract
+def test_config_schema_prints_the_committed_schema(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    committed = (ROOT / "configs" / "config.schema.json").read_text(encoding="ascii")
+    monkeypatch.chdir(tmp_path)
+
+    code = main(["config", "schema"], {})
+
+    assert code == ExitCode.OK
+    assert capsys.readouterr().out == committed
+
+
+@pytest.mark.contract
+def test_the_data_directory_can_come_from_the_environment(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    argv = ["report", "--countries", "US", "--config", str(CONFIG)]
+    argv += ["--out", str(tmp_path / "out")]
+    environ = {DATA_DIR_VARIABLE: str(tmp_path / "elsewhere")}
+
+    code = main(argv, environ)
+
+    assert code == ExitCode.MISSING_INPUT
+    assert "elsewhere" in capsys.readouterr().err
 
 
 @pytest.mark.unit
