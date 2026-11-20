@@ -15,9 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in integer arithmetic (#13).
 - The optional extra `fast`, which installs Numba to compile the analytics kernels; without it they
   run on NumPy with the same results (#13).
+- Documentation pages: how each task of the brief is solved, with the ingestion and caching
+  processes step by step; the architecture; the data model and assumptions; the CLI reference; the
+  API reference generated from the docstrings; a glossary; a new home page.
+- Decision records for the data stack, the charting and report format, the web extension stack, the
+  domain model, the config-driven design, the provider interface, the SDMX validation, the command
+  line and its exit codes, the data-quality rules, and the raw and staged layers.
 
 ### Changed
 
+- The decision records are renumbered in the order the decisions were taken: the data stack is
+  0001, exact decimals 0005, the 12-month look-back 0006, the fast analytics 0013.
 - The report's snapshot uses the `analytics` search: about 0.2 s for all 49 areas instead of
   2.3 s, with identical results (#13).
 - `transform` casts plain numbers in one go and parses any other value exactly as before; the

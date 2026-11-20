@@ -122,6 +122,7 @@ flowchart BT
     transform["transform"]
     providers["providers<br/>DataProvider, schema, in-memory fake"]
     bulk["bulk<br/>BulkFileProvider"]
+    analytics["analytics<br/>fixed-point arrays, searches"]
     snapshot["snapshot"]
     report["report"]
     cli["cli"]
@@ -132,7 +133,8 @@ flowchart BT
     fetch --> transform
     transform --> bulk
     providers --> bulk
-    config --> snapshot
+    config --> analytics
+    analytics --> snapshot
     config --> report
     bulk --> cli
     snapshot --> cli
@@ -361,9 +363,9 @@ under a different name.
   ranges, attributes constant within a series) are not implemented yet; `transform` logs them.
 - The chart is drawn from floating-point values; the tables and summary files carry exact values.
 - The report is Markdown only; an HTML version with an interactive chart is planned.
-- Planned extensions: an HTTP API and a web front end, faster analytics for interactive use
-  (`diagnostics/bench_kernels.py` compares pure Python, Numba and Cython on one kernel), and the
-  validation of area codes against the BIS SDMX metadata. See [docs/milestones.md](docs/milestones.md).
+- Planned extensions: an HTTP API and a web front end, and the validation of area codes against
+  the BIS SDMX metadata. The fast analytics for interactive use are in place (`analytics`, with
+  Numba as the optional `fast` extra). See [docs/milestones.md](docs/milestones.md).
 
 The main technical decisions, with their alternatives and costs, are recorded in
 [docs/adr/](docs/adr/index.md).
