@@ -1,9 +1,10 @@
 """The ``bis-prates`` command: fetch, transform and report on the policy-rate data.
 
-Each subcommand runs one step of the pipeline. Errors raised on purpose end the
-command with a one-line message and the exit code of ``exit_codes``; ``--debug``
-adds the traceback. Any other error is a bug: it is logged with its traceback and
-ends the command with ``INTERNAL_ERROR``.
+Each subcommand runs one step of the pipeline; ``config validate`` and ``config
+schema`` check the configuration and print its format. Errors raised on purpose
+end the command with a one-line message and the exit code of ``exit_codes``;
+``--debug`` adds the traceback. Any other error is a bug: it is logged with its
+traceback and ends the command with ``INTERNAL_ERROR``.
 
 See also: [CLI reference](cli.md).
 """
@@ -12,35 +13,47 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import pandas as pd
+from pandas import ArrowDtype
 
+from policy_rate_monitor import __version__
 from policy_rate_monitor.bulk import BulkFileProvider
 from policy_rate_monitor.cli.exit_codes import ExitCode, exit_code_for
 from policy_rate_monitor.config import FileConfigSource
-from policy_rate_monitor.core.errors import PolicyRateMonitorError
+from policy_rate_monitor.config.schema import render_json_schema
+from policy_rate_monitor.core.errors import ConfigError, PolicyRateMonitorError
 from policy_rate_monitor.core.models import SnapshotStatus
 from policy_rate_monitor.report import Report, ReportArgs
+from policy_rate_monitor.settings import (
+    CONFIG_VARIABLE,
+    DATA_DIR_VARIABLE,
+    DEFAULT_CONFIG,
+    Origin,
+    Setting,
+    config_path,
+    data_dir,
+)
 from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from policy_rate_monitor.config import DatasetConfig
     from policy_rate_monitor.core.models import DataSnapshot, SeriesMetadata
 
 __all__ = ["main"]
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG = Path("configs/bis_cbpol.json")
-"""The configuration used without ``--config``, relative to the current folder."""
 
-
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None, environ: Mapping[str, str] | None = None
+) -> int:
     """Runs one ``bis-prates`` command.
 
     Results go to standard output; warnings, errors and the log (set up here, at
@@ -48,13 +61,14 @@ def main(argv: list[str] | None = None) -> int:
 
     Args:
         argv: The arguments after the program name; ``None`` reads ``sys.argv``.
+        environ: The environment variables; ``None`` reads ``os.environ``.
 
     Returns:
         The exit code (see ``ExitCode``).
 
     Raises:
-        SystemExit: Raised by argparse for ``--help`` (code 0) and for invalid
-            arguments (code 2).
+        SystemExit: Raised by argparse for ``--help`` and ``--version`` (code 0)
+            and for invalid arguments (code 2).
     """
     args = _parser().parse_args(argv)
     logging.basicConfig(
@@ -63,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     try:
-        return args.command(args)
+        return args.command(args, os.environ if environ is None else environ)
     except PolicyRateMonitorError as error:
         if args.debug:
             logger.exception("the command failed")
@@ -83,39 +97,45 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _parser() -> argparse.ArgumentParser:
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument(
+    debug = argparse.ArgumentParser(add_help=False)
+    debug.add_argument(
+        "--debug", action="store_true", help="show the traceback of an error"
+    )
+    with_config = argparse.ArgumentParser(add_help=False, parents=[debug])
+    with_config.add_argument(
         "--config",
         type=Path,
-        default=DEFAULT_CONFIG,
-        help=f"the dataset configuration (default: {DEFAULT_CONFIG})",
+        help=f"the dataset configuration (default: ${CONFIG_VARIABLE}, "
+        f"else {DEFAULT_CONFIG})",
     )
-    common.add_argument(
+    with_data = argparse.ArgumentParser(add_help=False, parents=[with_config])
+    with_data.add_argument(
         "--data-dir",
         type=Path,
-        help="the data directory (default: dataset.data_dir in the configuration)",
-    )
-    common.add_argument(
-        "--debug", action="store_true", help="show the traceback of an error"
+        help=f"the data directory (default: ${DATA_DIR_VARIABLE}, "
+        "else dataset.data_dir in the configuration)",
     )
 
     parser = argparse.ArgumentParser(
         prog="bis-prates", description="Monitor central-bank policy rates."
     )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
     commands = parser.add_subparsers(title="commands", required=True)
 
     fetch_cmd = commands.add_parser(
-        "fetch", parents=[common], help="download the source ZIP, or use the cache"
+        "fetch", parents=[with_data], help="download the source ZIP, or use the cache"
     )
     fetch_cmd.set_defaults(command=_fetch)
 
     transform_cmd = commands.add_parser(
-        "transform", parents=[common], help="build the staged tables from the ZIP"
+        "transform", parents=[with_data], help="build the staged tables from the ZIP"
     )
     transform_cmd.set_defaults(command=_transform)
 
     report_cmd = commands.add_parser(
-        "report", parents=[common], help="write the snapshot report"
+        "report", parents=[with_data], help="write the snapshot report"
     )
     report_cmd.add_argument(
         "--countries",
@@ -134,20 +154,60 @@ def _parser() -> argparse.ArgumentParser:
         help="the output directory (default: out)",
     )
     report_cmd.set_defaults(command=_report)
+
+    config_cmd = commands.add_parser(
+        "config", help="check the configuration, or print its format"
+    )
+    config_commands = config_cmd.add_subparsers(title="commands", required=True)
+    validate_cmd = config_commands.add_parser(
+        "validate",
+        parents=[with_config],
+        help="check the configuration the other commands would load",
+    )
+    validate_cmd.set_defaults(command=_validate)
+    schema_cmd = config_commands.add_parser(
+        "schema", parents=[debug], help="print the JSON Schema of the configuration"
+    )
+    schema_cmd.set_defaults(command=_schema)
     return parser
 
 
-def _fetch(args: argparse.Namespace) -> int:
-    config = FileConfigSource(args.config).load()
-    provider = BulkFileProvider(config, args.data_dir or config.dataset.data_dir)
+def _load(path: Setting) -> DatasetConfig:
+    """Loads the configuration; on failure, says where its path came from."""
+    try:
+        return FileConfigSource(path.value).load()
+    except ConfigError as error:
+        note = f"{path.value}: {_where(path)}"
+        if path.origin == Origin.DEFAULT:
+            note += f"; choose another file with --config or {CONFIG_VARIABLE}"
+        raise ConfigError(f"{error}\n  {note}") from error
+
+
+def _where(path: Setting) -> str:
+    if path.origin == Origin.FLAG:
+        return "given with --config"
+    if path.origin == Origin.ENVIRONMENT:
+        return f"given with {CONFIG_VARIABLE}"
+    return "the default"
+
+
+def _open(
+    args: argparse.Namespace, environ: Mapping[str, str]
+) -> tuple[DatasetConfig, BulkFileProvider]:
+    config = _load(config_path(args.config, environ))
+    directory = data_dir(args.data_dir, environ, config)
+    return config, BulkFileProvider(config, directory.value)
+
+
+def _fetch(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
+    _config, provider = _open(args, environ)
     release = provider.fetch()
     sys.stdout.write(f"{release.location} (sha256 {release.checksum_sha256})\n")
     return ExitCode.OK
 
 
-def _transform(args: argparse.Namespace) -> int:
-    config = FileConfigSource(args.config).load()
-    provider = BulkFileProvider(config, args.data_dir or config.dataset.data_dir)
+def _transform(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
+    _config, provider = _open(args, environ)
     provider.transform()
     observations = provider.observations().num_rows
     series = len(provider.list_series())
@@ -159,13 +219,12 @@ def _transform(args: argparse.Namespace) -> int:
     return ExitCode.OK
 
 
-def _report(args: argparse.Namespace) -> int:
-    config = FileConfigSource(args.config).load()
-    provider = BulkFileProvider(config, args.data_dir or config.dataset.data_dir)
+def _report(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
+    config, provider = _open(args, environ)
     # Arrow types kept, so values stay Decimal. The stubs leave a parameter of
     # to_pandas untyped.
     table = provider.observations()
-    observations = table.to_pandas(types_mapper=pd.ArrowDtype)  # pyright: ignore[reportUnknownMemberType]
+    observations = table.to_pandas(types_mapper=ArrowDtype)  # pyright: ignore[reportUnknownMemberType]
     series = [provider.series_metadata(key) for key in provider.list_series()]
     issues = provider.data_quality_issues()
     release = provider.source_release()
@@ -199,6 +258,20 @@ def _report(args: argparse.Namespace) -> int:
     if not any(item.status == SnapshotStatus.OK for item in snapshots):
         sys.stderr.write("no requested area has a complete result (status ok)\n")
         return ExitCode.NO_RESULT
+    return ExitCode.OK
+
+
+def _validate(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
+    path = config_path(args.config, environ)
+    _load(path)
+    sys.stdout.write(f"{path.value}: valid ({_where(path)})\n")
+    return ExitCode.OK
+
+
+def _schema(_args: argparse.Namespace, _environ: Mapping[str, str]) -> int:
+    # TODO(andrea-dm): refuse under python -OO, which drops every description.
+    # https://github.com/andrea-dm/policy-rate-monitor/issues/8
+    sys.stdout.write(render_json_schema())
     return ExitCode.OK
 
 

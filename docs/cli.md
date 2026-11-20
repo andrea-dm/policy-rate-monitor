@@ -1,8 +1,8 @@
 # CLI reference
 
-`bis-prates` has three commands, run in this order. Each one writes files the next one reads, so a
-step can be rerun on its own. `python -m policy_rate_monitor.cli` works the same way, without the
-script on the `PATH`.
+`bis-prates` has three pipeline commands, run in this order. Each one writes files the next one
+reads, so a step can be rerun on its own. Two more commands check the configuration and print its
+format. `python -m policy_rate_monitor.cli` works the same way, without the script on the `PATH`.
 
 ```bash
 bis-prates fetch
@@ -51,18 +51,68 @@ warning listing every code the data has, with its name:
 warning: no series for UK. Available codes: AR (Argentina), AT (Austria), … ; EA stands for XM.
 ```
 
+### `bis-prates config validate`
+
+Loads the configuration the other commands would load, found the same way (see
+[Where the options come from](#where-the-options-come-from)), and prints its path and where the
+path came from:
+
+```text
+configs/bis_cbpol.json: valid (the default)
+```
+
+A missing or invalid configuration gives the same message as the other commands, and exit code 4.
+
+### `bis-prates config schema`
+
+Prints the JSON Schema of the configuration ([Configuration](configuration.md)). It needs no
+configuration file. After a change to the configuration models, regenerate the committed schema
+with it:
+
+```bash
+uv run bis-prates config schema > configs/config.schema.json
+```
+
 ## Options
 
-Options go after the command (`bis-prates report --out results`).
+Options go after the command (`bis-prates report --out results`). `bis-prates --version` prints the
+version.
 
 | Option | Commands | Default | Meaning |
 |---|---|---|---|
-| `--config PATH` | all | `configs/bis_cbpol.json` | the dataset configuration ([Configuration](configuration.md)) |
-| `--data-dir PATH` | all | `dataset.data_dir` in the configuration (`data`) | where `raw/` and `staged/` go; a relative path is relative to the current folder |
+| `--config PATH` | all but `config schema` | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` | the dataset configuration ([Configuration](configuration.md)) |
+| `--data-dir PATH` | `fetch`, `transform`, `report` | `$BIS_PRATES_DATA_DIR`, else `dataset.data_dir` in the configuration (`data`) | where `raw/` and `staged/` go; a relative path is relative to the current folder |
 | `--debug` | all | off | show the full traceback of an error |
 | `--countries "US,EA"` | `report` | required | the area codes, separated by commas; matched without regard to case and spaces, de-duplicated, and written as typed next to the code used; aliases such as `EA → XM` applied |
 | `--start YYYY-MM-DD` | `report` | the whole history | the first date of the chart; the summary is not affected |
 | `--out DIR` | `report` | `out` | the output folder |
+
+## Where the options come from
+
+The configuration file and the data directory are each taken from the first place that gives one:
+
+1. the option on the command line;
+2. the environment variable, `BIS_PRATES_CONFIG` or `BIS_PRATES_DATA_DIR`; an empty variable
+   counts as unset;
+3. for the data directory, `dataset.data_dir` in the configuration; for the configuration file,
+   `configs/bis_cbpol.json`.
+
+The variables set up a whole deployment, for example a scheduled job or the HTTP API, which reads
+its files the same way:
+
+```bash
+export BIS_PRATES_CONFIG=/etc/bis-prates/config.json
+export BIS_PRATES_DATA_DIR=/var/lib/bis-prates
+bis-prates fetch && bis-prates transform
+```
+
+When the configuration cannot be loaded, the message ends with the path and where it came from, so
+the wrong file is easy to spot:
+
+```text
+error: configs/bis_cbpol.json: cannot read the configuration: No such file or directory
+  configs/bis_cbpol.json: the default; choose another file with --config or BIS_PRATES_CONFIG
+```
 
 ## Exit codes
 

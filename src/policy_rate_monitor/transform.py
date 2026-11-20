@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
-import pandas as pd
-import pyarrow as pa
+from pandas import ArrowDtype, DataFrame, Series, read_csv, read_parquet, to_datetime
+from pyarrow import decimal128
 from pydantic import TypeAdapter
 
 from policy_rate_monitor.core.errors import MissingInputError, UnexpectedFormatError
@@ -142,7 +142,7 @@ def transform(config: DatasetConfig, data_dir: Path) -> TransformSummary:
     return summary
 
 
-def load_observations(data_dir: Path) -> pd.DataFrame:
+def load_observations(data_dir: Path) -> DataFrame:
     """Reads ``staged/observations.parquet``, keeping its Arrow types.
 
     Args:
@@ -155,7 +155,7 @@ def load_observations(data_dir: Path) -> pd.DataFrame:
         MissingInputError: The file is absent.
     """
     path = _staged_file(data_dir, "observations.parquet")
-    return pd.read_parquet(path, dtype_backend="pyarrow")
+    return read_parquet(path, dtype_backend="pyarrow")
 
 
 def load_series(data_dir: Path) -> list[SeriesMetadata]:
@@ -203,7 +203,7 @@ def _staged_file(data_dir: Path, name: str) -> Path:
 # ──────────────────────────────────────────────────────────────────────────────────── #
 
 
-def _read_csv(zip_path: Path, columns: ColumnsSection) -> pd.DataFrame:
+def _read_csv(zip_path: Path, columns: ColumnsSection) -> DataFrame:
     if not zip_path.is_file():
         msg = f"{zip_path} does not exist: run `bis-prates fetch` first"
         raise MissingInputError(msg)
@@ -214,7 +214,7 @@ def _read_csv(zip_path: Path, columns: ColumnsSection) -> pd.DataFrame:
             msg = f"{zip_path} should hold exactly one CSV file, found {len(csv_names)}"
             raise UnexpectedFormatError(msg)
         with archive.open(csv_names[0]) as csv_file:
-            return pd.read_csv(
+            return read_csv(
                 csv_file,
                 sep=columns.delimiter,
                 encoding=columns.encoding,
@@ -230,11 +230,11 @@ def _read_csv(zip_path: Path, columns: ColumnsSection) -> pd.DataFrame:
 
 
 def _rename_columns(
-    raw: pd.DataFrame,
+    raw: DataFrame,
     config: DatasetConfig,
     rules: dict[str, RuleSpec],
     issues: list[DataQualityIssue],
-) -> pd.DataFrame:
+) -> DataFrame:
     """Names each column by its concept id and checks them against the config."""
     separator = config.columns.header_label_separator
     names: list[str] = []
@@ -268,15 +268,15 @@ def _rename_columns(
     return data
 
 
-def _select(data: pd.DataFrame, config: DatasetConfig) -> pd.DataFrame:
+def _select(data: DataFrame, config: DatasetConfig) -> DataFrame:
     """Keeps the rows of the configured selection, e.g. the daily series."""
-    keep = pd.Series(True, index=data.index)
+    keep = Series(True, index=data.index)
     for concept_id, code in config.structure.selection.items():
         keep &= _code(data[concept_id], config.columns) == code
     return data[keep].reset_index(drop=True)
 
 
-def _series_keys(data: pd.DataFrame, config: DatasetConfig) -> pd.Series[str]:
+def _series_keys(data: DataFrame, config: DatasetConfig) -> Series[str]:
     """Joins the dimension codes of each row with "." in key order, e.g. "D.US"."""
     codes = [_code(data[d.id], config.columns) for d in config.structure.dimensions]
     keys = codes[0]
@@ -285,7 +285,7 @@ def _series_keys(data: pd.DataFrame, config: DatasetConfig) -> pd.Series[str]:
     return keys
 
 
-def _code(values: pd.Series[str], columns: ColumnsSection) -> pd.Series[str]:
+def _code(values: Series[str], columns: ColumnsSection) -> Series[str]:
     """Returns the code part of coded values ("US: United States" -> "US")."""
     if columns.value_label_separator is None:
         return values
@@ -293,20 +293,20 @@ def _code(values: pd.Series[str], columns: ColumnsSection) -> pd.Series[str]:
 
 
 def _stage_observations(
-    data: pd.DataFrame,
-    keys: pd.Series[str],
+    data: DataFrame,
+    keys: Series[str],
     config: DatasetConfig,
     rules: dict[str, RuleSpec],
     issues: list[DataQualityIssue],
-) -> pd.DataFrame:
+) -> DataFrame:
     structure = config.structure
     columns = config.columns
     measure = structure.measure
 
-    staged = pd.DataFrame({"series_key": keys})
+    staged = DataFrame({"series_key": keys})
     for dimension in structure.dimensions:
         staged[dimension.column] = _code(data[dimension.id], columns)
-    dates = pd.to_datetime(
+    dates = to_datetime(
         data[structure.time_dimension.id],
         format=structure.time_dimension.date_format,
         errors="coerce",
@@ -369,7 +369,7 @@ def _stage_observations(
     )
 
 
-def _values(data: pd.DataFrame, config: DatasetConfig) -> pd.Series:
+def _values(data: DataFrame, config: DatasetConfig) -> Series:
     """Parses the measure into exact decimals times 10**unit multiplier.
 
     A missing value, or one that is not a number fitting the configured precision
@@ -383,7 +383,7 @@ def _values(data: pd.DataFrame, config: DatasetConfig) -> pd.Series:
     measure = config.structure.measure
     text = data[measure.id]
     if measure.unit_multiplier is None:
-        multipliers = pd.Series(0, index=data.index)
+        multipliers = Series(0, index=data.index)
     else:
         codes = _code(data[measure.unit_multiplier], config.columns)
         unique = [str(code) for code in codes.unique()]
@@ -397,7 +397,7 @@ def _values(data: pd.DataFrame, config: DatasetConfig) -> pd.Series:
     if measure.scale:
         plain += rf"(\.[0-9]{{1,{measure.scale}}})?"
     fast = text.str.fullmatch(plain, na=False) & (multipliers == 0)
-    value_type = pd.ArrowDtype(pa.decimal128(measure.precision, measure.scale))
+    value_type = ArrowDtype(decimal128(measure.precision, measure.scale))
     values = text.where(fast).astype(value_type)
 
     slow = ~fast & ~text.isin(["", *config.columns.missing_values])
@@ -408,9 +408,9 @@ def _values(data: pd.DataFrame, config: DatasetConfig) -> pd.Series:
     return values
 
 
-def _invalid_status(data: pd.DataFrame, config: DatasetConfig) -> pd.Series[bool]:
+def _invalid_status(data: DataFrame, config: DatasetConfig) -> Series[bool]:
     """Marks the rows whose status is one of its attribute's invalid codes."""
-    invalid = pd.Series(False, index=data.index)
+    invalid = Series(False, index=data.index)
     for attribute in config.structure.observation_attributes:
         if attribute.invalid_codes:
             codes = _code(data[attribute.id], config.columns)
@@ -419,8 +419,8 @@ def _invalid_status(data: pd.DataFrame, config: DatasetConfig) -> pd.Series[bool
 
 
 def _drop_conflicting(
-    staged: pd.DataFrame, rule: RuleSpec | None, issues: list[DataQualityIssue]
-) -> pd.DataFrame:
+    staged: DataFrame, rule: RuleSpec | None, issues: list[DataQualityIssue]
+) -> DataFrame:
     """Keeps one row per series and date: the last one in the file, or the first."""
     keep = "last"
     if rule is not None and rule.params.get("keep") == "first":
@@ -464,8 +464,8 @@ def _to_decimal(
 
 
 def _check_expected_values(
-    data: pd.DataFrame,
-    keys: pd.Series[str],
+    data: DataFrame,
+    keys: Series[str],
     config: DatasetConfig,
     rule: RuleSpec | None,
     issues: list[DataQualityIssue],
@@ -502,7 +502,7 @@ def _check_expected_values(
 def _add_issues(
     issues: list[DataQualityIssue],
     rule: RuleSpec | None,
-    affected: pd.Series[str],
+    affected: Series[str],
     detail: str,
 ) -> None:
     """Adds one issue per series, with the number of affected observations."""
@@ -522,9 +522,9 @@ def _add_issues(
 
 
 def _series_metadata(
-    data: pd.DataFrame,
-    keys: pd.Series[str],
-    observations: pd.DataFrame,
+    data: DataFrame,
+    keys: Series[str],
+    observations: DataFrame,
     config: DatasetConfig,
 ) -> list[SeriesMetadata]:
     """Builds one SeriesMetadata per kept series, from its last row in the file."""

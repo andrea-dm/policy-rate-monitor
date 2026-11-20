@@ -67,11 +67,25 @@ above.
 - A script decides what to do from the number alone; the README lists the codes.
 - Only a crash before `main()` runs (a broken install) gives Python's own 1.
 - The configuration commands (`config validate`, `config schema`) and the settings read from
-  environment variables are planned in #7.
+  environment variables are added in #7 (see Updates).
 
 ## Evidence
 
 - `src/policy_rate_monitor/cli/` (`main.py`, `exit_codes.py`), `src/policy_rate_monitor/core/errors.py`.
 - `tests/test_cli.py`: `test_an_error_maps_to_its_exit_code`,
   `test_a_bug_ends_with_the_internal_error_code`,
-  `test_report_before_transform_gives_a_one_line_error`; `tests/core/test_errors.py`.
+  `test_report_before_transform_gives_a_one_line_error`,
+  `test_a_bad_configuration_says_where_its_path_came_from`; `tests/core/test_errors.py`;
+  `tests/test_settings.py` (the order of the layers).
+
+## Updates
+
+- 2026-11-20 (#7): the configuration file and the data directory are also read from
+  `BIS_PRATES_CONFIG` and `BIS_PRATES_DATA_DIR`, in the order flag, variable, configuration or
+  default, so a deployment such as the HTTP API is set up without a command line and reads the
+  same files as the CLI. The order lives in `settings`, outside `cli`, for the API to import. An
+  empty variable counts as unset. `config validate` checks the file the other commands would load
+  (no positional path, which would be a second way to name it); `config schema` replaces the
+  `python -m` entry that regenerated the schema. Not taken: `pydantic-settings` (two variables
+  need no dependency) and a `--source` override for `fetch` (neither the API nor the tests need
+  it; a configuration can name another URL).

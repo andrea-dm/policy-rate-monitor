@@ -51,11 +51,16 @@ depends_on = [
 ]
 
 [[modules]]
+path = "policy_rate_monitor.settings"
+depends_on = ["policy_rate_monitor.config"]
+
+[[modules]]
 path = "policy_rate_monitor.cli"
 depends_on = [
     "policy_rate_monitor.bulk",
     "policy_rate_monitor.config",
     "policy_rate_monitor.core",
     "policy_rate_monitor.report",
+    "policy_rate_monitor.settings",
     "policy_rate_monitor.snapshot",
 ]

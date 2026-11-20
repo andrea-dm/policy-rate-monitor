@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `diagnostics/check_record_figures.py`, which reproduces the figures about the data quoted in the
   decision records.
 - Docstrings for every public function, method and constant, each module linked to its page.
+- `bis-prates config validate`, which checks the configuration the other commands would load, and
+  `bis-prates config schema`, which prints its JSON Schema (#7).
+- `BIS_PRATES_CONFIG` and `BIS_PRATES_DATA_DIR`, read when `--config` or `--data-dir` is not
+  given; a configuration that cannot be loaded is reported with where its path came from (#7).
+- `bis-prates --version` (#7).
 
 ### Changed
 
@@ -39,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   staged files are unchanged (#13).
 - `SnapshotArgs` no longer takes `ref_area_column`: the snapshot finds an area's rows by its series
   key (#13).
+- The schema is regenerated with `bis-prates config schema`; the
+  `python -m policy_rate_monitor.config.schema` entry is removed (#7).
 - Exit code 8 now says "cannot read or write a file", since it covers any file error, not only the
   outputs.
 - The checks run in one order everywhere, and stop at the first failure: tach, ruff check, ruff
