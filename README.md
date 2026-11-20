@@ -182,8 +182,15 @@ uv sync --all-groups
 | `docs` | MkDocs and its plugins, for `mkdocs serve` and `mkdocs build` |
 | `jupyter` | JupyterLab and a kernel, for the notebooks in `diagnostics/` |
 
-The package has no optional extras yet; the planned web service and interactive chart will come as
-extras, so a plain install stays small.
+One optional extra, `fast`, installs Numba, which compiles the analytics kernels; without it they
+run on NumPy with the same results:
+
+```bash
+uv sync --no-dev --extra fast
+```
+
+The planned web service and interactive chart will also come as extras, so a plain install stays
+small.
 
 ### Usage
 

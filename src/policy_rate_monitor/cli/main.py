@@ -158,10 +158,6 @@ def _report(args: argparse.Namespace) -> int:
     issues = provider.data_quality_issues()
     release = provider.source_release()
 
-    ref_area_id = config.structure.series_metadata.ref_area
-    ref_area_column = next(
-        dim.column for dim in config.structure.dimensions if dim.id == ref_area_id
-    )
     snapshots = compute_snapshots(
         SnapshotArgs(
             observations=observations,
@@ -169,7 +165,6 @@ def _report(args: argparse.Namespace) -> int:
             requested=args.countries.split(","),
             settings=config.snapshot,
             area_aliases=config.area_aliases,
-            ref_area_column=ref_area_column,
         )
     )
     paths = Report(config).export(

@@ -14,6 +14,7 @@ DuckDB, which are not installed by `uv sync`; that is why the commands below use
 | `bench_snapshot.py` | Benchmark of five ways to compute the 12-month look-back for every series, at 1×, 10× and 50× the real data. Evidence for the look-back engine. |
 | `repro_pyarrow_join_asof_pre1970.py` | Minimal reproduction of a pyarrow `join_asof` bug: no match when any key is before 1970. |
 | `bench_kernels.py` | Trial of pure Python, Numba and Cython on one kernel: the 12-month change in basis points for every valid observation of every series, in exact integer arithmetic. Reads `data/staged/observations.parquet` (written by `bis-prates transform`). |
+| `bench_analytics.py` | Times the `analytics` functions on the real staged data: the snapshot at any date and the 12-month change history with NumPy and, when installed, Numba, and the rate moves (NumPy only), each checked against the v0.1.0 `bisect` method or a `Decimal` loop. |
 
 All of them read the unzipped bulk file at `resources/WS_CBPOL_csv_flat.csv` (gitignored). Get it
 from <https://data.bis.org/bulkdownload> under *Central bank policy rates (CSV, flat)*. Each one finds
@@ -34,6 +35,7 @@ uv run --with pyarrow --with duckdb python diagnostics/bench_snapshot.py run sea
 
 # numba and cython are used only by this trial; a version that is not installed is skipped
 uv run --with numba --with cython python diagnostics/bench_kernels.py
+uv run python diagnostics/bench_analytics.py   # with the fast extra installed, Numba is timed too
 ```
 
 Approaches: `bisect_py`, `searchsorted_np`, `pandas_merge_asof`, `arrow_join_asof`, `duckdb_asof`. The
@@ -125,3 +127,31 @@ them is within run-to-run noise. They differ in what they cost the project:
   The compile cost is paid once per process; `cache=True` keeps the compiled code on disk.
 - Cython needs a compiler and a build step, so the package would ship compiled wheels per platform
   and Python version, with a different build backend than hatchling and matching CI jobs.
+
+## Findings (2026-11-20): the analytics kernels (`bench_analytics.py`)
+
+Same environment, numpy 2.5.5, Numba 0.68.1. Input: the real staged data (49 series, 639,926 valid
+observations). The data is laid out once (`rate_history`, 0.22–0.32 s): per series, dates as int32
+day numbers and values as int64 scaled by 10⁶, so every change in basis points is an exact integer.
+Three runs; the ranges are run-to-run noise.
+
+| Task | v0.1.0 method | NumPy | Numba |
+|---|---|---|---|
+| Snapshot of all 49 areas at one date (a date-slider step) | 0.7–1.0 s (`bisect` on Python lists, rebuilt every call) | 51–56 µs | 41 µs |
+| One search for all 49 series (half of a slider step) | | 10–13 µs | 1.9 µs |
+| 12-month change for every observation | 2.9 s (`Decimal` loop) | 89–96 ms | 68–76 ms |
+| Every rate move with its size (33,110 moves) | | 1.0 ms | NumPy only |
+| The report's snapshot, all 49 areas (`compute_snapshots`) | 2.3 s | 0.21–0.23 s | |
+| First call of the two compiled searches | | | 0.68 s compiling; 0.17 s from the disk cache |
+
+All results are exactly those of the slower code they replace: 0 mismatches over 25 dates × 49
+series, and over all 639,926 rows for the change history.
+
+What the numbers say:
+
+- Most of the gain comes from building the arrays once and answering each request from them, not
+  from compiling: a slider step goes from about a second to about 50 µs with NumPy alone.
+- Numba makes the search itself about 5× faster, but a slider step only about 1.3× faster: the
+  rest of the step is the calendar arithmetic (`months_back`) and NumPy's own call overhead.
+- `cache=True` cuts the first call from 0.68 s to 0.17 s in every process after the first.
+- Numba stays an optional extra (`fast`); without it, the same functions run on NumPy.

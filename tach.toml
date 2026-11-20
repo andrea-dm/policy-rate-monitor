@@ -25,8 +25,12 @@ path = "policy_rate_monitor.transform"
 depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core", "policy_rate_monitor.fetch"]
 
 [[modules]]
-path = "policy_rate_monitor.snapshot"
+path = "policy_rate_monitor.analytics"
 depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
+
+[[modules]]
+path = "policy_rate_monitor.snapshot"
+depends_on = ["policy_rate_monitor.analytics", "policy_rate_monitor.config", "policy_rate_monitor.core"]
 
 [[modules]]
 path = "policy_rate_monitor.report"
