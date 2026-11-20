@@ -428,12 +428,12 @@ Each milestone is a GitHub milestone. Its work is tracked in issues and done on 
 
 | Milestone | Status |
 |---|---|
-| M0 Foundations | Not started (project scaffold in place) |
-| M1 Acquisition | Not started |
-| M2 Canonical data & quality | Not started |
-| M3 Snapshot calculation | Not started |
-| M4 Reporting | Not started |
-| M5 Core release | Not started |
+| M0 Foundations | Done |
+| M1 Acquisition | Done |
+| M2 Canonical data & quality | Done, together with M1 |
+| M3 Snapshot calculation | Done |
+| M4 Reporting | Done, together with M3 |
+| M5 Core release | Done, released as `v0.1.0` |
 | M6 HTTP API | Not started |
 | M7 SDMX validation | Not started |
 | M8 Web front end | Not started |
