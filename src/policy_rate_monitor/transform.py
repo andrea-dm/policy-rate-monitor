@@ -346,24 +346,38 @@ def _values(data: pd.DataFrame, config: DatasetConfig) -> pd.Series:
 
     A missing value, or one that is not a number fitting the configured precision
     and scale, becomes null.
+
+    Plain numbers that surely fit (a sign, at most ``precision - scale`` digits, a
+    point and at most ``scale`` digits) with no unit multiplier are cast by Arrow
+    in one go. Every other value goes through ``_to_decimal`` one by one, so the
+    result is the same as parsing every value with ``Decimal``.
     """
     measure = config.structure.measure
+    text = data[measure.id]
     if measure.unit_multiplier is None:
-        multipliers = [0] * len(data)
+        multipliers = pd.Series(0, index=data.index)
     else:
         codes = _code(data[measure.unit_multiplier], config.columns)
-        multipliers = _whole_numbers(codes, measure.unit_multiplier)
-    missing_values = {"", *config.columns.missing_values}
-    values: list[Decimal | None] = []
-    for text, multiplier in zip(data[measure.id], multipliers, strict=True):
-        if text in missing_values:
-            values.append(None)
-        else:
-            values.append(
-                _to_decimal(text, multiplier, measure.precision, measure.scale)
-            )
-    value_type = pa.decimal128(measure.precision, measure.scale)
-    return pd.Series(values, index=data.index, dtype=pd.ArrowDtype(value_type))
+        unique = [str(code) for code in codes.unique()]
+        numbers = _whole_numbers(unique, measure.unit_multiplier)
+        multipliers = codes.map(dict(zip(unique, numbers, strict=True)))
+
+    whole_digits = measure.precision - measure.scale
+    # [0-9], not \d: \d also matches digits of other scripts, which Arrow rejects.
+    plain = "[+-]?"
+    plain += f"[0-9]{{1,{whole_digits}}}" if whole_digits else "0"
+    if measure.scale:
+        plain += rf"(\.[0-9]{{1,{measure.scale}}})?"
+    fast = text.str.fullmatch(plain, na=False) & (multipliers == 0)
+    value_type = pd.ArrowDtype(pa.decimal128(measure.precision, measure.scale))
+    values = text.where(fast).astype(value_type)
+
+    slow = ~fast & ~text.isin(["", *config.columns.missing_values])
+    values[slow] = [
+        _to_decimal(value, multiplier, measure.precision, measure.scale)
+        for value, multiplier in zip(text[slow], multipliers[slow], strict=True)
+    ]
+    return values
 
 
 def _invalid_status(data: pd.DataFrame, config: DatasetConfig) -> pd.Series[bool]:
