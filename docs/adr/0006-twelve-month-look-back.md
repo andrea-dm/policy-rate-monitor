@@ -70,3 +70,9 @@ interactive front end, where the calculation runs on every user action (#13).
   look-back tables in `diagnostics/README.md`.
 - `tests/test_snapshot.py`: a target date on a weekend, 29 February, negative rates, a different
   latest date per area, insufficient history.
+
+## Updates
+
+- 2026-11-20: the search is replaced by one search over all series
+  ([0013](0013-fast-analytics-numpy-numba.md)); the target-date rule and the "on or before" rule
+  still apply.

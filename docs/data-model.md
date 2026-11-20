@@ -28,7 +28,8 @@ flowchart LR
     OBS & SER & DQ & REL --> CSV & JSON & PNG & MD
 ```
 
-The raw layer keeps the source as it came; the staged layer is the canonical data every consumer
+Tables are stored as parquet, a compact file format for tables that keeps each column's type. The
+raw layer keeps the source as it came; the staged layer is the canonical data every consumer
 reads, through the provider ([decision 0012](adr/0012-elt-raw-and-staged-layers.md)).
 
 ### Raw
@@ -82,7 +83,19 @@ attribute as published, for example `COMPILATION` (how the series is compiled) a
 
 `summary.json` holds the same snapshots with the full series record nested in each, the target
 date, the dataset, the source release and the generation time. Rates are JSON numbers, not
-strings.
+strings. Python's `json` reads them as floats, which brings back the rounding the tool avoids;
+read them as decimals instead:
+
+```python
+import json
+from decimal import Decimal
+
+with open("out/summary.json") as file:
+    summary = json.load(file, parse_float=Decimal)
+
+for snapshot in summary["snapshots"]:
+    print(snapshot["ref_area"], snapshot["latest_value"], snapshot["change_bps"])
+```
 
 ## Facts about the BIS file that shaped the design
 
@@ -96,7 +109,7 @@ strings.
 | Areas cover days differently: some include weekends, others publish business days only | Takes the last valid rate on or before the target date, never an exact date |
 | Areas end on different dates; ten euro-area members stopped when they joined the euro, Argentina in July 2025 | Evaluates each area at its own latest date, and flags a stale one |
 | Each daily series has one `UNIT_MULT` (0), `DECIMALS` (4) and unit (per cent per year) | Stores them once per series; `DECIMALS` is used only to format the report |
-| `ACTION`, `OBS_CONF` and `OBS_PRE_BREAK` hold the same value on every row | Checks them against the expected values (`unexpected_value`), so a change in a future file is noticed |
+| `ACTION`, `OBS_CONF`, `OBS_PRE_BREAK` and `UNIT_MEASURE` hold the same value on every row | Checks the four against the expected values (`unexpected_value`), so a change in a future file is noticed. `ACTION` is checked too, although it is not kept in the staged data |
 | The current file has no duplicate (series, date) | Duplicate handling is still built and tested on hand-made files |
 
 What each of these means for a reader of the report is in the README, under

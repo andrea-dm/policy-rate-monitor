@@ -3,6 +3,50 @@
 The public classes and functions of the package, generated from their docstrings. The examples in
 the docstrings run as tests, so they are kept true.
 
+## Use from Python
+
+The package can be used without the command line, for example in a notebook. Two example
+notebooks, which need the `jupyter` dependency group, do what the commands do:
+
+- [`examples/fetch_and_transform.ipynb`](https://github.com/andrea-dm/policy-rate-monitor/blob/develop/examples/fetch_and_transform.ipynb)
+  downloads the BIS file and stages it, as `fetch` and `transform` do;
+- [`examples/policy_rates.ipynb`](https://github.com/andrea-dm/policy-rate-monitor/blob/develop/examples/policy_rates.ipynb)
+  loads the staged data through the provider, computes the 12-month change and plots the rates,
+  as `report` does.
+
+The same steps as a script:
+
+```python
+from pathlib import Path
+
+import pandas as pd
+
+from policy_rate_monitor.bulk import BulkFileProvider
+from policy_rate_monitor.config import FileConfigSource
+from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
+
+config = FileConfigSource("configs/bis_cbpol.json").load()
+provider = BulkFileProvider(config, Path(config.dataset.data_dir))
+provider.fetch()      # downloads the BIS file, unless the cached copy is recent
+provider.transform()  # stages it
+
+# Arrow types kept, so the rates stay exact decimals.
+observations = provider.observations().to_pandas(types_mapper=pd.ArrowDtype)
+series = [provider.series_metadata(key) for key in provider.list_series()]
+
+snapshots = compute_snapshots(
+    SnapshotArgs(
+        observations=observations,
+        series=series,
+        requested=["US", "EA"],
+        settings=config.snapshot,
+        area_aliases=config.area_aliases,
+    )
+)
+for snapshot in snapshots:
+    print(snapshot.ref_area, snapshot.latest_value, snapshot.change_bps, snapshot.status)
+```
+
 ## Domain models and errors
 
 ::: policy_rate_monitor.core.models
@@ -14,12 +58,10 @@ the docstrings run as tests, so they are kept true.
 ::: policy_rate_monitor.config.source
 
 ::: policy_rate_monitor.config.models
-    options:
-      members:
-        - DatasetConfig
-        - SourceSection
-        - StructureSection
-        - SnapshotSection
+
+::: policy_rate_monitor.config.parsing
+
+::: policy_rate_monitor.config.schema
 
 ## Data providers
 
@@ -48,5 +90,7 @@ the docstrings run as tests, so they are kept true.
 ::: policy_rate_monitor.report
 
 ## Command line
+
+::: policy_rate_monitor.cli.main
 
 ::: policy_rate_monitor.cli.exit_codes

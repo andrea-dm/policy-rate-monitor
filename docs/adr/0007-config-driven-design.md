@@ -30,8 +30,9 @@ dataset needs a name that cannot be confused with them.
   implement the same `load()`. Every source passes the document to `parse_config`, so every source
   validates the same way and gives the same messages.
 - **Validated when it is loaded.** Pydantic models (`config/models.py`) check the configuration
-  and its cross-references (a rule naming an undeclared concept, an alias to a code that is itself
-  aliased, a two-digit year format). A mistake stops the program with one line per problem, at its
+  and its cross-references (a selection or a series-metadata field naming an undeclared concept,
+  an alias to a code that is itself aliased, a two-digit year format). Rule parameters are checked
+  by the rule itself, when it runs. A mistake stops the program with one line per problem, at its
   exact location.
 - **Outside the package.** The configuration lives in `configs/` at the repository root, not in
   the package. The package holds only the contract: the models, from which

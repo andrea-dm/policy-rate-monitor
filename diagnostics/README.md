@@ -9,22 +9,22 @@ DuckDB, which are not installed by `uv sync`; that is why the commands below use
 
 | File | Purpose |
 |---|---|
-| `eda_cbpol.ipynb` | EDA of the BIS policy-rate bulk file (`WS_CBPOL`, CSV flat): structure, coding, missing values, duplicates, metadata, calendar density, recency, a prototype of the 12-month look-back, and the design implications (§17). **Gitignored** while in progress. |
 | `spike_pyarrow_dtypes.py` | How pandas 3 behaves with pyarrow-backed `decimal128` and `date32` columns. Evidence for the pyarrow backend. |
 | `bench_snapshot.py` | Benchmark of five ways to compute the 12-month look-back for every series, at 1×, 10× and 50× the real data. Evidence for the look-back engine. |
 | `repro_pyarrow_join_asof_pre1970.py` | Minimal reproduction of a pyarrow `join_asof` bug: no match when any key is before 1970. |
 | `bench_kernels.py` | Trial of pure Python, Numba and Cython on one kernel: the 12-month change in basis points for every valid observation of every series, in exact integer arithmetic. Reads `data/staged/observations.parquet` (written by `bis-prates transform`). |
+| `check_record_figures.py` | Reproduces the figures about the data quoted in the decision records: the areas whose 12-month change is not exact in floating point (decision 0005), and the highest rate of each area (decision 0011). Reads `data/staged/observations.parquet`. |
 | `bench_analytics.py` | Times the `analytics` functions on the real staged data: the snapshot at any date and the 12-month change history with NumPy and, when installed, Numba, and the rate moves (NumPy only), each checked against the v0.1.0 `bisect` method or a `Decimal` loop. |
 
-All of them read the unzipped bulk file at `resources/WS_CBPOL_csv_flat.csv` (gitignored). Get it
-from <https://data.bis.org/bulkdownload> under *Central bank policy rates (CSV, flat)*. Each one finds
-the repository root by itself. Run them from the repository root.
+`bench_snapshot.py` reads the unzipped bulk file at `resources/WS_CBPOL_csv_flat.csv` (gitignored).
+Get it from <https://data.bis.org/bulkdownload> under *Central bank policy rates (CSV, flat)*. The
+scripts that read `data/staged/observations.parquet` need `bis-prates fetch` and `bis-prates
+transform` first. Run them from the repository root.
 
 ## Run
 
 ```bash
-uv sync --all-groups
-uv run jupyter lab diagnostics/eda_cbpol.ipynb
+uv sync --all-groups --all-extras
 
 uv run --with pyarrow python diagnostics/spike_pyarrow_dtypes.py
 uv run --with pyarrow python diagnostics/repro_pyarrow_join_asof_pre1970.py
@@ -36,6 +36,7 @@ uv run --with pyarrow --with duckdb python diagnostics/bench_snapshot.py run sea
 # numba and cython are used only by this trial; a version that is not installed is skipped
 uv run --with numba --with cython python diagnostics/bench_kernels.py
 uv run python diagnostics/bench_analytics.py   # with the fast extra installed, Numba is timed too
+uv run python diagnostics/check_record_figures.py
 ```
 
 Approaches: `bisect_py`, `searchsorted_np`, `pandas_merge_asof`, `arrow_join_asof`, `duckdb_asof`. The

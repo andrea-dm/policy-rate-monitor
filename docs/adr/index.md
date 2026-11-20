@@ -1,11 +1,13 @@
 # Architecture decisions
 
 Each record states one decision: the problem, what was decided and why, the alternatives that were
-rejected, and what the decision costs. A record is not edited once accepted, apart from its links;
-a later record supersedes it.
+rejected, and what the decision costs. A record is not edited once accepted, apart from its links
+and a dated update note that points to a later record; a later record supersedes it.
 
-Records are numbered in the order the decisions were taken. Decisions taken on the same day keep
-the order in which they were recorded. A decision that is agreed but not built yet is written down
+Records are numbered in the order the decisions were taken, by the date of a record's first
+decision. Decisions taken on the same day keep the order in which they were recorded. The records
+were renumbered once, on 2026-11-20, to follow this order; the changelog lists the old file
+names. A decision that is agreed but not built yet is written down
 all the same, so that the numbering stays in that order; its status says so.
 
 | Record | Decision | Decided | Status |
@@ -22,4 +24,4 @@ all the same, so that the numbering stays in that order; its status says so.
 | [0010](0010-cli-and-exit-codes.md) | A command line first, with one exit code per action | 2026-11-17 | Accepted |
 | [0011](0011-data-quality-rules.md) | Data-quality rules named in the configuration, reported as findings | 2026-11-17 | Accepted, partly built |
 | [0012](0012-elt-raw-and-staged-layers.md) | ELT, not ETL: load the source as it is, then stage it | 2026-11-19 | Accepted, partly built |
-| [0013](0013-fast-analytics-numpy-numba.md) | Fast analytics: fixed-point arrays, NumPy kernels, Numba optional | 2026-11-20 | Accepted |
+| [0013](0013-fast-analytics-numpy-numba.md) | Fast analytics: fixed-point arrays, NumPy kernels, Numba optional | 2026-11-19 | Accepted |

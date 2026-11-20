@@ -18,11 +18,12 @@ Results go to standard output; warnings, errors and the log go to standard error
 
 Finds the "Central bank policy rates (CSV, flat)" ZIP on the BIS bulk-download page, downloads it,
 checks it, and stores it with its release record, unless the cached copy is less than 24 hours
-old. When the site is down, an older copy is used with a warning. Step by step: [How it
-works](how-it-works.md#1-get-the-latest-data-11-the-ingestion-process).
+old (`cache_ttl_hours` in the configuration). When the site is down, an older copy is used with a
+warning. Step by step: [How it works](how-it-works.md#1-get-the-latest-data-11-the-ingestion-process).
 
 Writes `data/raw/WS_CBPOL_csv_flat.zip` and `data/raw/WS_CBPOL_csv_flat.json`, and prints the
-address and the SHA-256 fingerprint of the release:
+address and the SHA-256 fingerprint of the release (example from the release of 19 November
+2026):
 
 ```text
 https://data.bis.org/static/bulk/WS_CBPOL_csv_flat.zip (sha256 79f614ab22c2…)
@@ -32,7 +33,8 @@ https://data.bis.org/static/bulk/WS_CBPOL_csv_flat.zip (sha256 79f614ab22c2…)
 
 Loads the cached CSV, as it is, into `data/raw/WS_CBPOL_csv_flat.parquet`, then stages the daily
 series: `data/staged/observations.parquet`, `series.json` and `data_quality.json`. Prints the
-number of observations and series kept and the number of data-quality findings, for example:
+number of observations and series kept and the number of data-quality findings, for example, for
+the release of 19 November 2026:
 
 ```text
 709984 observations of 49 series kept, 0 data-quality findings
@@ -58,7 +60,7 @@ Options go after the command (`bis-prates report --out results`).
 | `--config PATH` | all | `configs/bis_cbpol.json` | the dataset configuration ([Configuration](configuration.md)) |
 | `--data-dir PATH` | all | `dataset.data_dir` in the configuration (`data`) | where `raw/` and `staged/` go; a relative path is relative to the current folder |
 | `--debug` | all | off | show the full traceback of an error |
-| `--countries "US,EA"` | `report` | required | the area codes, separated by commas; trimmed, upper-cased and de-duplicated; aliases such as `EA → XM` applied |
+| `--countries "US,EA"` | `report` | required | the area codes, separated by commas; matched without regard to case and spaces, de-duplicated, and written as typed next to the code used; aliases such as `EA → XM` applied |
 | `--start YYYY-MM-DD` | `report` | the whole history | the first date of the chart; the summary is not affected |
 | `--out DIR` | `report` | `out` | the output folder |
 
@@ -77,7 +79,7 @@ number alone ([decision 0010](adr/0010-cli-and-exit-codes.md)).
 | 5 | `MISSING_INPUT` | a step's input is missing | run the previous step (`transform` before `report`) |
 | 6 | `SOURCE_UNAVAILABLE` | the source cannot be reached and nothing is cached | try again later |
 | 7 | `UNEXPECTED_FORMAT` | the source file is not what the configuration describes | check the BIS file; the configuration may need updating |
-| 8 | `OUTPUT_ERROR` | the outputs cannot be written | check the output folder |
+| 8 | `OUTPUT_ERROR` | a file cannot be read or written | check the data and output folders |
 
 Only code 6 means "try again later". For example, in a nightly job:
 

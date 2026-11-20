@@ -35,11 +35,11 @@ try again later, fix the configuration, run an earlier step, or report a bug.
   | 5 | `MISSING_INPUT` | run the earlier step |
   | 6 | `SOURCE_UNAVAILABLE` | try again later; the only transient failure |
   | 7 | `UNEXPECTED_FORMAT` | look at the source: its format changed |
-  | 8 | `OUTPUT_ERROR` | fix the output folder |
+  | 8 | `OUTPUT_ERROR` | a file cannot be read or written: check the data and output folders |
 
   0, 1 and 2 mean what they mean in ruff and mypy, and 3 is pytest's internal error. Every code is
   below 126, which the shell reserves. Any unexpected exception becomes 3, with a one-line message
-  and the traceback with `--debug`.
+  and its traceback in the log; `--debug` adds the traceback for the expected errors too.
 
 ## How it evolved
 

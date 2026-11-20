@@ -48,3 +48,9 @@ on a rounding rule rather than on the data.
   `tests/core/`.
 - The "pyarrow-backed dtypes" table in `diagnostics/README.md` (exact decimal arithmetic; the
   silent rounding of pandas 2.3.3).
+
+## Updates
+
+- 2026-11-20: the figure of 6 areas is reproduced by `diagnostics/check_record_figures.py`.
+- 2026-11-20: the faster analytics are built, on integers scaled by 10^6
+  ([0013](0013-fast-analytics-numpy-numba.md)).

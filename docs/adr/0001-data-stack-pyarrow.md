@@ -68,3 +68,8 @@ drive the choice of types:
 - `diagnostics/spike_pyarrow_dtypes.py` and the "pyarrow-backed dtypes" table in
   `diagnostics/README.md`.
 - `tests/providers/`: the contract suite, which checks the canonical schema on both providers.
+
+## Updates
+
+- 2026-11-20: `analytics` adds a fourth targeted `# pyright: ignore`, where the stubs leave the
+  decimal type's scale untyped ([0013](0013-fast-analytics-numpy-numba.md)).

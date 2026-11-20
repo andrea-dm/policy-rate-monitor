@@ -1,4 +1,5 @@
 site_name: policy-rate-monitor
+repo_url: https://github.com/andrea-dm/policy-rate-monitor
 docs_dir: docs
 theme:
   name: material
@@ -9,7 +10,11 @@ plugins:
         python:
           paths: [src]
 markdown_extensions:
+  - admonition
+  - pymdownx.details
   - tables
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid

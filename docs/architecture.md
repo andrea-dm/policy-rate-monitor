@@ -27,7 +27,7 @@ The files of each layer are described in [Data model](data-model.md).
 ## The modules and their layers
 
 Each module may import only the modules below it. An arrow means "is imported by". tach checks the
-rule on every commit and in CI (`tach.toml`), so a module cannot quietly start depending on one
+rule before every push and in CI (`tach.toml`), so a module cannot quietly start depending on one
 above it.
 
 ```mermaid
@@ -117,6 +117,88 @@ sequenceDiagram
 | A configuration served by a service | A new `ConfigSource` | The configuration models and their checks |
 | The HTTP API | A new adapter beside `cli`, calling the same pieces | Everything below `cli` ([decision 0003](adr/0003-web-extension-stack.md)) |
 | A data-quality rule | Its code in `transform`, and its entry in the configuration | The findings format and the report |
+
+### A new source
+
+A provider implements the seven methods of `DataProvider`. `observations()` must return exactly the
+canonical schema, `observation_schema(config.structure)`, so the snapshot and the report work
+unchanged:
+
+```python
+from collections.abc import Sequence
+
+import pyarrow as pa
+
+from policy_rate_monitor.config import DatasetConfig
+from policy_rate_monitor.core.models import DataQualityIssue, SeriesMetadata, SourceRelease
+from policy_rate_monitor.providers import DataProvider, observation_schema
+
+
+class WarehouseProvider(DataProvider):
+    """Serves the policy rates from a data warehouse."""
+
+    def __init__(self, config: DatasetConfig, connection: object) -> None:
+        self.schema = observation_schema(config.structure)
+        self.connection = connection
+
+    def fetch(self) -> SourceRelease: ...  # record which version of the data is read
+    def transform(self) -> None: ...  # nothing to do if the warehouse is already clean
+    def list_series(self) -> list[str]: ...
+    def series_metadata(self, series_key: str) -> SeriesMetadata: ...
+    def observations(self, series_keys: Sequence[str] | None = None) -> pa.Table: ...
+    def data_quality_issues(self) -> list[DataQualityIssue]: ...
+    def source_release(self) -> SourceRelease | None: ...
+```
+
+Its test module runs the shared contract tests (`tests/providers/contract.py`) by subclassing
+`ProviderContract` and supplying two fixtures:
+
+```python
+import pytest
+from pyarrow import Schema
+
+from policy_rate_monitor.providers import observation_schema
+from tests.providers.contract import ProviderContract
+
+
+@pytest.fixture
+def provider(config, connection) -> WarehouseProvider:
+    return WarehouseProvider(config, connection)
+
+
+@pytest.fixture
+def schema(config) -> Schema:
+    return observation_schema(config.structure)
+
+
+class TestWarehouseProvider(ProviderContract):
+    pass
+```
+
+### A configuration from a service
+
+A `ConfigSource` only fetches the document; `parse_config` validates it, so every source gives the
+same checks and messages:
+
+```python
+from urllib.request import urlopen
+
+from policy_rate_monitor.config import ConfigSource, DatasetConfig, parse_config
+
+
+class ServiceConfigSource(ConfigSource):
+    """Reads the configuration from a URL, for example a configuration service."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def load(self) -> DatasetConfig:
+        with urlopen(self.url, timeout=10) as response:
+            document = response.read()
+        return parse_config(document, origin=self.url)
+```
+
+### Optional extras
 
 The parts that need more than the base install come as optional extras: `fast` (Numba) today, and
 later `interactive` (Plotly) and `web` (FastAPI, uvicorn). Nothing in the base layers imports

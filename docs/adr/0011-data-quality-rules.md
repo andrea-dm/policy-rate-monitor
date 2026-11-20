@@ -66,4 +66,4 @@ share it.
 - `tests/test_transform.py`: `test_missing_values_are_kept_and_marked_invalid`,
   `test_duplicates_are_dropped_and_reported`, `test_unparseable_dates_are_dropped_and_reported`,
   `test_a_value_with_more_decimals_than_the_type_is_never_rounded`.
-- `diagnostics/eda_cbpol.ipynb` §17 (gitignored while in progress): the profiling behind the rules.
+- `diagnostics/check_record_figures.py`: the highest rate of each area (Brazil, Argentina).
