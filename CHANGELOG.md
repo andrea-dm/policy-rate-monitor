@@ -36,7 +36,7 @@ The first release: the `bis-prates` command line, from the BIS bulk download to 
   models that validate it when it is loaded (#5).
 - The domain models and typed errors (#2).
 - The outputs of a real run in `out/`, and the README with installation, usage, the data model,
-  assumptions, known issues of the BIS data and limitations.
+  assumptions, known issues of the BIS data, limitations and the AI usage note.
 - `diagnostics/`: the spikes and benchmarks behind the technical choices, including a comparison
   of pure Python, Numba and Cython on one analytical kernel.
 - CI: ruff, pyright (strict), deptry, tach, the docs build, dependency audits and the package

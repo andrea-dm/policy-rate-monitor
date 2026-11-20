@@ -60,6 +60,7 @@ series to keep, the data-quality rules, the output fields) is declared in
 - [Contributing](#contributing)
 - [Change Log](#change-log)
 - [Credits](#credits)
+  - [AI Usage](#ai-usage)
 - [Security](#security)
 - [License](#license)
 
@@ -456,6 +457,35 @@ See [CHANGELOG.md](CHANGELOG.md) for the release history.
 ## Credits
 
 See [CREDITS.md](CREDITS.md) for the author and the key dependencies.
+
+### AI Usage
+
+This project was developed with Claude Code as a coding assistant. I set the design and took every
+technical decision: the configuration-driven design, the extract-load-transform approach, exact
+decimal arithmetic, the data-quality rules and the test strategy. On my prompts and suggestions,
+the assistant laid out options and their trade-offs, and I chose among them. The assistant then
+wrote most of the code, the critical tests and the documentation, following the design principles
+and code style I set. I reviewed every change, asked for changes where needed, and committed every
+change myself.
+
+Validation went beyond reading the code: ruff and pyright in strict mode, a test suite that runs
+without the network, a real end-to-end run on the BIS file, and an independent recomputation of
+the five headline figures from the raw CSV with separate code (plain Python, no pandas), which
+matches `out/summary.csv` exactly. Review caught real issues, for example:
+
+- a date-format check that accepted a two-digit year (`%y`), which would have read 1950 as 2050;
+- basis points computed with floats (`(4.10 − 3.85) × 100 = 24.999999999999957`), replaced by
+  exact decimals;
+- a pandas version (2.3.3) that silently rounded decimals when casting. Values are now parsed
+  exactly, and one with more decimals than the data type holds is marked invalid and reported,
+  never rounded; a regression test pins this (see [diagnostics/README.md](diagnostics/README.md)).
+
+**Lessons.** AI coding assistants are great tools for turning one's ideas into working code. They
+speed up the drafting, but the generated code comes at a cost that largely cancels out that gain:
+it needs stricter type checking, well-designed test suites, extra diagnostic checks and a cold
+human review. To take real advantage of it, the developer has to give precise, detailed
+instructions and challenge the assistant's proposals with counter-arguments, which takes solid
+skills and deep knowledge of the subject.
 
 ---
 
