@@ -13,6 +13,7 @@ import logging
 import sys
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -23,6 +24,11 @@ from policy_rate_monitor.core.errors import PolicyRateMonitorError
 from policy_rate_monitor.core.models import SnapshotStatus
 from policy_rate_monitor.report import Report, ReportArgs
 from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from policy_rate_monitor.core.models import DataSnapshot, SeriesMetadata
 
 __all__ = ["main"]
 
@@ -179,7 +185,38 @@ def _report(args: argparse.Namespace) -> int:
     )
     for path in paths:
         sys.stdout.write(f"{path}\n")
+    warning = _unknown_area_warning(snapshots, series, config.area_aliases)
+    if warning:
+        sys.stderr.write(warning)
     if not any(item.status == SnapshotStatus.OK for item in snapshots):
         sys.stderr.write("no requested area has a complete snapshot\n")
         return ExitCode.NO_RESULT
     return ExitCode.OK
+
+
+def _unknown_area_warning(
+    snapshots: list[DataSnapshot],
+    series: list[SeriesMetadata],
+    area_aliases: Mapping[str, str],
+) -> str:
+    """Names the requested codes the data does not have, and lists the ones it has.
+
+    The user cannot be expected to know the source's codes, e.g. that the BIS
+    calls the euro area ``XM``, so the warning shows every code with its name.
+    """
+    unknown = [
+        item.requested_ref_area
+        for item in snapshots
+        if item.status == SnapshotStatus.UNKNOWN_AREA
+    ]
+    if not unknown:
+        return ""
+    names = {item.ref_area: item.ref_area_name for item in series}
+    available = ", ".join(f"{code} ({names[code]})" for code in sorted(names))
+    aliases = "".join(
+        f"; {alias} stands for {code}" for alias, code in sorted(area_aliases.items())
+    )
+    return (
+        f"warning: no series for {', '.join(unknown)}. "
+        f"Available codes: {available}{aliases}.\n"
+    )
