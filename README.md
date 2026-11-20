@@ -81,8 +81,10 @@ series to keep, the data-quality rules, the output fields) is declared in
 - **Data quality reported, not hidden**: missing values are kept and marked invalid, duplicates are
   dropped or resolved as configured, and every finding is written to `data_quality.json` and shown
   in the report.
-- **One exit code per action**: a script or scheduler can tell "retry later" from "fix the
-  configuration" or "run the previous step" without reading messages.
+- **One exit code per kind of failure**: each failure ends the command with its own number, so a
+  script or scheduler running the commands knows what to do from the number alone: try again later
+  when the BIS site cannot be reached (6), stop until someone fixes the configuration (4), or run
+  the earlier step when its output is missing (5). The full list is under Usage.
 - **Strict static analysis**: ruff with a strict rule set, pyright in strict mode, deptry, and
   tach for the module layering.
 
@@ -106,7 +108,10 @@ flowchart LR
     bis --> fetch --> raw --> transform --> staged --> report --> out
 ```
 
-The modules are layered; tach checks that no import goes against the arrows:
+The modules are layered. Here an arrow means "is imported by", not "runs before": the `report`
+module only writes the output files from the figures it is given, and the `report` command in
+`cli` is what reads the staged data, through the provider, and passes it on. tach checks that no
+import goes against the arrows:
 
 ```mermaid
 flowchart BT
@@ -159,8 +164,25 @@ hand-made tables.
 ```bash
 git clone https://github.com/andrea-dm/policy-rate-monitor.git
 cd policy-rate-monitor
-uv sync --all-groups --all-extras
+uv sync --no-dev        # to run the tool: the package and its runtime dependencies only
 ```
+
+To work on the code, install the dependency groups as well:
+
+```bash
+uv sync --all-groups
+```
+
+| Group | Content |
+|---|---|
+| `lint` | ruff, pyright, deptry, tach and the pandas and pyarrow type stubs |
+| `test` | pytest, pytest-mock, pytest-cov, hypothesis |
+| `dev` | `lint` and `test` together; plain `uv sync` installs it by default |
+| `docs` | MkDocs and its plugins, for `mkdocs serve` and `mkdocs build` |
+| `jupyter` | JupyterLab and a kernel, for the notebooks in `diagnostics/` |
+
+The package has no optional extras yet; the planned web service and interactive chart will come as
+extras, so a plain install stays small.
 
 ### Usage
 
@@ -315,7 +337,9 @@ keeps the code, and the series metadata keeps the label as the area name.
 
 **KNOWN ISSUE**: the brief and most readers say `EA`; the BIS file uses `XM`. **Handled:** `EA` is
 an alias for `XM` in the configuration; `summary.csv` and `summary.json` show both the
-requested and the BIS code, `report.md` shows the BIS code.
+requested and the BIS code, `report.md` shows the BIS code. A code the data does not have (for
+example `UK` instead of `GB`) gets the status `unknown_area`, and `report` prints a warning that
+lists every code in the data with its name, so the right one can be found.
 
 **What you need to do:** add an alias to `area_aliases` for any other code you want to request
 under a different name.
