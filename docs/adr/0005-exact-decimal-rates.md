@@ -1,4 +1,4 @@
-# 0006 Exact decimal rates end to end
+# 0005 Exact decimal rates end to end
 
 - **Status:** Accepted
 - **Decided:** 2026-11-17, refined 2026-11-18
@@ -16,7 +16,7 @@ on a rounding rule rather than on the data.
   unit multiplier applied exactly (`value × 10^UNIT_MULT`). A value that is not a number, or has
   more digits than the configured precision and scale, becomes an invalid observation with a
   data-quality finding. It is never rounded to fit.
-- **Store exactly.** Staged values are `decimal128(15, 6)` ([0005](0005-data-stack-pyarrow.md)).
+- **Store exactly.** Staged values are `decimal128(15, 6)` ([0001](0001-data-stack-pyarrow.md)).
 - **Compute exactly.** The snapshot works on `Decimal` values, and the change is computed in decimal
   arithmetic.
 - **Strict models.** The domain models (`Rate`, `BasisPoints`) accept only `Decimal` from Python

@@ -31,7 +31,7 @@ class DataProvider(ABC):
     except ``source_release``, which returns ``None`` when the release is unknown.
     ``observations`` returns a table in the schema of ``observation_schema``, with at
     most one row per series and date, sorted by date within each series. Why an Arrow
-    table: docs/adr/0005-data-stack-pyarrow.md.
+    table: docs/adr/0001-data-stack-pyarrow.md.
     """
 
     @abstractmethod

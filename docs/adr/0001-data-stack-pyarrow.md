@@ -1,4 +1,4 @@
-# 0005 Arrow types and parquet for the data; Arrow tables at the provider interface
+# 0001 Arrow types and parquet for the data; Arrow tables at the provider interface
 
 - **Status:** Accepted
 - **Decided:** 2026-11-17 (data types and storage), 2026-11-20 (provider interface)
@@ -48,12 +48,12 @@ drive the choice of types:
 | NumPy-backed `float64` | Binary rounding, so basis points are not exact; weaker parquet types |
 | NumPy or pandas `object` arrays of `Decimal` | Slow, with no declared type and no schema |
 | A pandas DataFrame at the provider interface | No nullability and no schema to check; every provider would have to convert to pandas |
-| polars | Less familiar, and the look-back needs no join ([0007](0007-twelve-month-look-back.md)) |
+| polars | Less familiar, and the look-back needs no join ([0006](0006-twelve-month-look-back.md)) |
 | One pydantic model per observation | Slow and pointless at 710,000 rows; models are kept for the domain objects |
 
 ## Consequences
 
-- Values stay exact from the CSV to the summary files ([0006](0006-exact-decimal-rates.md)).
+- Values stay exact from the CSV to the summary files ([0005](0005-exact-decimal-rates.md)).
 - pyarrow ships no type information. `pyarrow-stubs` is in the `lint` group; three lines keep a
   targeted `# pyright: ignore` where the stubs leave a parameter untyped (`is_in`, `sort_by`,
   `to_pandas`).

@@ -78,8 +78,9 @@ results at every scale (same `digest`), after the pyarrow workaround below.
 | pyarrow `join_asof` (with workarounds) | 0.25 s | 2.6 s | 14.2 s | 1.8 GB |
 | DuckDB `ASOF JOIN` | 0.18 s | 0.9 s | 6.4 s | 2.1 GB |
 
-The first release ships the Python `bisect` version, run only for the requested areas; NumPy
-`searchsorted` is planned for interactive use (see `docs/adr/0007-twelve-month-look-back.md`).
+v0.1.0 shipped the Python `bisect` version, run only for the requested areas. Since #13 the report
+and the `analytics` module use NumPy `searchsorted` on fixed-point arrays (see
+`docs/adr/0006-twelve-month-look-back.md` and `docs/adr/0013-fast-analytics-numpy-numba.md`).
 
 **Decision (2026-11-17):** NumPy `searchsorted`, kept behind a stable function contract, with the
 Python `bisect` version as the **test oracle** and DuckDB as the documented scaling path.

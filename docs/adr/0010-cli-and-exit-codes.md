@@ -1,0 +1,77 @@
+# 0010 A command line first, with one exit code per action the caller must take
+
+- **Status:** Accepted
+- **Decided:** 2026-11-17 (the CLI as the interface); 2026-11-18 (errors and exit codes)
+
+## Context
+
+The brief offers two interfaces: a command line (Option A, recommended) or an HTTP service (Option
+B). Whoever runs the tool may be a person, a cron job or a scheduler such as Airflow. A script
+cannot read an error message; it can only read the exit code, and it needs to know what to do next:
+try again later, fix the configuration, run an earlier step, or report a bug.
+
+## Decision
+
+- **Option A: the `bis-prates` command line**, with `fetch`, `transform` and `report`, as the
+  brief recommends. The HTTP service comes as Extension 1 ([0003](0003-web-extension-stack.md)) and
+  calls the same code.
+- **A thin CLI.** The `cli` package parses the arguments, calls the provider, `compute_snapshots`
+  and `Report`, prints the result and returns a code. It holds no logic of its own, so the HTTP API
+  can call the same pieces. There is no separate `services` package yet: with one interface it would
+  only pass calls through. It is added with the API, if the two interfaces need shared steps.
+- **Typed errors in `core`.** `core/errors.py` defines `PolicyRateMonitorError` and its
+  subclasses `ConfigError`, `MissingInputError`, `SourceUnavailableError` and
+  `UnexpectedFormatError`. They know nothing about the CLI: `cli/exit_codes.py` maps them to exit
+  codes, and the API will map them to HTTP statuses.
+- **Our own small exit codes,** a documented `ExitCode` enum, each meaning one action:
+
+  | Code | Name | What the caller does |
+  |---|---|---|
+  | 0 | `OK` | nothing |
+  | 1 | `NO_RESULT` | the command ran, but no requested area has a result: check the codes |
+  | 2 | `USAGE_ERROR` | fix the command line (argparse's own code) |
+  | 3 | `INTERNAL_ERROR` | report a bug |
+  | 4 | `CONFIG_ERROR` | fix the configuration |
+  | 5 | `MISSING_INPUT` | run the earlier step |
+  | 6 | `SOURCE_UNAVAILABLE` | try again later; the only transient failure |
+  | 7 | `UNEXPECTED_FORMAT` | look at the source: its format changed |
+  | 8 | `OUTPUT_ERROR` | fix the output folder |
+
+  0, 1 and 2 mean what they mean in ruff and mypy, and 3 is pytest's internal error. Every code is
+  below 126, which the shell reserves. Any unexpected exception becomes 3, with a one-line message
+  and the traceback with `--debug`.
+
+## How it evolved
+
+The first proposal was the BSD `sysexits.h` codes (64–78). They were questioned and dropped: the
+interface is deprecated by its own documentation ("retained only for compatibility. Its use is
+discouraged"), it is not portable, Python's `os.EX_*` exist on Unix only, and argparse's usage
+error is 2, so it would need overriding. Only 0, 1 and 2 were considered next, and rejected because
+a scheduler could not tell "try again" from "fix the configuration". The first version of the chosen
+scheme gave 1 to internal errors, contrary to how Python tools use 1; it was revised to the table
+above.
+
+## Alternatives considered
+
+| Alternative | Why not |
+|---|---|
+| Option B, an HTTP service, as the main interface | The brief recommends A; B comes as Extension 1 |
+| A single `cli.py` | Mixes parsing, output and the exit-code contract, which could not be tested on its own |
+| `typer` or `click` | Three commands do not need a dependency |
+| `sysexits.h` (64–78) | Deprecated, not portable, and needs an override of argparse's error |
+| Only 0, 1 and 2 | A scheduler cannot tell a transient failure from a configuration error |
+| Exit codes carried by the exceptions | Would tie `core` to the CLI |
+
+## Consequences
+
+- A script decides what to do from the number alone; the README lists the codes.
+- Only a crash before `main()` runs (a broken install) gives Python's own 1.
+- The configuration commands (`config validate`, `config schema`) and the settings read from
+  environment variables are planned in #7.
+
+## Evidence
+
+- `src/policy_rate_monitor/cli/` (`main.py`, `exit_codes.py`), `src/policy_rate_monitor/core/errors.py`.
+- `tests/test_cli.py`: `test_an_error_maps_to_its_exit_code`,
+  `test_a_bug_ends_with_the_internal_error_code`,
+  `test_report_before_transform_gives_a_one_line_error`; `tests/core/test_errors.py`.
