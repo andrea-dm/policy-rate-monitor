@@ -1,0 +1,142 @@
+"""Tests of the configuration models, through the parser every source uses."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
+
+from tests.config.fixtures import changed, error_lines, load, minimal_document
+
+
+@pytest.mark.unit
+def test_unknown_key_is_rejected_with_its_location() -> None:
+    document = changed(minimal_document(), "snapshot.unknown", 1)
+
+    assert error_lines(document) == [
+        "snapshot.unknown: Extra inputs are not permitted (got 1)"
+    ]
+
+
+@pytest.mark.unit
+def test_every_failing_field_is_listed() -> None:
+    document = changed(minimal_document(), "source.max_attempts", "3")
+    document = changed(document, "structure.measure.precision", 16)
+
+    assert error_lines(document) == [
+        'source.max_attempts: Input should be a valid integer (got "3")',
+        (
+            "structure.measure.precision: Input should be less than or equal to 15"
+            " (got 16)"
+        ),
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("path", "value", "expected"),
+    [
+        (
+            "structure.selection",
+            {"FRQX": "D"},
+            (
+                "structure.selection.FRQX: 'FRQX' is not a dimension that can be"
+                " selected (FRQ); did you mean 'FRQ'?"
+            ),
+        ),
+        (
+            "structure.series_metadata.title",
+            "TTLX",
+            (
+                "structure.series_metadata.title: 'TTLX' is not a declared series"
+                " attribute; did you mean 'TTL'?"
+            ),
+        ),
+    ],
+    ids=["selection", "series_metadata"],
+)
+def test_reference_to_an_undeclared_concept_is_rejected(
+    path: str, value: object, expected: str
+) -> None:
+    assert error_lines(changed(minimal_document(), path, value)) == [expected]
+
+
+@pytest.mark.unit
+def test_output_field_must_be_a_series_metadata_field() -> None:
+    document = changed(
+        minimal_document(), "output.metadata_fields", ["series_key", "TTL"]
+    )
+
+    assert error_lines(document) == [
+        (
+            "output.metadata_fields[1]: Input should be 'series_key', 'ref_area',"
+            " 'ref_area_name', 'frequency', 'title', 'unit' or 'decimals' (got \"TTL\")"
+        )
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("aliases", "expected"),
+    [
+        ({"Q1": "Q1"}, "area_aliases.Q1: 'Q1' maps to itself"),
+        (
+            {"Q1": "Q2", "Q2": "Q3"},
+            (
+                "area_aliases.Q1: 'Q1' maps to 'Q2', which is itself an alias:"
+                " map 'Q1' to the final code"
+            ),
+        ),
+    ],
+    ids=["to_itself", "chain"],
+)
+def test_alias_must_map_to_a_final_code(aliases: dict[str, str], expected: str) -> None:
+    document = changed(minimal_document(), "area_aliases", aliases)
+
+    assert error_lines(document) == [expected]
+
+
+@pytest.mark.unit
+def test_two_digit_year_date_format_is_rejected() -> None:
+    # "%y" would read 1950 as 2050; a policy-rate history starts in the 1940s.
+    document = changed(
+        minimal_document(), "structure.time_dimension.date_format", "%y-%m-%d"
+    )
+
+    assert error_lines(document) == [
+        (
+            "structure.time_dimension.date_format: '%y-%m-%d' does not round-trip a"
+            " date: it must give the year, month and day"
+        )
+    ]
+
+
+@pytest.mark.unit
+def test_id_differing_from_a_declared_one_only_in_case_is_rejected() -> None:
+    document = changed(minimal_document(), "columns.unmapped", ["frq"])
+
+    assert error_lines(document) == [
+        (
+            "columns.unmapped[0]: 'frq' differs from the declared concept 'FRQ' only"
+            " in case"
+        )
+    ]
+
+
+@pytest.mark.unit
+def test_dollar_schema_key_is_accepted() -> None:
+    document = changed(minimal_document(), "$schema", "./config.schema.json")
+
+    assert load(document).schema_uri == "./config.schema.json"
+
+
+@pytest.mark.unit
+def test_models_are_frozen() -> None:
+    config = load(minimal_document())
+    selection: Any = config.structure.selection
+
+    with pytest.raises(ValidationError, match="frozen"):
+        setattr(config.snapshot, "lookback_months", 6)  # noqa: B010
+    with pytest.raises(TypeError, match="does not support item assignment"):
+        selection["FRQ"] = "M"

@@ -15,3 +15,43 @@ depends_on = ["policy_rate_monitor.core"]
 [[modules]]
 path = "policy_rate_monitor.core"
 depends_on = []
+
+[[modules]]
+path = "policy_rate_monitor.fetch"
+depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
+
+[[modules]]
+path = "policy_rate_monitor.transform"
+depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core", "policy_rate_monitor.fetch"]
+
+[[modules]]
+path = "policy_rate_monitor.snapshot"
+depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
+
+[[modules]]
+path = "policy_rate_monitor.report"
+depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
+
+[[modules]]
+path = "policy_rate_monitor.providers"
+depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
+
+[[modules]]
+path = "policy_rate_monitor.bulk"
+depends_on = [
+    "policy_rate_monitor.config",
+    "policy_rate_monitor.core",
+    "policy_rate_monitor.fetch",
+    "policy_rate_monitor.providers",
+    "policy_rate_monitor.transform",
+]
+
+[[modules]]
+path = "policy_rate_monitor.cli"
+depends_on = [
+    "policy_rate_monitor.bulk",
+    "policy_rate_monitor.config",
+    "policy_rate_monitor.core",
+    "policy_rate_monitor.report",
+    "policy_rate_monitor.snapshot",
+]

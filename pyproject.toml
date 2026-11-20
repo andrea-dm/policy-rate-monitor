@@ -3,7 +3,7 @@ name = "policy-rate-monitor"
 version = "0.1.0"
 description = "Monitor of central-bank policy rates."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.15"
 license = "Apache-2.0"
 authors = [
     { name = "Andrea Del Monaco", email = "***@gmail.com" },
@@ -11,9 +11,20 @@ authors = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 # Add runtime dependencies with `uv add <pkg>`; deptry (pre-push) checks they match the imports.
-dependencies = []
+dependencies = [
+    "matplotlib>=3.11.2",
+    "pandas>=3.1.1",
+    "pyarrow>=26.0.1",
+    "pydantic>=2.14.3",
+    "pydantic-core>=2.50.4",
+]
+
+[project.scripts]
+bis-prates = "policy_rate_monitor.cli.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -28,6 +39,7 @@ include = [
     "tests/**/*.py",
     "housekeeping/**/*.py",
     ".github/utils/**/*.py",
+    "diagnostics/**/*.py",
 ]
 
 [tool.ruff.lint]
@@ -231,6 +243,9 @@ runtime-evaluated-decorators = ["pydantic.validate_call", "pydantic.dataclasses.
     "SLF001",
     "T20",
 ]
+"diagnostics/**" = [
+    "T20", # spikes and benchmarks report their findings with print()
+]
 ".github/utils/**" = [
     "E402",
     "I001",
@@ -267,6 +282,8 @@ environments = ["sys_platform == 'linux'"]
 [dependency-groups]
 lint = [
     "deptry",
+    "pandas-stubs>=3.1.0.261029",
+    "pyarrow-stubs>=20.0.0.20260819",
     "pyright[nodejs]>=1.1.410",
     "ruff>=0.15.4",
     "tach>=0.34.1",
@@ -298,11 +315,17 @@ docs = [
 # ════════════════════════════════════════════════════════════════════════ Testing ═══ #
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Doctests: the `>>>` examples in docstrings under src/ run with the suite. Collection
+# imports every module under src/, so a module must have no import-time side effects
+# and every import it makes must be installed (else the whole run stops); see
+# tests/conftest.py, which also marks doctests `unit`.
+testpaths = ["tests", "src"]
 pythonpath = ["."]
+addopts = ["--doctest-modules"]
+doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 markers = [
     "unit: Quick tests, no I/O, no external dependencies.",
-    "contract: Tests that mock external boundaries (e.g., APIs, DBs).",
+    "contract: Tests at a boundary, using local stand-ins (temp files, mocked APIs or DBs).",
     "integration: Tests that talk to real external services (requires network, creds).",
     "whitebox: Tests that inspect internal state or mock internals (use sparingly).",
     "slow: Tests that take a long time to run.",

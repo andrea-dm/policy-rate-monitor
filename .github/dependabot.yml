@@ -4,7 +4,10 @@ updates:
   # setting (Settings -> Code security -> Dependabot security updates); version
   # bumps stay a deliberate, manual act.
   - package-ecosystem: github-actions
-    directory: /
+    # The composite action pins setup-uv too, so it is scanned with the workflows.
+    directories:
+      - /
+      - /.github/actions/*
     target-branch: develop
     schedule:
       interval: monthly

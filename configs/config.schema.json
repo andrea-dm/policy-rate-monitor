@@ -1,0 +1,665 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ColumnsSection": {
+      "additionalProperties": false,
+      "description": "How the concepts are written in the source file.",
+      "properties": {
+        "encoding": {
+          "description": "Text encoding of the file, as Python names it, e.g. 'utf-8'.",
+          "title": "Encoding",
+          "type": "string"
+        },
+        "delimiter": {
+          "description": "Field delimiter, one character.",
+          "maxLength": 1,
+          "minLength": 1,
+          "title": "Delimiter",
+          "type": "string"
+        },
+        "header_label_separator": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Splits a header into concept id and label at its first occurrence; a header\nwithout it is all id. Null if headers carry no labels.",
+          "title": "Header Label Separator"
+        },
+        "value_label_separator": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Splits a coded value into code and label at its first occurrence. Null if\ncoded values carry no labels.",
+          "title": "Value Label Separator"
+        },
+        "missing_values": {
+          "description": "Measure texts that mean \"no value\"; such an observation is invalid.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Values",
+          "type": "array"
+        },
+        "unmapped": {
+          "description": "Columns expected in the file but not declared in structure: loaded with the\nraw data, never mapped to canonical data, and not reported as unexpected.",
+          "items": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+            "type": "string"
+          },
+          "title": "Unmapped",
+          "type": "array"
+        },
+        "optional": {
+          "description": "Declared concepts whose column may be absent: a warning instead of an error.\nEvery other declared concept is a required column.",
+          "items": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+            "type": "string"
+          },
+          "title": "Optional",
+          "type": "array"
+        }
+      },
+      "required": [
+        "encoding",
+        "delimiter",
+        "header_label_separator",
+        "value_label_separator",
+        "missing_values",
+        "unmapped",
+        "optional"
+      ],
+      "title": "ColumnsSection",
+      "type": "object"
+    },
+    "Concept": {
+      "additionalProperties": false,
+      "description": "An SDMX concept: a column of the source file.",
+      "properties": {
+        "id": {
+          "description": "Concept id, the code part of the column header (the part before the header\nlabel separator).",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "coded": {
+          "description": "True if values are written as code and label, split at the first value label\nseparator; false if the value is taken whole (free text).",
+          "title": "Coded",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "coded"
+      ],
+      "title": "Concept",
+      "type": "object"
+    },
+    "DataQualitySeverity": {
+      "description": "How serious a data-quality finding is.",
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ],
+      "title": "DataQualitySeverity",
+      "type": "string"
+    },
+    "DatasetSection": {
+      "additionalProperties": false,
+      "description": "Identity and defaults of the dataset.",
+      "properties": {
+        "id": {
+          "description": "Identifier in snake_case, used in provenance and log lines.",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "description": "Heading of the report.",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "description": "What the data is: the report's \"About the data\" paragraph.",
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "attribution": {
+          "description": "Source credit, shown in the chart caption and the report.",
+          "minLength": 1,
+          "title": "Attribution",
+          "type": "string"
+        },
+        "data_dir": {
+          "description": "Default data directory. A relative path is resolved against the working\ndirectory when the command runs; '~' and '$' are not expanded.",
+          "format": "path",
+          "title": "Data Dir",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "attribution",
+        "data_dir"
+      ],
+      "title": "DatasetSection",
+      "type": "object"
+    },
+    "Dimension": {
+      "additionalProperties": false,
+      "description": "A dimension of the series key.",
+      "properties": {
+        "id": {
+          "description": "Concept id, the code part of the column header (the part before the header\nlabel separator).",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "coded": {
+          "description": "True if values are written as code and label, split at the first value label\nseparator; false if the value is taken whole (free text).",
+          "title": "Coded",
+          "type": "boolean"
+        },
+        "column": {
+          "description": "Name of its column in the canonical observations table.",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "coded",
+        "column"
+      ],
+      "title": "Dimension",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Measure": {
+      "additionalProperties": false,
+      "description": "The concept that holds the observation value.",
+      "properties": {
+        "id": {
+          "description": "Concept id of the value.",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "precision": {
+          "description": "Total significant digits of the stored decimal value (at most 15, what an\nexact rate allows).",
+          "maximum": 15,
+          "minimum": 1,
+          "title": "Precision",
+          "type": "integer"
+        },
+        "scale": {
+          "description": "Digits after the decimal point of the stored value (at most precision).",
+          "minimum": 0,
+          "title": "Scale",
+          "type": "integer"
+        },
+        "unit_multiplier": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Coded series attribute whose code is the power of ten the published value is\nmultiplied by; null if values are stored as published.",
+          "title": "Unit Multiplier"
+        }
+      },
+      "required": [
+        "id",
+        "precision",
+        "scale",
+        "unit_multiplier"
+      ],
+      "title": "Measure",
+      "type": "object"
+    },
+    "MetadataConcepts": {
+      "additionalProperties": false,
+      "description": "Which concept fills each SeriesMetadata field.",
+      "properties": {
+        "ref_area": {
+          "description": "Coded dimension whose code is ref_area and whose label is ref_area_name.",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "title": "Ref Area",
+          "type": "string"
+        },
+        "frequency": {
+          "description": "Dimension whose code is the frequency.",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "title": "Frequency",
+          "type": "string"
+        },
+        "title": {
+          "description": "Series attribute that holds the title.",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "title": "Title",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Series attribute that holds the unit of measure; null if there is none.",
+          "title": "Unit"
+        },
+        "decimals": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Series attribute that holds the display decimals; null if there is none.",
+          "title": "Decimals"
+        }
+      },
+      "required": [
+        "ref_area",
+        "frequency",
+        "title",
+        "unit",
+        "decimals"
+      ],
+      "title": "MetadataConcepts",
+      "type": "object"
+    },
+    "ObservationAttribute": {
+      "additionalProperties": false,
+      "description": "An attribute that can change from one observation to the next.",
+      "properties": {
+        "id": {
+          "description": "Concept id, the code part of the column header (the part before the header\nlabel separator).",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "coded": {
+          "description": "True if values are written as code and label, split at the first value label\nseparator; false if the value is taken whole (free text).",
+          "title": "Coded",
+          "type": "boolean"
+        },
+        "keep_as": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name of its column in the canonical observations table; null if it stays in\nthe raw data only, read for checks.",
+          "title": "Keep As"
+        },
+        "invalid_codes": {
+          "default": [],
+          "description": "Codes that make an observation invalid whatever its value.",
+          "items": {
+            "pattern": "^[A-Za-z0-9_@$-]+$",
+            "type": "string"
+          },
+          "title": "Invalid Codes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "coded",
+        "keep_as"
+      ],
+      "title": "ObservationAttribute",
+      "type": "object"
+    },
+    "OutputSection": {
+      "additionalProperties": false,
+      "description": "What the outputs carry.",
+      "properties": {
+        "metadata_fields": {
+          "description": "SeriesMetadata fields added to each summary row, in column order.",
+          "items": {
+            "enum": [
+              "series_key",
+              "ref_area",
+              "ref_area_name",
+              "frequency",
+              "title",
+              "unit",
+              "decimals"
+            ],
+            "type": "string"
+          },
+          "title": "Metadata Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "metadata_fields"
+      ],
+      "title": "OutputSection",
+      "type": "object"
+    },
+    "RuleSpec": {
+      "additionalProperties": false,
+      "description": "One data-quality rule to run: which one, how serious, with what parameters.",
+      "properties": {
+        "name": {
+          "description": "Name under which the rule is registered.",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "description": "False switches the rule off and keeps its settings.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "severity": {
+          "$ref": "#/$defs/DataQualitySeverity",
+          "description": "Severity of the rule's findings."
+        },
+        "params": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "description": "The rule's parameters, checked by the rule itself.",
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "severity"
+      ],
+      "title": "RuleSpec",
+      "type": "object"
+    },
+    "SnapshotSection": {
+      "additionalProperties": false,
+      "description": "Parameters of the snapshot calculation.",
+      "properties": {
+        "lookback_months": {
+          "description": "Calendar months between a series' latest valid date and its target date.",
+          "exclusiveMinimum": 0,
+          "title": "Lookback Months",
+          "type": "integer"
+        },
+        "stale_latest_days": {
+          "description": "A latest observation older than this many days before the dataset's latest\ndate is flagged STALE_LATEST.",
+          "exclusiveMinimum": 0,
+          "title": "Stale Latest Days",
+          "type": "integer"
+        },
+        "stale_prior_days": {
+          "description": "A prior observation older than this many days before the target date is\nflagged STALE_PRIOR.",
+          "exclusiveMinimum": 0,
+          "title": "Stale Prior Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "lookback_months",
+        "stale_latest_days",
+        "stale_prior_days"
+      ],
+      "title": "SnapshotSection",
+      "type": "object"
+    },
+    "SourceSection": {
+      "additionalProperties": false,
+      "description": "Where the source file is found and how it is downloaded.",
+      "properties": {
+        "discovery_url": {
+          "description": "Page whose links are searched for file_name.",
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Discovery Url",
+          "type": "string"
+        },
+        "file_name": {
+          "description": "Exact last path segment of the link to pick; also the cached file's name.",
+          "pattern": "^[^/\\\\]+$",
+          "title": "File Name",
+          "type": "string"
+        },
+        "fallback_url": {
+          "description": "Download URL used when the page is unreachable or has no matching link. It\nmust end in file_name.",
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Fallback Url",
+          "type": "string"
+        },
+        "cache_ttl_hours": {
+          "description": "How long a cached copy counts as fresh, in hours. 0 always revalidates.",
+          "minimum": 0,
+          "title": "Cache Ttl Hours",
+          "type": "integer"
+        },
+        "max_attempts": {
+          "description": "HTTP attempts per download, the first one included.",
+          "minimum": 1,
+          "title": "Max Attempts",
+          "type": "integer"
+        },
+        "connect_timeout_seconds": {
+          "description": "Time allowed to open a connection, in seconds.",
+          "exclusiveMinimum": 0,
+          "title": "Connect Timeout Seconds",
+          "type": "number"
+        },
+        "read_timeout_seconds": {
+          "description": "Time allowed between two received chunks, in seconds.",
+          "exclusiveMinimum": 0,
+          "title": "Read Timeout Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "discovery_url",
+        "file_name",
+        "fallback_url",
+        "cache_ttl_hours",
+        "max_attempts",
+        "connect_timeout_seconds",
+        "read_timeout_seconds"
+      ],
+      "title": "SourceSection",
+      "type": "object"
+    },
+    "StructureSection": {
+      "additionalProperties": false,
+      "description": "The source's concepts, in SDMX terms, and the series to keep.",
+      "properties": {
+        "dimensions": {
+          "description": "The dimensions of the series key, in key order.",
+          "items": {
+            "$ref": "#/$defs/Dimension"
+          },
+          "minItems": 1,
+          "title": "Dimensions",
+          "type": "array"
+        },
+        "time_dimension": {
+          "$ref": "#/$defs/TimeDimension",
+          "description": "The time period."
+        },
+        "measure": {
+          "$ref": "#/$defs/Measure",
+          "description": "The observation value."
+        },
+        "observation_attributes": {
+          "description": "Attributes that vary per observation.",
+          "items": {
+            "$ref": "#/$defs/ObservationAttribute"
+          },
+          "title": "Observation Attributes",
+          "type": "array"
+        },
+        "series_attributes": {
+          "description": "Attributes constant within a series; they become series metadata.",
+          "items": {
+            "$ref": "#/$defs/Concept"
+          },
+          "title": "Series Attributes",
+          "type": "array"
+        },
+        "series_metadata": {
+          "$ref": "#/$defs/MetadataConcepts",
+          "description": "The concept bound to each SeriesMetadata field."
+        },
+        "selection": {
+          "description": "One code for each dimension other than the reference area, matched on the\ncode, e.g. a frequency dimension fixed to its daily code.",
+          "patternProperties": {
+            "^[A-Za-z][A-Za-z0-9_-]*$": {
+              "pattern": "^[A-Za-z0-9_@$-]+$",
+              "type": "string"
+            }
+          },
+          "title": "Selection",
+          "type": "object"
+        }
+      },
+      "required": [
+        "dimensions",
+        "time_dimension",
+        "measure",
+        "observation_attributes",
+        "series_attributes",
+        "series_metadata",
+        "selection"
+      ],
+      "title": "StructureSection",
+      "type": "object"
+    },
+    "TimeDimension": {
+      "additionalProperties": false,
+      "description": "The concept that holds the observation date.",
+      "properties": {
+        "id": {
+          "description": "Concept id of the time period.",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "date_format": {
+          "description": "strptime pattern of the dates, e.g. '%Y-%m-%d'. It must give back the year,\nmonth and day.",
+          "title": "Date Format",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "date_format"
+      ],
+      "title": "TimeDimension",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The validated configuration of one dataset.",
+  "properties": {
+    "$schema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "JSON Schema of this document, for editors. Ignored by the program.",
+      "title": "$Schema"
+    },
+    "dataset": {
+      "$ref": "#/$defs/DatasetSection",
+      "description": "Identity and defaults."
+    },
+    "source": {
+      "$ref": "#/$defs/SourceSection",
+      "description": "Download settings: discovery page, file name, fallback URL, cache, attempts."
+    },
+    "structure": {
+      "$ref": "#/$defs/StructureSection",
+      "description": "The source's concepts and their roles."
+    },
+    "columns": {
+      "$ref": "#/$defs/ColumnsSection",
+      "description": "How the concepts are written in the file."
+    },
+    "rules": {
+      "description": "Data-quality rules, in the order they run. Names are unique.",
+      "items": {
+        "$ref": "#/$defs/RuleSpec"
+      },
+      "title": "Rules",
+      "type": "array"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/SnapshotSection",
+      "description": "Snapshot parameters."
+    },
+    "output": {
+      "$ref": "#/$defs/OutputSection",
+      "description": "Output fields."
+    },
+    "area_aliases": {
+      "description": "Requested code to reference-area code. Keys are upper case; no alias maps to\nitself or to another alias.",
+      "patternProperties": {
+        "^[A-Za-z0-9_@$-]+$": {
+          "pattern": "^[A-Za-z0-9_@$-]+$",
+          "type": "string"
+        }
+      },
+      "title": "Area Aliases",
+      "type": "object"
+    }
+  },
+  "required": [
+    "dataset",
+    "source",
+    "structure",
+    "columns",
+    "rules",
+    "snapshot",
+    "output",
+    "area_aliases"
+  ],
+  "title": "DatasetConfig",
+  "type": "object"
+}

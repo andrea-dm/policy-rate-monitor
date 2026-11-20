@@ -1,0 +1,6 @@
+requested_ref_area,ref_area,series_key,ref_area_name,title,unit,decimals,latest_date,latest_value,prior_date,prior_value,change_bps,status,flags
+US,US,D.US,United States,Central bank policy rates - United States - Daily - End of period,Per cent per year,4,2026-11-17,3.875,2025-11-17,3.875,0,ok,
+EA,XM,D.XM,Euro area,Central bank policy rates - Euro area - Daily - End of period,Per cent per year,4,2026-11-17,2.5,2025-11-17,2,50,ok,
+GB,GB,D.GB,United Kingdom,Central bank policy rates - United Kingdom - Daily - End of period,Per cent per year,4,2026-11-16,4,2025-11-14,4,0,ok,
+JP,JP,D.JP,Japan,Central bank policy rates - Japan - Daily - End of period,Per cent per year,4,2026-11-17,1.25,2025-11-17,0.5,75,ok,
+CH,CH,D.CH,Switzerland,Central bank policy rates - Switzerland - Daily - End of period,Per cent per year,4,2026-11-17,0,2025-11-17,0,0,ok,

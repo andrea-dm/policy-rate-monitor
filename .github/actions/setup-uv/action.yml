@@ -1,0 +1,31 @@
+name: Set up uv and Python
+description: >
+  Installs uv (at least the version the pipeline trusts) and points it at a Python version,
+  restoring the shared uv download cache.
+
+inputs:
+  python-version:
+    description: Python version uv uses (sets UV_PYTHON for the rest of the job).
+    required: true
+  save-cache:
+    description: >
+      "true" for the jobs that install the widest dependency closure (pyright, pytest); every
+      other job only restores the cache, so a narrow install cannot overwrite a wide one.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v10.3.3
+      with:
+        # uv 0.13.4 dropped the compromised emSign root from its bundle; 0.13.5 also rejects
+        # chains that hold the compromised intermediate keys.
+        version: ">=0.13.5"
+        python-version: ${{ inputs.python-version }}
+        # `auto` (the default) caches on every event except `release` and tag pushes, so the
+        # jobs that publish never restore a cache another run could have written.
+        enable-cache: auto
+        save-cache: ${{ inputs.save-cache }}
+    - name: Show the uv version
+      shell: bash
+      run: uv --version

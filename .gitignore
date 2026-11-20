@@ -202,7 +202,7 @@ metadata/
 
 # Data
 data/*
-out/*
+# out/ is committed: the generated outputs are a deliverable
 
 # Test files
 rules/temp.json
@@ -215,6 +215,8 @@ old/
 *.tmp
 tmp/
 temp/*
+# Issue and PR payloads read by .github/utils/*.py
+work_in_progress/
 
 
 # Misc
@@ -225,6 +227,7 @@ experimental/*.xlsx
 # GitHub
 .github/*
 !.github/workflows/
+!.github/actions/
 !.github/ISSUE_TEMPLATE/
 !.github/PULL_REQUEST_TEMPLATE/
 AGENTS.md
@@ -233,11 +236,16 @@ AGENTS.md
 # Project-specific ignores:
 # Agent-run check runners (kept local only)
 housekeeping/
+# Design manifests written and read by the agents (kept local only)
+manifests/
 logs/
 outputs/
 notebooks/
+# EDA notebooks are work in progress (README stays tracked)
+diagnostics/*.ipynb
 *.pptx
 bkp/
+resources/
 
 # Local Claude Code settings (machine/session-specific permission allowlists)
 /.claude/

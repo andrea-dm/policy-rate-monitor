@@ -1,0 +1,83 @@
+{
+  "$schema": "./config.schema.json",
+  "dataset": {
+    "id": "bis_cbpol",
+    "title": "Central bank policy rates",
+    "description": "Policy rates set by central banks, as published by the Bank for International Settlements (BIS) in its WS_CBPOL dataflow. The pipeline uses the daily series only.",
+    "attribution": "Source: Bank for International Settlements (BIS), central bank policy rates (WS_CBPOL)",
+    "data_dir": "data"
+  },
+  "source": {
+    "discovery_url": "https://data.bis.org/bulkdownload",
+    "file_name": "WS_CBPOL_csv_flat.zip",
+    "fallback_url": "https://data.bis.org/static/bulk/WS_CBPOL_csv_flat.zip",
+    "cache_ttl_hours": 24,
+    "max_attempts": 3,
+    "connect_timeout_seconds": 10,
+    "read_timeout_seconds": 60
+  },
+  "structure": {
+    "dimensions": [
+      { "id": "FREQ", "coded": true, "column": "freq" },
+      { "id": "REF_AREA", "coded": true, "column": "ref_area" }
+    ],
+    "time_dimension": { "id": "TIME_PERIOD", "date_format": "%Y-%m-%d" },
+    "measure": { "id": "OBS_VALUE", "precision": 15, "scale": 6, "unit_multiplier": "UNIT_MULT" },
+    "observation_attributes": [
+      { "id": "OBS_STATUS", "coded": true, "keep_as": "obs_status", "invalid_codes": ["M"] },
+      { "id": "OBS_CONF", "coded": true, "keep_as": null },
+      { "id": "OBS_PRE_BREAK", "coded": false, "keep_as": null }
+    ],
+    "series_attributes": [
+      { "id": "UNIT_MEASURE", "coded": true },
+      { "id": "UNIT_MULT", "coded": true },
+      { "id": "DECIMALS", "coded": true },
+      { "id": "TITLE", "coded": false },
+      { "id": "COMPILATION", "coded": false },
+      { "id": "SOURCE_REF", "coded": false },
+      { "id": "SUPP_INFO_BREAKS", "coded": false }
+    ],
+    "series_metadata": {
+      "ref_area": "REF_AREA",
+      "frequency": "FREQ",
+      "title": "TITLE",
+      "unit": "UNIT_MEASURE",
+      "decimals": "DECIMALS"
+    },
+    "selection": { "FREQ": "D" }
+  },
+  "columns": {
+    "encoding": "utf-8",
+    "delimiter": ",",
+    "header_label_separator": ":",
+    "value_label_separator": ": ",
+    "missing_values": ["NaN"],
+    "unmapped": ["STRUCTURE", "STRUCTURE_ID", "ACTION", "TIME_FORMAT"],
+    "optional": ["COMPILATION", "SOURCE_REF", "SUPP_INFO_BREAKS"]
+  },
+  "rules": [
+    { "name": "unexpected_column", "severity": "warning" },
+    { "name": "unparseable_date", "severity": "warning" },
+    { "name": "non_numeric_value", "severity": "warning" },
+    { "name": "status_value_mismatch", "severity": "warning" },
+    { "name": "excess_decimals", "severity": "warning" },
+    { "name": "exact_duplicate", "severity": "info" },
+    { "name": "conflicting_duplicate", "severity": "warning", "params": { "keep": "last" } },
+    { "name": "series_attribute_not_constant", "severity": "warning", "params": { "resolve": "most_frequent" } },
+    { "name": "plausible_range", "severity": "warning", "params": { "min": -5, "max": 200 } },
+    {
+      "name": "unexpected_value",
+      "severity": "warning",
+      "params": { "expected": { "ACTION": "I", "OBS_CONF": "F", "OBS_PRE_BREAK": "", "UNIT_MEASURE": "368" } }
+    }
+  ],
+  "snapshot": {
+    "lookback_months": 12,
+    "stale_latest_days": 30,
+    "stale_prior_days": 7
+  },
+  "output": {
+    "metadata_fields": ["series_key", "ref_area_name", "title", "unit", "decimals"]
+  },
+  "area_aliases": { "EA": "XM" }
+}

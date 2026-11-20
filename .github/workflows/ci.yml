@@ -1,76 +1,639 @@
 name: CI
 
+# One workflow for every check, build and release step. The `route` job decides which jobs
+# a run needs (see its comment); every other job depends only on `route` unless it consumes
+# another job's output, so independent checks start in parallel. A job that is allowed to
+# fail says so with `continue-on-error`, and when (e.g. informational on pull requests).
+#
+# Optional parts stay off until the repository is configured for them (Settings -> Secrets
+# and variables -> Actions):
+#   docs (mike)  variable DOCS_PUBLISH=true; needs `mike` in the docs group and GitHub Pages
+#                serving the gh-pages branch
+#   PyPI         variable PYPI_PUBLISH=true; needs a PyPI trusted publisher for this
+#                workflow and the `pypi` environment
+
 "on":
   pull_request:
   push:
-    branches:
-      - main
-      - develop
+    # Branches only. Releasing is a deliberate act: a release runs when a GitHub release
+    # is published, so the tag and the release notes exist before any file is attached.
+    branches: ["**"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Superseded runs are cancelled on pull requests and feature branches. Runs on main,
+# develop, release-* and releases are never cancelled: they publish (docs, packages), and
+# cancelling a run cancels all of its jobs, so a publish could stop halfway.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request' || (github.event_name == 'push'
+    && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop'
+    && !startsWith(github.ref, 'refs/heads/release-')) }}
 
 env:
   PY_VERSION: "3.12"
+  # `uv run` uses exactly the environment the job synced. Without it, `uv run` after a
+  # partial sync (`--only-group lint`) silently installs the project and the dev group.
+  UV_NO_SYNC: "1"
 
 jobs:
-  lint:
-    name: ${{ matrix.name }}
+  # ─────────────────────────────────────────────────────────────────────────── route ─── #
+  # Decides what this run checks or publishes, so each job's `if` reads one output
+  # instead of repeating event and branch tests. `kind` is one of:
+  #   pr           pull_request event
+  #   integration  push (or manual run) on main or develop
+  #   long         push on release-*
+  #   branch       push on any other branch with no open pull request
+  #   release      a GitHub release was published
+  #   skip         push on a branch with an open pull request: that PR's run checks it
+  route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      kind: ${{ steps.route.outputs.kind }}
+      checks: ${{ steps.route.outputs.checks }}
+      audit: ${{ steps.route.outputs.audit }}
+      docs: ${{ steps.route.outputs.docs }}
+      publish: ${{ steps.route.outputs.publish }}
+    steps:
+      - id: route
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          kind=branch
+          if [ "$EVENT" = pull_request ]; then
+            kind=pr
+          elif [ "$EVENT" = release ]; then
+            kind=release
+          elif [[ "$BRANCH" =~ ^(main|develop)$ ]]; then
+            kind=integration
+          elif [[ "$BRANCH" =~ ^release- ]]; then
+            kind=long
+          elif [ "$EVENT" = push ]; then
+            # If the lookup fails, run anyway: a duplicate run beats an unchecked push.
+            if ! open=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq length); then
+              echo "::warning::could not list the open pull requests; running the checks anyway"
+              open=0
+            fi
+            if [ "$open" -gt 0 ]; then
+              kind=skip
+            fi
+          fi
+
+          checks=false; audit=false; docs=false; publish=false
+          case "$kind" in pr|integration|long|branch) checks=true ;; esac
+          case "$kind" in pr|integration) audit=true; docs=true ;; esac
+          if [ "$kind" = release ] || { [ "$kind" = integration ] && [ "$BRANCH" = develop ]; }; then
+            publish=true
+          fi
+
+          echo "kind=$kind checks=$checks audit=$audit docs=$docs publish=$publish"
+          {
+            echo "kind=$kind"
+            echo "checks=$checks"
+            echo "audit=$audit"
+            echo "docs=$docs"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+
+  # ──────────────────────────────────────────────────────────────────────── security ─── #
+  # GitHub's own secret scanning needs a paid plan on a private repository; gitleaks needs
+  # no licence on a personal account.
+  secret-detection:
+    needs: route
+    if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write # gitleaks comments on the PR line that leaks
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitleaks scans the pushed or PR commits, not only the tip
+      - uses: gitleaks/gitleaks-action@v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  audit:
+    needs: route
+    if: needs.route.outputs.audit == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Informational on pull requests, a hard failure on main and develop.
+    continue-on-error: ${{ needs.route.outputs.kind == 'pr' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      # What an installation of the package gets. `uv export` omits extras unless asked,
+      # which would leave the extras' dependencies unaudited.
+      - name: Export the runtime dependencies
+        run: uv export --locked --no-dev --all-extras --no-emit-project --output-file requirements-audit.txt
+      # The export is pinned and hashed, so pip-audit reads it as it is (`--disable-pip`)
+      # instead of resolving it again; `--strict` fails on a dependency it cannot audit.
+      - name: pip-audit
+        run: uvx --from 'pip-audit>=2.7,<3' pip-audit --strict --disable-pip --requirement requirements-audit.txt
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: requirements-audit
+          path: requirements-audit.txt
+          retention-days: 7
+
+  audit-dev:
+    needs: route
+    if: needs.route.outputs.audit == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: ${{ needs.route.outputs.kind == 'pr' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      # What a development environment gets: every group (dev, lint, test, docs, jupyter)
+      # as well. A finding with no fixed release is passed with `--ignore-vuln <id>`, with
+      # the reason and the date beside it.
+      - name: Export every dependency
+        run: uv export --locked --all-groups --all-extras --no-emit-project --output-file requirements-audit-dev.txt
+      - name: pip-audit
+        run: uvx --from 'pip-audit>=2.7,<3' pip-audit --strict --disable-pip --requirement requirements-audit-dev.txt
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: requirements-audit-dev
+          path: requirements-audit-dev.txt
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────────────── lint ─── #
+  ruff:
+    needs: route
+    if: needs.route.outputs.checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      - run: uv sync --locked --only-group lint --no-install-project
+      - name: ruff format
+        run: uv run ruff format --check
+      - name: ruff check
+        run: uv run ruff check --output-format github
+
+  deptry:
+    needs: route
+    if: needs.route.outputs.checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      # deptry maps imports to distributions through the installed metadata, so the
+      # project and every extra are installed, not only the lint group.
+      - run: uv sync --locked --all-extras --no-default-groups --group lint
+      - run: uv run deptry src/ tests/
+
+  tach:
+    needs: route
+    if: needs.route.outputs.checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      - run: uv sync --locked --only-group lint --no-install-project
+      - run: uv run tach check
+
+  # The Angular commit format is mandatory in this repository.
+  commit-format:
+    needs: route
+    if: needs.route.outputs.kind == 'pr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check every commit header of the pull request
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='^((build|chore|ci|docs|feat|fix|perf|refactor|test)(\([a-z0-9,/-]+\))?!?: [a-z].*[^.]|revert: .+)$'
+          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
+            echo "The pull request carries no base or head SHA; no commit range to check."
+            exit 1
+          fi
+          if ! shas=$(git rev-list --no-merges "$BASE_SHA..$HEAD_SHA"); then
+            echo "git rev-list failed; no commit was checked."
+            exit 1
+          fi
+          if [ -z "$shas" ]; then
+            echo "No commit between $BASE_SHA and $HEAD_SHA; refusing to pass an empty check."
+            exit 1
+          fi
+          status=0
+          checked=0
+          for sha in $shas; do
+            if ! header=$(git log -1 --format=%s "$sha"); then
+              echo "git log failed for $sha; the check is incomplete."
+              exit 1
+            fi
+            checked=$((checked + 1))
+            if printf '%s\n' "$header" | grep -Eq "$pattern"; then
+              echo "ok      $sha  $header"
+            else
+              echo "INVALID $sha  $header"
+              status=1
+            fi
+          done
+          echo "checked $checked commit(s)"
+          if [ "$status" -ne 0 ]; then
+            echo
+            echo "Expected: <type>(<scope>): <lowercase summary, no trailing period>"
+          fi
+          exit $status
+
+  # Strict docs build: catches dead cross-references and missing anchors before they are
+  # published. Runs on pull requests as well as main and develop, so a broken page is
+  # caught before it merges.
+  docs-build:
+    needs: route
+    if: needs.route.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      - run: uv sync --locked --only-group docs
+      - run: uv run mkdocs build --strict
+
+  # ─────────────────────────────────────────────────────────────────────── typecheck ─── #
+  pyright:
+    needs: route
+    if: needs.route.outputs.checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # Widest dependency closure in the pipeline, so this job writes the cache.
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+          save-cache: "true"
+      - run: uv sync --locked --all-groups --all-extras
+      - run: uv run pyright src/ tests/
+
+  # ──────────────────────────────────────────────────────────────────────────── test ─── #
+  pytest:
+    name: pytest (${{ matrix.python }})
+    needs: route
+    if: needs.route.outputs.checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: ruff
-            command: |
-              uv run ruff format --check
-              uv run ruff check --output-format github src/ tests/
-          - name: deptry
-            command: uv run deptry src/ tests/
-          - name: tach
-            command: uv run tach check
+        # Every minor version the classifiers in pyproject.toml declare.
+        python: ["3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
         with:
-          python-version: ${{ env.PY_VERSION }}
-          enable-cache: true
-          cache-suffix: lint
-      - name: Install lint dependencies
-        run: uv sync --locked --only-group lint --no-install-project
-      - name: Run ${{ matrix.name }}
-        run: ${{ matrix.command }}
+          python-version: ${{ matrix.python }}
+          save-cache: "true"
+      - run: uv sync --locked --all-groups --all-extras
+      - name: Check the interpreter
+        env:
+          EXPECTED: ${{ matrix.python }}
+        run: >-
+          uv run python -c 'import os, sys;
+          expected = os.environ["EXPECTED"];
+          actual = f"{sys.version_info.major}.{sys.version_info.minor}";
+          print(f"Using Python {actual} (expected {expected})");
+          assert actual == expected, f"Expected Python {expected}, got {actual}"'
+      # No path argument: testpaths (tests/ and src/) applies, so the doctests run too.
+      - name: pytest
+        run: >-
+          uv run pytest -W error::FutureWarning
+          --cov=src/policy_rate_monitor --cov-report=term-missing:skip-covered
+          --cov-report=xml:coverage.xml --junitxml=report.xml
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: pytest-${{ matrix.python }}
+          path: |
+            coverage.xml
+            report.xml
+          retention-days: 1
 
-  pyright:
+  # ─────────────────────────────────────────────────────────────────────────── build ─── #
+  build-package:
+    needs: route
+    if: needs.route.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      base-version: ${{ steps.version.outputs.base }}
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
         with:
           python-version: ${{ env.PY_VERSION }}
-          enable-cache: true
-          cache-suffix: pyright
-      - name: Install dependencies
-        run: uv sync --locked --group dev
-      - run: uv run pyright src/ tests/
+      - id: version
+        env:
+          KIND: ${{ needs.route.outputs.kind }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          base=$(sed -n 's/^version *= *"\(.*\)"/\1/p' pyproject.toml)
+          version="$base"
+          if [ "$KIND" = release ]; then
+            # develop carries a placeholder version between releases, so a forgotten bump
+            # would publish a wheel whose version is not the tagged one.
+            if [ "v$base" != "$TAG" ]; then
+              echo "::error::Tag $TAG does not match the pyproject version $base (expected tag v$base)."
+              exit 1
+            fi
+          else
+            # The run number keeps dev versions monotonic.
+            version="$base.dev$GITHUB_RUN_NUMBER"
+            sed -i "s/^version = \".*\"/version = \"$version\"/" pyproject.toml
+            echo "Mutated version to $version"
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: uv build --out-dir dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
 
-  pytest:
+  # Catches packaging regressions (missing modules, a bad build-backend config, a stale
+  # `__version__`) before the artifact reaches a registry.
+  wheel-smoke:
+    needs: [route, build-package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - name: Import the installed wheel
+        env:
+          EXPECTED_VERSION: ${{ needs.build-package.outputs.version }}
+          BASE_VERSION: ${{ needs.build-package.outputs.base-version }}
+          UV_NO_SYNC: "false" # the `--with` environment must be installed
+        run: |
+          wheel=$(realpath dist/*.whl)
+          # Outside the checkout, so `import` can only find the installed wheel.
+          cd "$RUNNER_TEMP"
+          uv run --no-project --isolated --with "$wheel" python -c '
+          import importlib.metadata, os
+          import policy_rate_monitor
+          installed = importlib.metadata.version("policy-rate-monitor")
+          print(policy_rate_monitor.__file__, installed, policy_rate_monitor.__version__)
+          assert installed == os.environ["EXPECTED_VERSION"], installed
+          assert policy_rate_monitor.__version__ == os.environ["BASE_VERSION"], policy_rate_monitor.__version__
+          '
+
+  sbom:
+    needs: route
+    if: needs.route.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true # supply-chain artifact only; never blocks a release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      - run: uv export --locked --no-dev --all-extras --no-emit-project --output-file requirements-sbom.txt
+      - run: uvx --from 'cyclonedx-bom>=7,<8' cyclonedx-py requirements requirements-sbom.txt --output-format JSON --output-file sbom.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: 90 # the default maximum on a private repository
+
+  # Versioned docs with mike on the gh-pages branch, which GitHub Pages serves as it is:
+  # `dev` follows develop, `stable` the latest release.
+  build-docs:
+    needs: route
+    if: needs.route.outputs.publish == 'true' && vars.DOCS_PUBLISH == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      contents: write # mike pushes to gh-pages
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-uv
         with:
           python-version: ${{ env.PY_VERSION }}
-          enable-cache: true
-          cache-suffix: pytest
-      - name: Install dependencies
-        run: uv sync --locked --group dev
-      - run: uv run pytest tests/ --cov=src/policy_rate_monitor --cov-report=term-missing:skip-covered
+      - run: uv sync --locked --only-group docs
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages:gh-pages || echo "gh-pages not published yet."
+      - name: Deploy with mike
+        env:
+          KIND: ${{ needs.route.outputs.kind }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          # pages_has version|alias NAME: whether gh-pages already holds that version or alias.
+          pages_has() {
+            local versions
+            versions=$(git show gh-pages:versions.json 2>/dev/null) || return 1
+            printf '%s' "$versions" | python3 -c '
+          import json, sys
+          field, name = sys.argv[1], sys.argv[2]
+          items = json.load(sys.stdin)
+          found = any(item.get("version") == name if field == "version" else name in item.get("aliases", []) for item in items)
+          sys.exit(0 if found else 1)
+          ' "$1" "$2"
+          }
+
+          # A version named like an alias blocks the alias, so it is deleted first.
+          if [ "$KIND" = release ]; then
+            if pages_has version stable; then uv run mike delete --push stable; fi
+            uv run mike deploy --push --update-aliases "$TAG" stable
+          else
+            if pages_has version dev; then uv run mike delete --push dev; fi
+            uv run mike deploy --push --update-aliases develop dev
+          fi
+          # Until the first release there is no `stable`, so the site defaults to `dev`.
+          if pages_has alias stable; then
+            uv run mike set-default --push stable
+          else
+            uv run mike set-default --push dev
+          fi
+
+  # ────────────────────────────────────────────────────────────────────────── deploy ─── #
+  # Attaches the built distributions and the SBOM to the published GitHub release, so
+  # every release carries the exact files that passed the smoke test.
+  release-github:
+    needs: [route, build-package, wheel-smoke, sbom]
+    if: >-
+      ${{ !cancelled() && needs.route.outputs.kind == 'release'
+      && needs.build-package.result == 'success' && needs.wheel-smoke.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: github-release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - uses: actions/download-artifact@v8
+        continue-on-error: true # the SBOM never blocks a release
+        with:
+          name: sbom
+      - name: Attach the assets to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          files=(dist/*)
+          if [ -f sbom.json ]; then
+            files+=(sbom.json)
+          fi
+          gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY"
+
+  # PyPI is the registry that cannot be undone, so it goes last, and only after the GitHub
+  # release accepted the same files.
+  release-pypi:
+    needs: [route, release-github]
+    if: >-
+      ${{ !cancelled() && needs.route.outputs.kind == 'release'
+      && needs.release-github.result == 'success' && vars.PYPI_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/policy-rate-monitor
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # trusted publishing: no PyPI token is stored
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - run: uv publish --trusted-publishing always dist/*
+
+  # Fast-forwards develop to main after a green run on main. Non-blocking: develop may
+  # legitimately diverge, and a failed fast-forward must not mark a release as broken.
+  # A push made with GITHUB_TOKEN starts no new run, so develop is not checked again.
+  sync-develop-with-main:
+    needs: [route, audit, audit-dev, ruff, deptry, tach, docs-build, pyright, pytest]
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    concurrency:
+      group: develop-sync
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: develop
+          fetch-depth: 0
+      - run: |
+          git fetch origin main develop
+          if ! git merge --ff-only origin/main; then
+            echo "::error::develop has diverged from main; open a pull request to reconcile."
+            exit 1
+          fi
+          git push origin develop
+
+  # ───────────────────────────────────────────────────────────────────────────── log ─── #
+  notify-on-failure:
+    needs:
+      - route
+      - secret-detection
+      - audit
+      - audit-dev
+      - ruff
+      - deptry
+      - tach
+      - commit-format
+      - docs-build
+      - pyright
+      - pytest
+      - build-package
+      - wheel-smoke
+      - sbom
+      - build-docs
+      - release-github
+      - release-pypi
+      - sync-develop-with-main
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -n "$PR" ]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" \
+              --body "@$AUTHOR — pipeline failed. Please check the [report]($RUN_URL)."
+          else
+            echo "Pipeline failed on $GITHUB_REF_NAME. See $RUN_URL"
+          fi
