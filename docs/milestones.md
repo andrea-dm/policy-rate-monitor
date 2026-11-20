@@ -340,6 +340,9 @@ optional work begins.
 - The `config validate` and `config schema` commands, and options also read from environment
   variables and the configuration file, so the CLI and the API are configured the same way.
 - Follow-ups of the configuration package: clearer messages, earlier checks, less duplicated code.
+- Fast, exact analytics for the front end: the 12-month change of every area as of any date, the
+  change history and every rate move, on NumPy arrays, with Numba as an optional extra. The
+  report's snapshot uses the same search.
 
 **Done when.** API tests pass against the fake provider, and on the same canonical data the
 endpoints return the same numbers as `bis-prates report`.

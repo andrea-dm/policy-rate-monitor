@@ -1,6 +1,7 @@
 # 0007 The 12-month look-back: binary search per area
 
-- **Status:** Accepted
+- **Status:** Accepted. The search is superseded by [0008](0008-fast-analytics-numpy-numba.md);
+  the target-date rule and the "on or before" rule stay.
 - **Decided:** 2026-11-17 (method and benchmark), 2026-11-19 (shipped version)
 
 ## Context

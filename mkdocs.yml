@@ -24,3 +24,4 @@ nav:
       - adr/0005-data-stack-pyarrow.md
       - adr/0006-exact-decimal-rates.md
       - adr/0007-twelve-month-look-back.md
+      - adr/0008-fast-analytics-numpy-numba.md

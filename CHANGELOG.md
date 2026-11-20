@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `analytics`: the staged observations as fixed-point NumPy arrays, with `snapshot_at` (latest
+  rate, rate 12 months earlier and change for every area as of any date), `change_history` (the
+  12-month change of every observation) and `rate_moves` (every rate change and its size), exact
+  in integer arithmetic (#13).
+- The optional extra `fast`, which installs Numba to compile the analytics kernels; without it they
+  run on NumPy with the same results (#13).
+
+### Changed
+
+- The report's snapshot uses the `analytics` search: about 0.2 s for all 49 areas instead of
+  2.3 s, with identical results (#13).
+- `transform` casts plain numbers in one go and parses any other value exactly as before; the
+  staged files are unchanged (#13).
+- `SnapshotArgs` no longer takes `ref_area_column`: the snapshot finds an area's rows by its series
+  key (#13).
+
 ## [0.1.0] — 2026-11-20
 
 The first release: the `bis-prates` command line, from the BIS bulk download to the report.
