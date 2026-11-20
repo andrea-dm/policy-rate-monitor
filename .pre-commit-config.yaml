@@ -1,5 +1,17 @@
 default_install_hook_types: [pre-commit, pre-push]
+# The checks run in a fixed order and stop at the first failure: the module layering first,
+# since a wrong import changes the code anyway; then ruff; at push, deptry and the slow pyright.
+# README.md (Development Workflow) and CI use the same order.
+fail_fast: true
 repos:
+  - repo: local
+    hooks:
+      - id: tach-check
+        name: tach check
+        entry: uv run --no-sync tach check
+        language: system
+        always_run: true
+        pass_filenames: false
   - repo: builtin
     hooks:
       - id: trailing-whitespace
@@ -28,13 +40,6 @@ repos:
         entry: uv run --no-sync ruff format
         language: system
         types: [python]
-      - id: pyright
-        name: pyright (pre-push)
-        entry: uv run --no-sync pyright
-        language: system
-        types: [python]
-        pass_filenames: false
-        stages: [pre-push]
       - id: deptry
         name: deptry (pre-push)
         entry: uv run --no-sync deptry src/ tests/
@@ -42,10 +47,10 @@ repos:
         always_run: true
         pass_filenames: false
         stages: [pre-push]
-      - id: tach-check
-        name: tach check (pre-push)
-        entry: uv run --no-sync tach check
+      - id: pyright
+        name: pyright (pre-push)
+        entry: uv run --no-sync pyright
         language: system
-        always_run: true
+        types: [python]
         pass_filenames: false
         stages: [pre-push]
