@@ -26,7 +26,8 @@ The first release: the `bis-prates` command line, from the BIS bulk download to 
   or before the same calendar date 12 months earlier, and the change in basis points, computed
   exactly; statuses for an unknown area, no valid data and insufficient history, and flags for a
   stale latest or prior rate. Writes `summary.csv`, `summary.json`, `policy_rates.png` and
-  `report.md` (#11).
+  `report.md` (#11). A requested code the data does not have gets a warning listing the codes it
+  has, with their names.
 - One exit code per kind of failure (#10).
 - `DataProvider`, the interface through which the CLI reads data, with the canonical observations
   schema built from the configuration, `BulkFileProvider` over the bulk-download file,
