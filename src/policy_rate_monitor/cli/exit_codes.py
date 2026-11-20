@@ -1,5 +1,8 @@
 """Exit codes of ``bis-prates`` and the mapping from the package's errors to them.
 
+See also: [CLI reference: exit codes](cli.md#exit-codes) and [decision
+0010](adr/0010-cli-and-exit-codes.md).
+
 Examples:
     A subclass gets the code of its nearest mapped parent; anything else is a bug:
 

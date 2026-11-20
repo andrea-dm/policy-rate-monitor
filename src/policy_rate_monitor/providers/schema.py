@@ -1,4 +1,7 @@
-"""The canonical form of the observations every provider returns."""
+"""The canonical form of the observations every provider returns.
+
+See also: [Data model](data-model.md).
+"""
 
 from __future__ import annotations
 

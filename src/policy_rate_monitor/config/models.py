@@ -12,6 +12,9 @@ with ``parse_config`` (or ``model_validate_json``), not from a parsed ``dict``. 
 that needs one field runs on its type, so it reports even while another section fails.
 Checks across fields run once those fields are valid.
 
+See also: [Configuration](configuration.md) and [decision
+0007](adr/0007-config-driven-design.md).
+
 Examples:
     >>> CANONICAL_COLUMNS
     ('series_key', 'date', 'value', 'is_valid')
@@ -265,7 +268,7 @@ class DatasetSection(_ConfigModel):
     description: Text
     """What the data is: the report's "About the data" paragraph."""
     attribution: Text
-    """Source credit, shown in the chart caption and the report."""
+    """Source credit, shown in the report's "About the data" section."""
     data_dir: LocalPath
     """Default data directory. A relative path is resolved against the working
     directory when the command runs; '~' and '$' are not expanded."""
@@ -603,7 +606,7 @@ class RuleSpec(_ConfigModel):
     """One data-quality rule to run: which one, how serious, with what parameters."""
 
     name: RuleName
-    """Name under which the rule is registered."""
+    """Name of the rule; a name the code does not implement is logged and skipped."""
     enabled: bool = True
     """False switches the rule off and keeps its settings."""
     severity: DataQualitySeverity
@@ -664,7 +667,8 @@ class DatasetConfig(_ConfigModel):
     columns: ColumnsSection
     """How the concepts are written in the file."""
     rules: RuleList
-    """Data-quality rules, in the order they run. Names are unique."""
+    """Data-quality rules to run, by name. Names are unique; the order in the file
+    does not change the order the checks run."""
     snapshot: SnapshotSection
     """Snapshot parameters."""
     output: OutputSection

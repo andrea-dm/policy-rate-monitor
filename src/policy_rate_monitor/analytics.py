@@ -21,6 +21,8 @@ same arrays. ``rate_moves`` needs no search and runs on NumPy only.
 
 The arrays of a ``RateHistory`` are read-only, so a history can be shared by every
 request of a server.
+
+See also: [decision 0013](adr/0013-fast-analytics-numpy-numba.md).
 """
 
 from __future__ import annotations
@@ -69,14 +71,19 @@ NO_INDEX = -1
 """Index returned when a series has no observation that qualifies."""
 
 SERIES_KEY, DATE, VALUE, IS_VALID = CANONICAL_COLUMNS
+"""Names of the canonical columns the arrays are built from."""
 SERIES_STEP = 2**32
 """Distance between two series in ``series_days``; any int32 day fits between."""
 EPOCH = date(1970, 1, 1)
 """Day 0 of the day numbers."""
 DAY = np.dtype("datetime64[D]")
+"""NumPy dtype of a date counted in days, for the calendar arithmetic."""
 MONTH = np.dtype("datetime64[M]")
+"""NumPy dtype of a date counted in months, for the calendar arithmetic."""
 ONE_DAY = np.timedelta64(1, "D")
+"""One day, to step NumPy day dates."""
 ONE_MONTH = np.timedelta64(1, "M")
+"""One month, to step NumPy month dates."""
 
 
 @dataclass(frozen=True)
@@ -106,6 +113,13 @@ class RateHistory:
     def position(self, series_key: str) -> int:
         """Returns the position of a series in ``keys``.
 
+        Args:
+            series_key: The series key, e.g. ``"D.US"``.
+
+        Returns:
+            The position ``i`` of the series: its rows are ``offsets[i]`` to
+            ``offsets[i + 1] - 1``.
+
         Raises:
             KeyError: The series is not in the history.
         """
@@ -115,11 +129,25 @@ class RateHistory:
             raise KeyError(series_key) from None
 
     def date_at(self, index: int) -> date:
-        """Returns the date of observation *index*."""
+        """Returns the date of one observation.
+
+        Args:
+            index: Position of the observation in the arrays.
+
+        Returns:
+            The observation date.
+        """
         return EPOCH + timedelta(days=int(self.days[index]))
 
     def value_at(self, index: int) -> Decimal:
-        """Returns the value of observation *index*, exactly as it was staged."""
+        """Returns the value of one observation, exactly as it was staged.
+
+        Args:
+            index: Position of the observation in the arrays.
+
+        Returns:
+            The value in percent, with the staged number of decimal places.
+        """
         return Decimal(int(self.values[index])).scaleb(-self.scale)
 
 
@@ -224,6 +252,12 @@ def _scale(values: Series) -> int:
 def day_number(day: date) -> int:
     """Returns a date as days since 1970-01-01.
 
+    Args:
+        day: The date.
+
+    Returns:
+        The number of days from 1970-01-01, negative before it.
+
     Examples:
         >>> day_number(date(1970, 1, 2)), day_number(date(1969, 12, 31))
         (1, -1)
@@ -259,6 +293,13 @@ def months_back(days: NDArray[np.int32], months: int) -> NDArray[np.int32]:
 
 def bps(change: int | np.int64, scale: int) -> Decimal:
     """Turns a change in units of 10**-scale percent into basis points, exactly.
+
+    Args:
+        change: A difference of two values of the arrays.
+        scale: Decimal places of the values (``RateHistory.scale``).
+
+    Returns:
+        The change in basis points.
 
     Examples:
         >>> bps(250_000, 6)
@@ -336,7 +377,8 @@ def rate_moves(history: RateHistory) -> RateMoves:
     return RateMoves(index, values[index] - values[index - 1])
 
 
-# The searches: a NumPy version and a loop that numba can compile.
+# --- The searches -------------------------------------------------
+# Each one has a NumPy version and a loop that numba can compile.
 
 
 def _prior_index_numpy(

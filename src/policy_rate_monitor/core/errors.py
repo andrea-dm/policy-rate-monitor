@@ -4,6 +4,8 @@ The errors describe *what* went wrong in domain terms and carry no exit codes or
 statuses: the CLI (``cli.exit_codes``) and the API map them, so ``core`` imports nothing
 from the layers above it. Anything that is not a ``PolicyRateMonitorError`` is a bug.
 
+See also: [CLI reference: exit codes](cli.md#exit-codes).
+
 Examples:
     Callers catch the base class to tell an error raised on purpose from a bug:
 

@@ -1,8 +1,11 @@
 name: CI
 
 # One workflow for every check, build and release step. The `route` job decides which jobs
-# a run needs (see its comment); every other job depends only on `route` unless it consumes
-# another job's output, so independent checks start in parallel. A job that is allowed to
+# a run needs (see its comment). The code checks run as a chain, in the order of the
+# README's development workflow, each starting only when the one before passed: tach, ruff,
+# deptry, pyright, pytest, then the docs build. A failure stops the chain, so the slow jobs
+# do not run on code that already failed a cheap check. Every other job depends only on
+# `route` unless it consumes another job's output, so it starts in parallel. A job that is allowed to
 # fail says so with `continue-on-error`, and when (e.g. informational on pull requests).
 #
 # Optional parts stay off until the repository is configured for them (Settings -> Secrets
@@ -179,7 +182,7 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────────────── lint ─── #
   ruff:
-    needs: route
+    needs: [route, tach]
     if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -189,13 +192,13 @@ jobs:
         with:
           python-version: ${{ env.PY_VERSION }}
       - run: uv sync --locked --only-group lint --no-install-project
-      - name: ruff format
-        run: uv run ruff format --check
       - name: ruff check
         run: uv run ruff check --output-format github
+      - name: ruff format
+        run: uv run ruff format --check
 
   deptry:
-    needs: route
+    needs: [route, ruff]
     if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -277,7 +280,7 @@ jobs:
   # published. Runs on pull requests as well as main and develop, so a broken page is
   # caught before it merges.
   docs-build:
-    needs: route
+    needs: [route, pytest]
     if: needs.route.outputs.docs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -291,7 +294,7 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────── typecheck ─── #
   pyright:
-    needs: route
+    needs: [route, deptry]
     if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -308,7 +311,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────── test ─── #
   pytest:
     name: pytest (${{ matrix.python }})
-    needs: route
+    needs: [route, pyright]
     if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20

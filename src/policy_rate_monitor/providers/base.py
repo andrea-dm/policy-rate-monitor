@@ -1,4 +1,7 @@
-"""The interface between the data and the rest of the package."""
+"""The interface between the data and the rest of the package.
+
+See also: [decision 0008](adr/0008-provider-interface.md).
+"""
 
 from __future__ import annotations
 
@@ -31,7 +34,7 @@ class DataProvider(ABC):
     except ``source_release``, which returns ``None`` when the release is unknown.
     ``observations`` returns a table in the schema of ``observation_schema``, with at
     most one row per series and date, sorted by date within each series. Why an Arrow
-    table: docs/adr/0005-data-stack-pyarrow.md.
+    table: [decision 0001](adr/0001-data-stack-pyarrow.md).
     """
 
     @abstractmethod
@@ -40,6 +43,11 @@ class DataProvider(ABC):
 
         Returns:
             The release of the source data now at hand.
+
+        Raises:
+            SourceUnavailableError: The source cannot be reached and no copy is at
+                hand.
+            UnexpectedFormatError: The source data is not in the expected format.
         """
 
     @abstractmethod
@@ -47,18 +55,36 @@ class DataProvider(ABC):
         """Builds the canonical data from the source data.
 
         Its data-quality findings are read with ``data_quality_issues``.
+
+        Raises:
+            MissingInputError: The source data has not been fetched.
+            UnexpectedFormatError: The source data is not in the expected format.
         """
 
     @abstractmethod
     def list_series(self) -> list[str]:
-        """Returns the key of every series, e.g. ``["D.GB", "D.US"]``."""
+        """Returns the key of every series.
+
+        Returns:
+            The series keys, e.g. ``["D.GB", "D.US"]``.
+
+        Raises:
+            MissingInputError: The data is not prepared yet.
+        """
 
     @abstractmethod
     def series_metadata(self, series_key: str) -> SeriesMetadata:
         """Returns the metadata of one series.
 
+        Args:
+            series_key: The series key, e.g. ``"D.US"``.
+
+        Returns:
+            The series' title, unit, decimals and other attributes.
+
         Raises:
             KeyError: There is no series with this key.
+            MissingInputError: The data is not prepared yet.
         """
 
     @abstractmethod
@@ -67,16 +93,30 @@ class DataProvider(ABC):
 
         Args:
             series_keys: The series to return; ``None`` returns every series.
+
+        Returns:
+            A table in the schema of ``observation_schema``.
+
+        Raises:
+            MissingInputError: The data is not prepared yet.
         """
 
     @abstractmethod
     def data_quality_issues(self) -> list[DataQualityIssue]:
-        """Returns the data-quality findings of the last ``transform``."""
+        """Returns the data-quality findings of the last ``transform``.
+
+        Returns:
+            The findings; empty when the data had none.
+
+        Raises:
+            MissingInputError: The data is not prepared yet.
+        """
 
     @abstractmethod
     def source_release(self) -> SourceRelease | None:
         """Returns the release the canonical data was built from.
 
-        ``None`` when the provider has no record of it: the data can still be used,
-        with its provenance unknown.
+        Returns:
+            The release; ``None`` when the provider has no record of it: the data can
+            still be used, with its provenance unknown.
         """

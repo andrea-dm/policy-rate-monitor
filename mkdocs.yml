@@ -1,4 +1,5 @@
 site_name: policy-rate-monitor
+repo_url: https://github.com/andrea-dm/policy-rate-monitor
 docs_dir: docs
 theme:
   name: material
@@ -9,7 +10,11 @@ plugins:
         python:
           paths: [src]
 markdown_extensions:
+  - admonition
+  - pymdownx.details
   - tables
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -17,11 +22,26 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
 nav:
   - Home: index.md
+  - How it works: how-it-works.md
+  - Architecture: architecture.md
+  - Data model: data-model.md
+  - CLI reference: cli.md
   - Configuration: configuration.md
+  - API reference: reference.md
+  - Glossary: glossary.md
   - Milestones: milestones.md
   - Decisions:
       - adr/index.md
-      - adr/0005-data-stack-pyarrow.md
-      - adr/0006-exact-decimal-rates.md
-      - adr/0007-twelve-month-look-back.md
-      - adr/0008-fast-analytics-numpy-numba.md
+      - adr/0001-data-stack-pyarrow.md
+      - adr/0002-charting-and-report-format.md
+      - adr/0003-web-extension-stack.md
+      - adr/0004-domain-model.md
+      - adr/0005-exact-decimal-rates.md
+      - adr/0006-twelve-month-look-back.md
+      - adr/0007-config-driven-design.md
+      - adr/0008-provider-interface.md
+      - adr/0009-sdmx-validation.md
+      - adr/0010-cli-and-exit-codes.md
+      - adr/0011-data-quality-rules.md
+      - adr/0012-elt-raw-and-staged-layers.md
+      - adr/0013-fast-analytics-numpy-numba.md

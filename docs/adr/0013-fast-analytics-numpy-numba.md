@@ -1,8 +1,8 @@
-# 0008 Fast analytics: fixed-point arrays, NumPy kernels, Numba optional
+# 0013 Fast analytics: fixed-point arrays, NumPy kernels, Numba optional
 
 - **Status:** Accepted
 - **Decided:** 2026-11-19 (Numba over Cython), 2026-11-20 (the analytics module)
-- **Supersedes:** the shipped search of [0007](0007-twelve-month-look-back.md). Its target-date
+- **Supersedes:** the shipped search of [0006](0006-twelve-month-look-back.md). Its target-date
   rule and its "on or before" rule stay.
 
 ## Context
@@ -14,7 +14,7 @@ a date slider or switching areas, and needs answers in well under a millisecond.
 needs two more calculations: the 12-month change for every observation, and every rate decision
 with its size.
 
-The benchmark behind [0007](0007-twelve-month-look-back.md) had already found NumPy `searchsorted`
+The benchmark behind [0006](0006-twelve-month-look-back.md) had already found NumPy `searchsorted`
 the fastest search. A second trial (`diagnostics/bench_kernels.py`) compared pure Python, Numba and
 Cython on one kernel.
 
@@ -24,7 +24,7 @@ Cython on one kernel.
   NumPy arrays once (about 0.2 s): the valid observations of all series end to end, dates as int32
   day numbers, and rates as int64 in units of 10⁻⁶ percent (the configured scale). A change in
   basis points is then an exact integer difference, so the arithmetic stays exact as
-  [0006](0006-exact-decimal-rates.md) requires.
+  [0005](0005-exact-decimal-rates.md) requires.
 - **One search for all series.** Each date is packed with its series position into one int64
   (`series × 2³² + day`), which rises across the whole array, so one `np.searchsorted` call answers
   a question for every series at once.
@@ -72,7 +72,7 @@ compiled code in 0.17 s (`diagnostics/README.md`).
 | Cython | As fast as Numba on these kernels, but needs a C compiler, compiled wheels per platform and Python version, a different build backend and matching CI jobs |
 | Numba as a required dependency | The NumPy versions are already within the target; a compiled dependency in every install is not needed for that margin |
 | Pure NumPy, no Numba at all | Kept as the default; Numba stays available for the extra margin a server may want |
-| DuckDB `ASOF JOIN` | Fast, but a new engine for in-memory data of this size; still the path for data larger than memory ([0007](0007-twelve-month-look-back.md)) |
+| DuckDB `ASOF JOIN` | Fast, but a new engine for in-memory data of this size; still the path for data larger than memory ([0006](0006-twelve-month-look-back.md)) |
 | Keep `bisect` in the report and use the arrays only for the front end | Two searches to keep in agreement; one search tested against one reference is simpler |
 | Explicit Numba signatures (eager compilation) | They move the compilation from the first call to import time, so every command, `fetch` and `--help` included, would pay it; with `cache=True` the first call already loads from disk |
 | `fastmath`, `boundscheck`, `inline` | No effect here: `fastmath` relaxes floating-point rules and the kernels are integer only; bounds checks are already off by default; `inline` inlines one Numba function into another, and the kernels call none |

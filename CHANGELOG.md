@@ -15,15 +15,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in integer arithmetic (#13).
 - The optional extra `fast`, which installs Numba to compile the analytics kernels; without it they
   run on NumPy with the same results (#13).
+- Documentation pages: how each task of the brief is solved, with the ingestion and caching
+  processes step by step; the architecture; the data model and assumptions; the CLI reference; the
+  API reference generated from the docstrings; a glossary; a new home page.
+- Decision records for the charting and report format, the web extension stack, the domain model,
+  the config-driven design, the provider interface, the SDMX validation, the command line and its
+  exit codes, the data-quality rules, and the raw and staged layers.
+- Two example notebooks: `examples/fetch_and_transform.ipynb` downloads and stages the data, as
+  `fetch` and `transform` do; `examples/policy_rates.ipynb` loads the staged data through the
+  provider, computes the 12-month change and plots the rates, as `report` does.
+- `diagnostics/check_record_figures.py`, which reproduces the figures about the data quoted in the
+  decision records.
+- Docstrings for every public function, method and constant, each module linked to its page.
 
 ### Changed
 
+- The decision records are renumbered, once, in the order the decisions were taken. Links to the
+  old file names no longer resolve: `0005-data-stack-pyarrow.md` is now `0001-…`,
+  `0006-exact-decimal-rates.md` is `0005-…`, and `0007-twelve-month-look-back.md` is `0006-…`.
 - The report's snapshot uses the `analytics` search: about 0.2 s for all 49 areas instead of
   2.3 s, with identical results (#13).
 - `transform` casts plain numbers in one go and parses any other value exactly as before; the
   staged files are unchanged (#13).
 - `SnapshotArgs` no longer takes `ref_area_column`: the snapshot finds an area's rows by its series
   key (#13).
+- Exit code 8 now says "cannot read or write a file", since it covers any file error, not only the
+  outputs.
+- The checks run in one order everywhere, and stop at the first failure: tach, ruff check, ruff
+  format, deptry, pyright, pytest, the docs build. The commit hooks run tach before ruff, the push
+  hooks deptry before pyright, and in CI each check job starts only when the one before passed.
+- The message for exit code 1 says "no requested area has a complete result (status ok)", as the
+  docs do.
+
+### Fixed
+
+- `transform` finds the CSV in the ZIP whatever the case of its extension, as `fetch` already did.
+- Docstrings and pages that did not match the code: requested codes are kept as typed, not
+  upper-cased; `version_id` is never set for the bulk download; the attribution is shown in the
+  report only; an unexpected error's traceback is always logged.
 
 ## [0.1.0] — 2026-11-20
 
