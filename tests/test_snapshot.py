@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 import pandas as pd
-import pyarrow as pa  # pyright: ignore[reportMissingTypeStubs]
+import pyarrow as pa
 import pytest
 
 from policy_rate_monitor.config.models import SnapshotSection
@@ -28,7 +28,7 @@ NAMES = {
 }
 
 # The staged value type (precision and scale from the config's measure).
-RATE = pd.ArrowDtype(pa.decimal128(15, 6))  # pyright: ignore[reportUnknownArgumentType]
+RATE = pd.ArrowDtype(pa.decimal128(15, 6))
 
 # (ref_area, date, value, is_valid); a None value is a missing observation.
 Row = tuple[str, str, str | None, bool]

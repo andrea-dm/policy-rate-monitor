@@ -14,19 +14,15 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pandas as pd
+
+from policy_rate_monitor.bulk import BulkFileProvider
 from policy_rate_monitor.cli.exit_codes import ExitCode, exit_code_for
 from policy_rate_monitor.config import FileConfigSource
 from policy_rate_monitor.core.errors import PolicyRateMonitorError
 from policy_rate_monitor.core.models import SnapshotStatus
-from policy_rate_monitor.fetch import fetch, read_release
 from policy_rate_monitor.report import Report, ReportArgs
 from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
-from policy_rate_monitor.transform import (
-    load_data_quality,
-    load_observations,
-    load_series,
-    transform,
-)
 
 __all__ = ["main"]
 
@@ -125,30 +121,36 @@ def _parser() -> argparse.ArgumentParser:
 
 def _fetch(args: argparse.Namespace) -> int:
     config = FileConfigSource(args.config).load()
-    data_dir = args.data_dir or config.dataset.data_dir
-    release = fetch(config.source, data_dir)
+    provider = BulkFileProvider(config, args.data_dir or config.dataset.data_dir)
+    release = provider.fetch()
     sys.stdout.write(f"{release.location} (sha256 {release.checksum_sha256})\n")
     return ExitCode.OK
 
 
 def _transform(args: argparse.Namespace) -> int:
     config = FileConfigSource(args.config).load()
-    data_dir = args.data_dir or config.dataset.data_dir
-    summary = transform(config, data_dir)
+    provider = BulkFileProvider(config, args.data_dir or config.dataset.data_dir)
+    provider.transform()
+    observations = provider.observations().num_rows
+    series = len(provider.list_series())
+    issues = len(provider.data_quality_issues())
     sys.stdout.write(
-        f"{summary.rows_read} rows read, {summary.observations} observations of "
-        f"{summary.series} series kept, {summary.issues} data-quality findings\n"
+        f"{observations} observations of {series} series kept, "
+        f"{issues} data-quality findings\n"
     )
     return ExitCode.OK
 
 
 def _report(args: argparse.Namespace) -> int:
     config = FileConfigSource(args.config).load()
-    data_dir = args.data_dir or config.dataset.data_dir
-    observations = load_observations(data_dir)
-    series = load_series(data_dir)
-    issues = load_data_quality(data_dir)
-    release = read_release(config.source, data_dir)
+    provider = BulkFileProvider(config, args.data_dir or config.dataset.data_dir)
+    # Arrow types kept, so values stay Decimal. The stubs leave a parameter of
+    # to_pandas untyped.
+    table = provider.observations()
+    observations = table.to_pandas(types_mapper=pd.ArrowDtype)  # pyright: ignore[reportUnknownMemberType]
+    series = [provider.series_metadata(key) for key in provider.list_series()]
+    issues = provider.data_quality_issues()
+    release = provider.source_release()
 
     ref_area_id = config.structure.series_metadata.ref_area
     ref_area_column = next(

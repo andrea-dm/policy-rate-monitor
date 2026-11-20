@@ -28,6 +28,9 @@ The first release: the `bis-prates` command line, from the BIS bulk download to 
   stale latest or prior rate. Writes `summary.csv`, `summary.json`, `policy_rates.png` and
   `report.md` (#11).
 - One exit code per kind of failure (#10).
+- `DataProvider`, the interface through which the CLI reads data, with the canonical observations
+  schema built from the configuration, `BulkFileProvider` over the bulk-download file,
+  `InMemoryProvider` for tests, and contract tests every provider passes (#6).
 - The dataset configuration `configs/bis_cbpol.json`, its JSON Schema, and the configuration
   models that validate it when it is loaded (#5).
 - The domain models and typed errors (#2).

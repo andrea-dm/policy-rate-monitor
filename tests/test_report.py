@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
-import pyarrow as pa  # pyright: ignore[reportMissingTypeStubs]
+import pyarrow as pa
 import pytest
 
 from policy_rate_monitor.config import parse_config
@@ -24,7 +24,7 @@ from policy_rate_monitor.report import Report, ReportArgs
 CONFIG_PATH = Path(__file__).parents[1] / "configs" / "bis_cbpol.json"
 
 # The staged value type (precision and scale from the config's measure).
-RATE = pd.ArrowDtype(pa.decimal128(15, 6))  # pyright: ignore[reportUnknownArgumentType]
+RATE = pd.ArrowDtype(pa.decimal128(15, 6))
 
 
 @pytest.mark.contract

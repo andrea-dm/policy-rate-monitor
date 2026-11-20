@@ -20,7 +20,7 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
 import pandas as pd
-import pyarrow as pa  # pyright: ignore[reportMissingTypeStubs]
+import pyarrow as pa
 from pydantic import TypeAdapter
 
 from policy_rate_monitor.core.errors import MissingInputError, UnexpectedFormatError
@@ -362,8 +362,8 @@ def _values(data: pd.DataFrame, config: DatasetConfig) -> pd.Series:
             values.append(
                 _to_decimal(text, multiplier, measure.precision, measure.scale)
             )
-    value_type = pa.decimal128(measure.precision, measure.scale)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    return pd.Series(values, index=data.index, dtype=pd.ArrowDtype(value_type))  # pyright: ignore[reportUnknownArgumentType]
+    value_type = pa.decimal128(measure.precision, measure.scale)
+    return pd.Series(values, index=data.index, dtype=pd.ArrowDtype(value_type))
 
 
 def _invalid_status(data: pd.DataFrame, config: DatasetConfig) -> pd.Series[bool]:

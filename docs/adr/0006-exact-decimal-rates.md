@@ -1,0 +1,50 @@
+# 0006 Exact decimal rates end to end
+
+- **Status:** Accepted
+- **Decided:** 2026-11-17, refined 2026-11-18
+
+## Context
+
+The report's main figure is the 12-month change in basis points, `(latest − prior) × 100`. With
+floating point, `(4.10 − 3.85) × 100 = 24.999999999999957`. Profiling the BIS file showed this kind
+of noise for 6 of the 49 areas. Rounding at the end would hide it, but the result would then depend
+on a rounding rule rather than on the data.
+
+## Decision
+
+- **Parse from text.** Values are read from the CSV as text and turned into `Decimal`, with the
+  unit multiplier applied exactly (`value × 10^UNIT_MULT`). A value that is not a number, or has
+  more digits than the configured precision and scale, becomes an invalid observation with a
+  data-quality finding. It is never rounded to fit.
+- **Store exactly.** Staged values are `decimal128(15, 6)` ([0005](0005-data-stack-pyarrow.md)).
+- **Compute exactly.** The snapshot works on `Decimal` values, and the change is computed in decimal
+  arithmetic.
+- **Strict models.** The domain models (`Rate`, `BasisPoints`) accept only `Decimal` from Python
+  callers, with at most 15 significant digits, which is what a JSON number carries exactly. A float
+  reaching a rate is a bug, and the model reports it where it happens.
+- **`DECIMALS` is display precision.** `summary.json` holds the exact values as JSON numbers;
+  `report.md` formats each rate with its series' `DECIMALS`. Stored values are never rounded to it.
+- **Floats only for drawing.** The chart is the one place where rates become floats.
+
+## Alternatives considered
+
+| Alternative | Why not |
+|---|---|
+| Floats, rounded when written | Hides the error; the result depends on the rounding rule |
+| Rates as JSON strings (pydantic's default for `Decimal`) | Harder for every consumer of `summary.json` and the API |
+| Models that accept floats and convert them | A float has already lost exactness, so the conversion only hides the bug |
+| Rounding to `DECIMALS` inside the model | Formatting in the domain model; the API would return rounded values |
+
+## Consequences
+
+- The headline figures match an independent calculation on the raw CSV exactly.
+- `Decimal` arithmetic is slower than float. The faster analytics planned for the interactive
+  front end (#13) keep exactness with integers scaled by 10^6, not with floats.
+- Python callers must pass `Decimal`; JSON input still accepts numbers.
+
+## Evidence
+
+- `tests/test_snapshot.py::test_change_is_exact_in_basis_points`; the domain-model tests in
+  `tests/core/`.
+- The "pyarrow-backed dtypes" table in `diagnostics/README.md` (exact decimal arithmetic; the
+  silent rounding of pandas 2.3.3).
