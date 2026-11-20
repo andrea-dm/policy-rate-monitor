@@ -73,8 +73,11 @@ results at every scale (same `digest`), after the pyarrow workaround below.
 | pyarrow `join_asof` (with workarounds) | 0.25 s | 2.6 s | 14.2 s | 1.8 GB |
 | DuckDB `ASOF JOIN` | 0.18 s | 0.9 s | 6.4 s | 2.1 GB |
 
-**Decision:** NumPy `searchsorted`, kept behind a stable function contract. The Python `bisect`
-version is kept as the **test oracle**, and DuckDB is the documented scaling path.
+The first release ships the Python `bisect` version, run only for the requested areas; NumPy
+`searchsorted` is planned for interactive use (see `docs/adr/0007-twelve-month-look-back.md`).
+
+**Decision (2026-11-17):** NumPy `searchsorted`, kept behind a stable function contract, with the
+Python `bisect` version as the **test oracle** and DuckDB as the documented scaling path.
 
 When to revisit the decision:
 

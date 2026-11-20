@@ -114,22 +114,34 @@ flowchart BT
     config["config<br/>configuration models"]
     fetch["fetch"]
     transform["transform"]
+    providers["providers<br/>DataProvider, schema, in-memory fake"]
+    bulk["bulk<br/>BulkFileProvider"]
     snapshot["snapshot"]
     report["report"]
     cli["cli"]
 
     core --> config
     config --> fetch
+    config --> providers
     fetch --> transform
+    transform --> bulk
+    providers --> bulk
     config --> snapshot
     config --> report
-    transform --> cli
+    bulk --> cli
     snapshot --> cli
     report --> cli
 ```
 
-`snapshot` is a pure function over the staged observations: it does no I/O, so it is tested on
-small hand-made tables.
+The CLI reads data only through a `DataProvider`: `fetch` and `transform` prepare it, and five
+read-only queries serve the series, their metadata, the observations, the data-quality findings
+and the source release. `BulkFileProvider` is the one over the BIS bulk download; another source
+(a query engine, an SDMX API) would be another provider, with no change to the snapshot or the
+report. Every provider returns the observations in one canonical form, built from the
+configuration, and passes the same contract tests.
+
+`snapshot` is a pure function over the observations: it does no I/O, so it is tested on small
+hand-made tables.
 
 ---
 
@@ -321,6 +333,9 @@ under a different name.
   (`diagnostics/bench_kernels.py` compares pure Python, Numba and Cython on one kernel), and the
   validation of area codes against the BIS SDMX metadata. See [docs/milestones.md](docs/milestones.md).
 
+The main technical decisions, with their alternatives and costs, are recorded in
+[docs/adr/](docs/adr/index.md).
+
 ---
 
 ## Project Structure
@@ -339,6 +354,11 @@ src/policy_rate_monitor/
 │   ├── schema.py           # The JSON Schema, in its committed text form
 │   ├── source.py           # ConfigSource interface and the file source
 │   └── _problems.py        # Message templates of the configuration checks
+├── providers/              # The data interface (depends only on core and config)
+│   ├── base.py             # DataProvider: fetch, transform and five read-only queries
+│   ├── schema.py           # The canonical observations schema, built from the configuration
+│   └── memory.py           # InMemoryProvider, a fake for tests
+├── bulk.py                 # BulkFileProvider: the provider over the bulk-download file
 ├── cli/                    # The bis-prates command
 │   ├── main.py             # Argument parsing and the three commands
 │   ├── exit_codes.py       # ExitCode and the mapping from the typed errors
@@ -388,6 +408,7 @@ What the tests cover:
 | `tests/test_fetch.py` | the cache; the fallback URL; a download that is not a ZIP or holds two CSV files; the network down with and without a cached copy |
 | `tests/test_report.py` | the four files written from hand-made inputs, with the expected CSV and JSON values |
 | `tests/test_cli.py` | the help lists the three commands; errors map to their exit codes; `report` before `transform` gives a one-line error |
+| `tests/providers/` | the provider contract (canonical schema, one row per series and date, sorted dates, validity, metadata for every series), run on both providers; the row checks fail on tables built to break them; a provider missing a method cannot be created; the schema follows the configuration |
 | `tests/config/`, `tests/core/` | the configuration checks and the domain models |
 
 Docstring examples under `src/` run as part of the suite. The five headline figures were also
