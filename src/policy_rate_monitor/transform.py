@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
-import pyarrow as pa
 from pandas import ArrowDtype, DataFrame, Series, read_csv, read_parquet, to_datetime
+from pyarrow import decimal128
 from pydantic import TypeAdapter
 
 from policy_rate_monitor.core.errors import MissingInputError, UnexpectedFormatError
@@ -397,7 +397,7 @@ def _values(data: DataFrame, config: DatasetConfig) -> Series:
     if measure.scale:
         plain += rf"(\.[0-9]{{1,{measure.scale}}})?"
     fast = text.str.fullmatch(plain, na=False) & (multipliers == 0)
-    value_type = ArrowDtype(pa.decimal128(measure.precision, measure.scale))
+    value_type = ArrowDtype(decimal128(measure.precision, measure.scale))
     values = text.where(fast).astype(value_type)
 
     slow = ~fast & ~text.isin(["", *config.columns.missing_values])

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    import pyarrow as pa
+    from pyarrow import Table
 
     from policy_rate_monitor.core.models import (
         DataQualityIssue,
@@ -88,7 +88,7 @@ class DataProvider(ABC):
         """
 
     @abstractmethod
-    def observations(self, series_keys: Sequence[str] | None = None) -> pa.Table:
+    def observations(self, series_keys: Sequence[str] | None = None) -> Table:
         """Returns the observations of the given series, or of all series.
 
         Args:
