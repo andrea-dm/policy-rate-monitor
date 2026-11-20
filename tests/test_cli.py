@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from policy_rate_monitor.bulk import BulkFileProvider
 from policy_rate_monitor.cli.exit_codes import ExitCode, exit_code_for
 from policy_rate_monitor.cli.main import main
 from policy_rate_monitor.core.errors import (
@@ -41,7 +42,7 @@ def test_a_bug_ends_with_the_internal_error_code(
     def broken_fetch(*_args: object) -> None:
         raise KeyError("ref_area")
 
-    monkeypatch.setattr("policy_rate_monitor.cli.main.fetch", broken_fetch)
+    monkeypatch.setattr(BulkFileProvider, "fetch", broken_fetch)
 
     code = main(["fetch", "--config", str(CONFIG)])
 

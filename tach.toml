@@ -33,12 +33,25 @@ path = "policy_rate_monitor.report"
 depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
 
 [[modules]]
-path = "policy_rate_monitor.cli"
+path = "policy_rate_monitor.providers"
+depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
+
+[[modules]]
+path = "policy_rate_monitor.bulk"
 depends_on = [
     "policy_rate_monitor.config",
     "policy_rate_monitor.core",
     "policy_rate_monitor.fetch",
+    "policy_rate_monitor.providers",
+    "policy_rate_monitor.transform",
+]
+
+[[modules]]
+path = "policy_rate_monitor.cli"
+depends_on = [
+    "policy_rate_monitor.bulk",
+    "policy_rate_monitor.config",
+    "policy_rate_monitor.core",
     "policy_rate_monitor.report",
     "policy_rate_monitor.snapshot",
-    "policy_rate_monitor.transform",
 ]
