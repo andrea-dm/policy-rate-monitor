@@ -85,10 +85,10 @@ description. `config.schema.json` describes the configuration format.
     field's `description`. That is why the file is long (about 660 lines): it lists every field of
     every section with its type, limits and description.
 
-    After a change to a model, regenerate it from the repository root and commit it with the change:
+    After a change to a model, regenerate it and commit it with the change:
 
     ```bash
-    uv run python -m policy_rate_monitor.config.schema configs/config.schema.json
+    uv run bis-prates config schema > configs/config.schema.json
     ```
 
     A test compares the committed file with a fresh one. If they differ, it fails and prints that
@@ -132,8 +132,11 @@ loads the configuration, for example:
 So a file the editor shows as clean can still fail to load. The full check is loading it:
 
 ```bash
-uv run python -c "from policy_rate_monitor.config import FileConfigSource; FileConfigSource('configs/bis_cbpol.json').load()"
+bis-prates config validate --config configs/bis_cbpol.json
 ```
+
+It prints `configs/bis_cbpol.json: valid (given with --config)`, or the problems found, with exit
+code 4 ([CLI reference](cli.md#bis-prates-config-validate)).
 
 Or, from Python, with the problems printed as the program prints them:
 

@@ -41,6 +41,7 @@ flowchart BT
     analytics["analytics<br/>fixed-point arrays, searches"]
     snapshot["snapshot"]
     report["report"]
+    settings["settings<br/>where the options come from"]
     cli["cli"]
 
     core --> config
@@ -55,6 +56,8 @@ flowchart BT
     bulk --> cli
     snapshot --> cli
     report --> cli
+    config --> settings
+    settings --> cli
 ```
 
 | Module | What it does | Reads or writes |
@@ -68,6 +71,7 @@ flowchart BT
 | `analytics` | The staged observations as fixed-point NumPy arrays, and the searches on them: the snapshot at any date, the change history, the rate moves | nothing |
 | `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested area | nothing |
 | `report` | Writes the summary files, the chart and the Markdown report from the snapshots it is given | `out/` |
+| `settings` | Where the configuration file and the data directory come from: the command line, an environment variable, the configuration or a default; shared by the CLI and the HTTP API | nothing |
 | `cli` | The `bis-prates` command: parses the arguments, calls the pieces above, prints, returns an exit code | nothing directly |
 
 Three rules keep the design testable:

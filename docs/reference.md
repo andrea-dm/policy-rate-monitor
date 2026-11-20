@@ -91,6 +91,8 @@ for snapshot in snapshots:
 
 ## Command line
 
+::: policy_rate_monitor.settings
+
 ::: policy_rate_monitor.cli.main
 
 ::: policy_rate_monitor.cli.exit_codes

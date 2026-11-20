@@ -206,6 +206,8 @@ uv run bis-prates report --countries "US,EA,GB,JP,CH" --start "2015-01-01"
 ```
 
 With the virtual environment activated, `bis-prates` works without `uv run`.
+`bis-prates config validate` checks the configuration, and `bis-prates config schema` prints its
+JSON Schema.
 
 | Command | Reads | Writes |
 |---|---|---|
@@ -217,8 +219,8 @@ Options, after the command:
 
 | Option | Commands | Default |
 |---|---|---|
-| `--config PATH` | all | `configs/bis_cbpol.json` |
-| `--data-dir PATH` | all | `data` (`dataset.data_dir` in the configuration) |
+| `--config PATH` | all | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` |
+| `--data-dir PATH` | `fetch`, `transform`, `report` | `$BIS_PRATES_DATA_DIR`, else `data` (`dataset.data_dir` in the configuration) |
 | `--debug` | all | off; shows the full traceback of an error |
 | `--countries "US,EA"` | `report` | required; codes are matched without regard to case and spaces, de-duplicated, and written as typed next to the code used |
 | `--start YYYY-MM-DD` | `report` | the whole history; first date of the chart |
@@ -497,7 +499,7 @@ src/policy_rate_monitor/
 │   └── memory.py           # InMemoryProvider, a fake for tests
 ├── bulk.py                 # BulkFileProvider: the provider over the bulk-download file
 ├── cli/                    # The bis-prates command
-│   ├── main.py             # Argument parsing and the three commands
+│   ├── main.py             # Argument parsing, the pipeline and config commands
 │   ├── exit_codes.py       # ExitCode and the mapping from the typed errors
 │   └── __main__.py         # python -m policy_rate_monitor.cli
 ├── fetch.py                # Download the source ZIP and keep a cached copy
@@ -505,6 +507,7 @@ src/policy_rate_monitor/
 ├── analytics.py            # Fixed-point arrays and the searches on them (pure; Numba optional)
 ├── snapshot.py             # Latest rate, prior rate and change per area (pure)
 ├── report.py               # summary.csv, summary.json, policy_rates.png, report.md
+├── settings.py             # Where the configuration and data directory come from
 └── py.typed                # PEP 561 marker
 tests/                      # pytest suite (see Testing)
 diagnostics/                # Spikes and benchmarks behind the technical choices
@@ -547,7 +550,8 @@ What the tests cover:
 | `tests/test_snapshot.py` | the 12-month change exactly in basis points; a target date on a weekend; 29 February; negative rates; invalid observations skipped; a different latest date per area; unknown area, insufficient history and no valid data; the `EA` alias; messy requested codes; the stale flags |
 | `tests/test_fetch.py` | the cache; the fallback URL; a download that is not a ZIP or holds two CSV files; the network down with and without a cached copy |
 | `tests/test_report.py` | the four files written from hand-made inputs, with the expected CSV and JSON values |
-| `tests/test_cli.py` | the help lists the three commands; errors map to their exit codes; `report` before `transform` gives a one-line error |
+| `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; `report` before `transform` gives a one-line error; `config validate` and `config schema`; a bad configuration says where its path came from |
+| `tests/test_settings.py` | the order of the layers (flag, environment variable, configuration or default) for the configuration file and the data directory; an empty variable counts as unset |
 | `tests/providers/` | the provider contract (canonical schema, one row per series and date, sorted dates, validity, metadata for every series), run on both providers; the row checks fail on tables built to break them; a provider missing a method cannot be created; the schema follows the configuration |
 | `tests/config/`, `tests/core/` | the configuration checks and the domain models |
 
