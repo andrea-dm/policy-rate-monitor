@@ -249,6 +249,19 @@ def test_series_metadata_is_kept(tmp_path: Path) -> None:
     assert dict(series.attributes) == {"UNIT_MULT": "0"}
 
 
+def test_the_csv_in_the_zip_is_found_whatever_the_case_of_its_extension(
+    tmp_path: Path,
+) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    with zipfile.ZipFile(raw / "rates.zip", "w") as archive:
+        archive.writestr("RATES.CSV", f"{HEADER}\n{US},2024-01-01,5.25,{US_SERIES},A\n")
+
+    summary = transform(make_config(), tmp_path)
+
+    assert summary.observations == 1
+
+
 def test_missing_required_column_is_named(tmp_path: Path) -> None:
     write_zip(tmp_path, "D: Daily,US: United States", header="FREQ:F,REF_AREA:R")
 

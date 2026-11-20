@@ -3,6 +3,9 @@
 ``Report(config).export(args)`` takes the snapshots and the staged data and writes four
 files to the output folder: ``summary.csv``, ``summary.json``, ``policy_rates.png`` and
 ``report.md``. Every text that names the dataset comes from the configuration.
+
+See also: [How it works](how-it-works.md), section 10, and [decision
+0002](adr/0002-charting-and-report-format.md).
 """
 
 # pyright: reportUnknownMemberType=false
@@ -38,6 +41,7 @@ if TYPE_CHECKING:
 __all__ = ["Report", "ReportArgs"]
 
 CHART_FILE = "policy_rates.png"
+"""File name of the chart in the output folder."""
 
 # Areas with a latest rate get a line on the chart.
 _CHARTED = (SnapshotStatus.OK, SnapshotStatus.INSUFFICIENT_HISTORY)

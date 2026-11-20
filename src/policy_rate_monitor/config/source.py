@@ -3,6 +3,8 @@
 A source reads a document and passes it to ``parse_config``, so every source validates
 the same way and gives the same messages.
 
+See also: [Configuration](configuration.md).
+
 Examples:
     Creating a file source does no I/O; ``load`` reads the file:
 
@@ -33,6 +35,9 @@ class ConfigSource(ABC):
     @abstractmethod
     def load(self) -> DatasetConfig:
         """Returns the validated configuration.
+
+        Returns:
+            The configuration, checked against the models.
 
         Raises:
             ConfigError: The configuration cannot be read or does not validate.

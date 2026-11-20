@@ -9,6 +9,10 @@ ELT in two layers, both under the data directory:
   series) and ``staged/data_quality.json`` (the ``DataQualityIssue`` findings).
 
 Every column name, code and rule comes from the configuration.
+
+See also: [How it works](how-it-works.md), sections 3 and 4, [Data
+model](data-model.md), [decision 0011](adr/0011-data-quality-rules.md) and [decision
+0012](adr/0012-elt-raw-and-staged-layers.md).
 """
 
 from __future__ import annotations
@@ -60,6 +64,8 @@ IMPLEMENTED_RULES = (
     "conflicting_duplicate",
     "unexpected_value",
 )
+"""The data-quality rules that have code. A configured rule not listed here is logged
+and skipped."""
 
 _SERIES_LIST = TypeAdapter(list[SeriesMetadata])
 _ISSUE_LIST = TypeAdapter(list[DataQualityIssue])
@@ -67,7 +73,8 @@ _ISSUE_LIST = TypeAdapter(list[DataQualityIssue])
 
 @dataclass(frozen=True)
 class TransformSummary:
-    """What one transform run produced, for the CLI to print.
+    """What one transform run produced: returned by ``transform``, and the same
+    counts are written to the log.
 
     Attributes:
         rows_read: Rows in the source CSV.
@@ -138,6 +145,12 @@ def transform(config: DatasetConfig, data_dir: Path) -> TransformSummary:
 def load_observations(data_dir: Path) -> pd.DataFrame:
     """Reads ``staged/observations.parquet``, keeping its Arrow types.
 
+    Args:
+        data_dir: The data directory holding ``staged/``.
+
+    Returns:
+        The staged observations, values as Arrow decimals.
+
     Raises:
         MissingInputError: The file is absent.
     """
@@ -148,6 +161,12 @@ def load_observations(data_dir: Path) -> pd.DataFrame:
 def load_series(data_dir: Path) -> list[SeriesMetadata]:
     """Reads ``staged/series.json``.
 
+    Args:
+        data_dir: The data directory holding ``staged/``.
+
+    Returns:
+        The metadata of every staged series.
+
     Raises:
         MissingInputError: The file is absent.
     """
@@ -157,6 +176,12 @@ def load_series(data_dir: Path) -> list[SeriesMetadata]:
 
 def load_data_quality(data_dir: Path) -> list[DataQualityIssue]:
     """Reads ``staged/data_quality.json``.
+
+    Args:
+        data_dir: The data directory holding ``staged/``.
+
+    Returns:
+        The data-quality findings of the last transform run.
 
     Raises:
         MissingInputError: The file is absent.
@@ -173,9 +198,9 @@ def _staged_file(data_dir: Path, name: str) -> Path:
     return path
 
 
-# --------------------------------------------------------------------------------------
-# Raw layer
-# --------------------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────────── #
+# ══════════════════════════════════════════════════════════════════════ Raw layer ═══ #
+# ──────────────────────────────────────────────────────────────────────────────────── #
 
 
 def _read_csv(zip_path: Path, columns: ColumnsSection) -> pd.DataFrame:
@@ -183,7 +208,8 @@ def _read_csv(zip_path: Path, columns: ColumnsSection) -> pd.DataFrame:
         msg = f"{zip_path} does not exist: run `bis-prates fetch` first"
         raise MissingInputError(msg)
     with zipfile.ZipFile(zip_path) as archive:
-        csv_names = [name for name in archive.namelist() if name.endswith(".csv")]
+        names = archive.namelist()
+        csv_names = [name for name in names if name.lower().endswith(".csv")]
         if len(csv_names) != 1:
             msg = f"{zip_path} should hold exactly one CSV file, found {len(csv_names)}"
             raise UnexpectedFormatError(msg)
@@ -198,9 +224,9 @@ def _read_csv(zip_path: Path, columns: ColumnsSection) -> pd.DataFrame:
             )
 
 
-# --------------------------------------------------------------------------------------
-# Staging
-# --------------------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────────── #
+# ════════════════════════════════════════════════════════════════════════ Staging ═══ #
+# ──────────────────────────────────────────────────────────────────────────────────── #
 
 
 def _rename_columns(
@@ -327,6 +353,8 @@ def _stage_observations(
     )
     _check_expected_values(data, keys, config, rules.get("unexpected_value"), issues)
 
+    # An exact copy repeats the whole source row, every column, not only the series
+    # and date; rows that share a series and date but differ are conflicts, below.
     exact_copy = ~no_date & data.duplicated()
     _add_issues(
         issues,
@@ -500,6 +528,8 @@ def _series_metadata(
     config: DatasetConfig,
 ) -> list[SeriesMetadata]:
     """Builds one SeriesMetadata per kept series, from its last row in the file."""
+    # Any row would do if the series attributes are constant within a series; that is
+    # assumed, not checked, until the series_attribute_not_constant rule is built.
     kept = set(observations["series_key"])
     last_rows = keys.drop_duplicates(keep="last").sort_values()
     records = data.loc[last_rows.index].to_dict("records")

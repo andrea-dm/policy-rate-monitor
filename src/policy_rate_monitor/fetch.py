@@ -5,6 +5,9 @@ that it is a ZIP holding exactly one CSV, and stores it in ``<data_dir>/raw/`` n
 small JSON file that records where it came from (a ``SourceRelease``). A copy younger
 than the cache lifetime is used without any request; when the network fails, an older
 copy is used with a warning.
+
+See also: [How it works](how-it-works.md), sections 1 and 2, and
+[Data model](data-model.md).
 """
 
 from __future__ import annotations
@@ -42,12 +45,29 @@ logger = logging.getLogger(__name__)
 
 
 def cached_zip(source: SourceSection, data_dir: Path) -> Path:
-    """Returns where the cached ZIP lives: ``<data_dir>/raw/<file_name>``."""
+    """Returns where the cached ZIP lives: ``<data_dir>/raw/<file_name>``.
+
+    Args:
+        source: The ``source`` section of the configuration.
+        data_dir: The data directory.
+
+    Returns:
+        The path of the ZIP, whether it exists or not.
+    """
     return data_dir / "raw" / source.file_name
 
 
 def read_release(source: SourceSection, data_dir: Path) -> SourceRelease | None:
-    """Returns the release of the cached ZIP, or ``None`` if none is usable."""
+    """Returns the release of the cached ZIP, or ``None`` if none is usable.
+
+    Args:
+        source: The ``source`` section of the configuration.
+        data_dir: The data directory.
+
+    Returns:
+        The release recorded next to the ZIP; ``None`` when the ZIP or its record is
+        missing, or the record cannot be read.
+    """
     zip_path = cached_zip(source, data_dir)
     meta_path = zip_path.with_suffix(".json")
     if not zip_path.is_file() or not meta_path.is_file():
@@ -116,6 +136,14 @@ def fetch(
 def http_get(url: str, connect_timeout: float, read_timeout: float) -> bytes:
     """Downloads one URL over HTTP(S), with separate connect and read timeouts.
 
+    Args:
+        url: The address to download.
+        connect_timeout: Seconds to wait for the connection.
+        read_timeout: Seconds to wait for each read once connected.
+
+    Returns:
+        The body of the response.
+
     Raises:
         SourceUnavailableError: The server cannot be reached or does not answer 200.
     """
@@ -129,6 +157,7 @@ def http_get(url: str, connect_timeout: float, read_timeout: float) -> bytes:
         path += "?" + parts.query
     try:
         connection.connect()
+        # The constructor's timeout covers the connection; from here on, the reads.
         if connection.sock is not None:
             connection.sock.settimeout(read_timeout)
         connection.request("GET", path, headers={"User-Agent": "policy-rate-monitor"})
@@ -177,6 +206,8 @@ def _find_download_url(source: SourceSection, get: Callable[[str], bytes]) -> st
 
 
 def _download(url: str, attempts: int, get: Callable[[str], bytes]) -> bytes:
+    # All attempts but the last retry after a growing pause (1 s, 2 s, ...); the last
+    # one is outside the loop so that its error reaches the caller.
     for attempt in range(1, attempts):
         try:
             return get(url)
@@ -209,6 +240,9 @@ def _store(zip_path: Path, content: bytes, release: SourceRelease) -> None:
     partial = zip_path.with_name(zip_path.name + ".part")
     partial.write_bytes(content)
     partial.replace(zip_path)
+    # The record goes second. A download happens only when the old record is missing or
+    # older than the cache lifetime, so a crash between the two writes leaves an
+    # expired record and the next run downloads again.
     zip_path.with_suffix(".json").write_text(
         release.model_dump_json(indent=2), encoding="utf-8"
     )

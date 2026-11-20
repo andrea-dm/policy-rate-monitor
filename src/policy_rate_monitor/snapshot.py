@@ -1,6 +1,9 @@
 """Latest policy rate, the rate a year earlier and the change, per requested area.
 
 Pure calculation on the staged observations: no I/O.
+
+See also: [How it works](how-it-works.md), sections 5 to 8, and
+[decision 0006](adr/0006-twelve-month-look-back.md).
 """
 
 from __future__ import annotations
@@ -41,10 +44,13 @@ class SnapshotArgs:
     """The inputs of ``compute_snapshots``.
 
     Attributes:
-        observations: Staged observations with the canonical columns.
+        observations: Staged observations with the canonical columns, values as
+            Arrow decimals (``to_pandas(types_mapper=ArrowDtype)``, as the CLI
+            does).
         series: Metadata of every series in *observations*.
-        requested: Area codes as the user typed them; they are stripped and
-            upper-cased, empty ones and repeats are dropped.
+        requested: Area codes as the user typed them. They are matched after
+            stripping and upper-casing, empty ones and repeats are dropped, and
+            each snapshot keeps the code as typed, without the spaces.
         settings: Look-back and staleness thresholds.
         area_aliases: Requested code to the code used in the data, e.g. EA to XM.
     """
@@ -94,6 +100,9 @@ def compute_snapshots(args: SnapshotArgs) -> list[DataSnapshot]:
 
     Returns:
         The snapshots, one per distinct requested code.
+
+    Raises:
+        TypeError: The values in *observations* are not Arrow decimals.
     """
     series_by_area = {item.ref_area: item for item in args.series}
     requests: list[tuple[str, str, SeriesMetadata | None]] = []

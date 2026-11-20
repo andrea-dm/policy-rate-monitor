@@ -4,6 +4,8 @@ Each subcommand runs one step of the pipeline. Errors raised on purpose end the
 command with a one-line message and the exit code of ``exit_codes``; ``--debug``
 adds the traceback. Any other error is a bug: it is logged with its traceback and
 ends the command with ``INTERNAL_ERROR``.
+
+See also: [CLI reference](cli.md).
 """
 
 from __future__ import annotations
@@ -35,16 +37,24 @@ __all__ = ["main"]
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = Path("configs/bis_cbpol.json")
+"""The configuration used without ``--config``, relative to the current folder."""
 
 
 def main(argv: list[str] | None = None) -> int:
     """Runs one ``bis-prates`` command.
+
+    Results go to standard output; warnings, errors and the log (set up here, at
+    INFO level) go to standard error.
 
     Args:
         argv: The arguments after the program name; ``None`` reads ``sys.argv``.
 
     Returns:
         The exit code (see ``ExitCode``).
+
+    Raises:
+        SystemExit: Raised by argparse for ``--help`` (code 0) and for invalid
+            arguments (code 2).
     """
     args = _parser().parse_args(argv)
     logging.basicConfig(
@@ -59,10 +69,12 @@ def main(argv: list[str] | None = None) -> int:
             logger.exception("the command failed")
         sys.stderr.write(f"error: {error}\n")
         return exit_code_for(error)
+    # The errors raised on purpose are typed; a plain OSError is the file system
+    # refusing a read or a write (permissions, a full disk), not a bug.
     except OSError as error:
         if args.debug:
             logger.exception("the command failed")
-        sys.stderr.write(f"error: cannot write the output: {error}\n")
+        sys.stderr.write(f"error: cannot read or write a file: {error}\n")
         return ExitCode.OUTPUT_ERROR
     except Exception as error:
         logger.exception("unexpected error, please report it")
@@ -162,6 +174,7 @@ def _report(args: argparse.Namespace) -> int:
         SnapshotArgs(
             observations=observations,
             series=series,
+            # compute_snapshots strips, upper-cases and drops the empty codes.
             requested=args.countries.split(","),
             settings=config.snapshot,
             area_aliases=config.area_aliases,
@@ -184,7 +197,7 @@ def _report(args: argparse.Namespace) -> int:
     if warning:
         sys.stderr.write(warning)
     if not any(item.status == SnapshotStatus.OK for item in snapshots):
-        sys.stderr.write("no requested area has a complete snapshot\n")
+        sys.stderr.write("no requested area has a complete result (status ok)\n")
         return ExitCode.NO_RESULT
     return ExitCode.OK
 

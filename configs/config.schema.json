@@ -138,7 +138,7 @@
           "type": "string"
         },
         "attribution": {
-          "description": "Source credit, shown in the chart caption and the report.",
+          "description": "Source credit, shown in the report's \"About the data\" section.",
           "minLength": 1,
           "title": "Attribution",
           "type": "string"
@@ -376,7 +376,7 @@
       "description": "One data-quality rule to run: which one, how serious, with what parameters.",
       "properties": {
         "name": {
-          "description": "Name under which the rule is registered.",
+          "description": "Name of the rule; a name the code does not implement is logged and skipped.",
           "pattern": "^[a-z][a-z0-9_]*$",
           "title": "Name",
           "type": "string"
@@ -623,7 +623,7 @@
       "description": "How the concepts are written in the file."
     },
     "rules": {
-      "description": "Data-quality rules, in the order they run. Names are unique.",
+      "description": "Data-quality rules to run, by name. Names are unique; the order in the file\ndoes not change the order the checks run.",
       "items": {
         "$ref": "#/$defs/RuleSpec"
       },
