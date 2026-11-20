@@ -56,8 +56,11 @@ Environment: 4 cores, 16 GB RAM, Python 3.12, pandas 3.1.1, pyarrow 26.0.1, Duck
 | Cast `"abc"` to decimal | Raises for the whole column, so values are validated before casting |
 | Cast `"3.12345"` to scale 4 | Raises "would cause data loss" on pandas 3.1.1. **pandas 2.3.3 silently rounded it to `3.1235`.** |
 
-The last row shows that library defaults are not a validation strategy. "More decimals than the
-series' `DECIMALS`" is an explicit data-quality rule, and a regression test fixes the behaviour.
+The last row shows that library defaults are not a validation strategy. `transform` does not rely
+on the cast: it parses each value exactly, and a value with more decimals than the configured
+scale is kept with no value, marked invalid and reported as a `non_numeric_value` finding, never
+rounded. A regression test in `tests/test_transform.py` pins this. The separate rule "more decimals
+than the series' `DECIMALS`" (`excess_decimals`) is configured but not implemented yet.
 
 ### 12-month look-back (`bench_snapshot.py`)
 

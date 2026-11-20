@@ -177,6 +177,26 @@ def test_unit_multiplier_is_applied_exactly(tmp_path: Path) -> None:
     assert load_observations(tmp_path)["value"].tolist() == [Decimal("5.25")]
 
 
+def test_a_value_with_more_decimals_than_the_type_is_never_rounded(
+    tmp_path: Path,
+) -> None:
+    # pandas 2.3.3 silently rounded such a value when casting it to the decimal type.
+    write_zip(
+        tmp_path,
+        f"{US},2024-01-01,3.1234567,{US_SERIES},A: Normal",
+        f"{US},2024-01-02,3.123456,{US_SERIES},A: Normal",
+    )
+    rules = [{"name": "non_numeric_value", "severity": "warning"}]
+    transform(make_config(rules=rules), tmp_path)
+
+    observations = load_observations(tmp_path)
+    assert observations["value"].isna().tolist() == [True, False]
+    assert observations["value"].tolist()[1] == Decimal("3.123456")
+    assert observations["is_valid"].tolist() == [False, True]
+    [issue] = load_data_quality(tmp_path)
+    assert (issue.rule, issue.count) == ("non_numeric_value", 1)
+
+
 def test_unparseable_dates_are_dropped_and_reported(tmp_path: Path) -> None:
     write_zip(
         tmp_path,
