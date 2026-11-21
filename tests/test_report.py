@@ -279,6 +279,8 @@ def test_report_html_shows_the_interactive_chart_and_loads_nothing(
     # Plotly's JavaScript is in the page, not fetched.
     assert not re.search(r"<script[^>]*\ssrc=", page)
     assert not re.search(r"<link\b", page)
+    # HTML forbids control characters other than whitespace.
+    assert not re.search("[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]", page)
 
 
 @pytest.mark.contract

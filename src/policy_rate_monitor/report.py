@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import csv
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -54,6 +55,10 @@ __all__ = [
     "summary_document",
     "valid_rows",
 ]
+
+# The control characters HTML forbids (all but whitespace). Plotly's code has some in
+# its string literals, where a JavaScript escape stands for the same character.
+_CONTROL = re.compile("[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]")
 
 CHART_FILE = "policy_rates.png"
 """File name of the chart in the output folder."""
@@ -427,9 +432,10 @@ def _interactive_chart(args: ReportArgs, title: str) -> str | None:
     figure = rate_figure(title, args.snapshots, args.observations, args.start)
     # Inline, not from a CDN, so the chart shows without a network. The height is fixed
     # because the page gives the chart's box none.
-    return figure.to_html(
+    chart = figure.to_html(
         full_html=False, include_plotlyjs=True, default_height="34rem"
     )
+    return _CONTROL.sub(lambda match: f"\\u{ord(match[0]):04x}", chart)
 
 
 def _md_cell(text: str) -> str:
