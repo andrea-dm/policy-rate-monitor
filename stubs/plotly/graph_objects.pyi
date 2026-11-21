@@ -13,6 +13,8 @@ class Scatter:
         name: str,
         mode: str = ...,
         line_shape: str = ...,
+        line: dict[str, Any] = ...,
+        hovertemplate: str = ...,
     ) -> None: ...
 
 class Figure:

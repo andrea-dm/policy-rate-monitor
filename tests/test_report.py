@@ -4,7 +4,9 @@ import base64
 import csv
 import json
 import re
+import struct
 import sys
+import zlib
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -14,6 +16,8 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+from policy_rate_monitor import report
+from policy_rate_monitor.chart_style import NO_DATA, alt_text, line_style
 from policy_rate_monitor.config import DatasetConfig, parse_config
 from policy_rate_monitor.core.models import (
     DataQualityIssue,
@@ -24,7 +28,10 @@ from policy_rate_monitor.core.models import (
     SnapshotStatus,
     SourceRelease,
 )
+from policy_rate_monitor.providers import InMemoryProvider
 from policy_rate_monitor.report import ICONS, Report, ReportArgs
+from policy_rate_monitor.service import load_staged, summary
+from tests.web.conftest import ROWS, SERIES
 
 CONFIG_PATH = Path(__file__).parents[1] / "configs" / "bis_cbpol.json"
 
@@ -329,3 +336,89 @@ def test_text_from_the_data_is_escaped_in_report_html(
     assert "<td>bad &lt;script&gt;alert(1)&lt;/script&gt;</td>" in page
     # Markdown has no escaping: the text is written as it is.
     assert f"# Rates {script}" in (tmp_path / "report.md").read_text(encoding="utf-8")
+
+
+def _png_text(path: Path) -> dict[str, str]:
+    """The text chunks of a PNG file (tEXt, and zTXt compressed)."""
+    data = path.read_bytes()[8:]
+    texts: dict[str, str] = {}
+    while data:
+        (length,) = struct.unpack(">I", data[:4])
+        kind, body = data[4:8], data[8 : 8 + length]
+        if kind == b"tEXt":
+            key, _, value = body.partition(b"\0")
+            texts[key.decode("latin-1")] = value.decode("latin-1")
+        elif kind == b"zTXt":
+            key, _, value = body.partition(b"\0")
+            texts[key.decode("latin-1")] = zlib.decompress(value[1:]).decode("latin-1")
+        data = data[12 + length :]
+    return texts
+
+
+@pytest.mark.contract
+def test_the_png_draws_the_n_th_line_with_the_n_th_line_style(
+    config: DatasetConfig, tmp_path: Path
+) -> None:
+    data = load_staged(InMemoryProvider(config.structure, ROWS, SERIES))
+    args = ReportArgs(
+        snapshots=summary(config, data, ["CH", "US", "EA"]),
+        observations=data.observations,
+        series=data.series,
+        issues=[],
+        release=None,
+        out_dir=tmp_path,
+    )
+
+    figure = report._chart_figure(args, "Rates")
+
+    (axes,) = figure.axes
+    lines = axes.get_lines()
+    assert [line.get_label() for line in lines] == [
+        "Switzerland",
+        "United States",
+        "Euro area",
+    ]
+    for index, line in enumerate(lines):
+        assert line.get_color() == line_style(index).colour
+        assert line.get_linewidth() == pytest.approx(2 * 72 / 120)
+    assert [label.get_text() for label in axes.texts] == [
+        "Switzerland",
+        "United States",
+        "Euro area",
+    ]
+
+
+@pytest.mark.contract
+def test_the_png_dash_pattern_is_the_style_in_pixels() -> None:
+    assert report._matplotlib_dash(()) == "solid"
+    assert report._matplotlib_dash((8, 4)) == (0, (4.0, 2.0))
+
+
+@pytest.mark.contract
+def test_the_png_names_each_line_at_its_end(tmp_path: Path) -> None:
+    figure = report._chart_figure(_full_args(tmp_path), "Rates")
+
+    (axes,) = figure.axes
+    (label,) = axes.texts
+    assert label.get_text() == "United States"
+    assert label.get_color() == line_style(0).label_colour
+
+
+@pytest.mark.contract
+def test_an_empty_png_says_so(tmp_path: Path) -> None:
+    figure = report._chart_figure(_empty_args(tmp_path), "Rates")
+
+    (axes,) = figure.axes
+    assert [text.get_text() for text in axes.texts] == [NO_DATA]
+
+
+@pytest.mark.contract
+def test_the_chart_carries_its_text_alternative(
+    config: DatasetConfig, tmp_path: Path
+) -> None:
+    paths = Report(config).export(_full_args(tmp_path))
+
+    expected = alt_text(config.dataset.title, ["United States"])
+    assert _png_text(paths[2])["Description"] == expected
+    assert f"![{expected}](policy_rates.png)" in paths[3].read_text(encoding="utf-8")
+    assert f"<figcaption>{expected} " in paths[4].read_text(encoding="utf-8")

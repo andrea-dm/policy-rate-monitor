@@ -17,7 +17,7 @@ Generated on {{ generated_date }} at {{ generated_time }} UTC.
 | {{ [name, code, latest_date, latest, prior_date, prior, change, with_icon(status), with_icons(flags)] | map("md_cell") | join(" | ") }} |
 {% endfor %}
 
-![{{ title }}]({{ chart_file }})
+![{{ chart_alt }}]({{ chart_file }})
 
 ## About the data
 

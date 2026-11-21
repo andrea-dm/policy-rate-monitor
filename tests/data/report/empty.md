@@ -8,7 +8,7 @@ Generated on 2026-11-21 at 12:00 UTC.
 |---|---|---|--:|---|--:|--:|---|---|
 | - | ZZ | - | - | - | - | - | ❓ unknown_ref_area | - |
 
-![Central bank policy rates](policy_rates.png)
+![Central bank policy rates: no country or economic area has a rate to plot.](policy_rates.png)
 
 ## About the data
 

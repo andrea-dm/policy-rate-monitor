@@ -9,7 +9,7 @@ Generated on 2026-11-21 at 12:00 UTC.
 | United States | US | 2026-11-10 | 4.00 | 2025-11-10 | 3.75 | 25 | ✅ ok | ⏳ stale_prior |
 | - | ZZ | - | - | - | - | - | ❓ unknown_ref_area | - |
 
-![Central bank policy rates](policy_rates.png)
+![Central bank policy rates: a step chart of United States, in per cent, over the whole history.](policy_rates.png)
 
 ## About the data
 

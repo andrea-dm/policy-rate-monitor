@@ -52,3 +52,4 @@ nav:
       - adr/0013-fast-analytics-numpy-numba.md
       - adr/0014-http-api.md
       - adr/0015-report-templates-and-html.md
+      - adr/0016-accessible-charts.md

@@ -26,6 +26,14 @@ from typing import TYPE_CHECKING
 from jinja2 import Environment, PackageLoader, select_autoescape
 from matplotlib.figure import Figure
 
+from policy_rate_monitor.chart_style import (
+    LABEL_GAP,
+    LINE_WIDTH,
+    NO_DATA,
+    alt_text,
+    label_positions,
+    line_style,
+)
 from policy_rate_monitor.core.models import (
     DataQualitySeverity,
     SnapshotFlag,
@@ -38,6 +46,7 @@ if TYPE_CHECKING:
     from decimal import Decimal
     from pathlib import Path
 
+    from matplotlib.axes import Axes
     from pandas import DataFrame
 
     from policy_rate_monitor.config.models import DatasetConfig, MetadataField
@@ -63,6 +72,8 @@ _CONTROL = re.compile("[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]")
 
 CHART_FILE = "policy_rates.png"
 """File name of the chart in the output folder."""
+
+_DPI = 120
 
 # A country or economic area with a latest rate gets a line on the chart.
 _CHARTED = (SnapshotStatus.OK, SnapshotStatus.INSUFFICIENT_HISTORY)
@@ -180,11 +191,17 @@ class Report:
         summary = summary_document(config, args.snapshots, args.release, generated_at)
         json_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
+        title = config.dataset.title
+        names = [series.ref_area_name for series in charted_series(args.snapshots)]
+        chart_alt = alt_text(title, names, args.start)
         chart_path = out_dir / CHART_FILE
-        _write_chart(args, config.dataset.title, chart_path)
+        _chart_figure(args, title).savefig(
+            chart_path, dpi=_DPI, metadata={"Title": title, "Description": chart_alt}
+        )
 
         context = self._context(args, generated_at)
-        context["chart_html"] = _interactive_chart(args, config.dataset.title)
+        context["chart_alt"] = chart_alt
+        context["chart_html"] = _interactive_chart(args, title)
         context["chart_png"] = base64.b64encode(chart_path.read_bytes()).decode("ascii")
 
         md_path = out_dir / "report.md"
@@ -396,29 +413,63 @@ def valid_rows(
     return rows
 
 
-def _write_chart(args: ReportArgs, title: str, path: Path) -> None:
+def _chart_figure(args: ReportArgs, title: str) -> Figure:
     # A bare Figure draws with the Agg canvas and leaves pyplot's global state alone.
     figure = Figure(figsize=(10, 5.5), layout="constrained")
     axes = figure.add_subplot()
     charted = charted_series(args.snapshots)
-    for series in charted:
+    ends: list[tuple[str, date, float, str]] = []
+    for index, series in enumerate(charted):
         rows = valid_rows(args.observations, series.series_key, args.start)
+        style = line_style(index)
+        dates = rows["date"].tolist()
         # Floats only for drawing; every number in the files stays an exact decimal.
         values = [float(value) for value in rows["value"]]
         axes.step(
-            rows["date"].tolist(),
+            dates,
             values,
             where="post",
             label=series.ref_area_name,
+            color=style.colour,
+            linewidth=LINE_WIDTH * 72 / _DPI,
+            linestyle=_matplotlib_dash(style.dash),
         )
+        if values:
+            ends += [(series.ref_area_name, dates[-1], values[-1], style.label_colour)]
     axes.set_title(title)
     axes.set_ylabel("Per cent")
     axes.grid(visible=True, alpha=0.3)
     if charted:
         axes.legend()
+    if ends:
+        _label_line_ends(axes, ends)
     else:
-        axes.text(0.5, 0.5, "No data to plot", ha="center", transform=axes.transAxes)
-    figure.savefig(path, dpi=120)
+        axes.text(0.5, 0.5, NO_DATA, ha="center", transform=axes.transAxes)
+    return figure
+
+
+def _matplotlib_dash(pattern: tuple[int, ...]) -> str | tuple[int, tuple[float, ...]]:
+    # matplotlib scales a dash pattern by the line width, so pixels divide by it.
+    if not pattern:
+        return "solid"
+    return (0, tuple(length / LINE_WIDTH for length in pattern))
+
+
+def _label_line_ends(axes: Axes, ends: list[tuple[str, date, float, str]]) -> None:
+    low, high = axes.get_ylim()
+    positions = label_positions(
+        [value for _, _, value, _ in ends], (high - low) * LABEL_GAP
+    )
+    for (name, day, _, colour), position in zip(ends, positions, strict=True):
+        axes.annotate(
+            name,
+            xy=(day, position),
+            xytext=(6, 0),
+            textcoords="offset points",
+            va="center",
+            color=colour,
+            annotation_clip=False,
+        )
 
 
 def _interactive_chart(args: ReportArgs, title: str) -> str | None:

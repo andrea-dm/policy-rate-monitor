@@ -35,7 +35,12 @@ depends_on = ["policy_rate_monitor.analytics", "policy_rate_monitor.config", "po
 # report imports charts only when Plotly is installed, for report.html.
 [[modules]]
 path = "policy_rate_monitor.report"
-depends_on = ["policy_rate_monitor.charts", "policy_rate_monitor.config", "policy_rate_monitor.core"]
+depends_on = ["policy_rate_monitor.chart_style", "policy_rate_monitor.charts", "policy_rate_monitor.config", "policy_rate_monitor.core"]
+
+# The look of both charts; imports no plotting library.
+[[modules]]
+path = "policy_rate_monitor.chart_style"
+depends_on = []
 
 [[modules]]
 path = "policy_rate_monitor.providers"
@@ -68,7 +73,7 @@ depends_on = [
 # Needs the interactive extra (Plotly).
 [[modules]]
 path = "policy_rate_monitor.charts"
-depends_on = ["policy_rate_monitor.core", "policy_rate_monitor.report"]
+depends_on = ["policy_rate_monitor.chart_style", "policy_rate_monitor.core", "policy_rate_monitor.report"]
 
 # Needs the web extra (FastAPI, uvicorn). An adapter beside cli, over the same service.
 [[modules]]
