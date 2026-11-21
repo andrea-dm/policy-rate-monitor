@@ -6,13 +6,14 @@ the docstrings run as tests, so they are kept true.
 ## Use from Python
 
 The package can be used without the command line, for example in a notebook. Two example
-notebooks, which need the `jupyter` dependency group, do what the commands do:
+notebooks, which need the `jupyter` dependency group (and the `interactive` extra for the Plotly
+chart), do what the commands do:
 
 - [`examples/fetch_and_transform.ipynb`](https://github.com/andrea-dm/policy-rate-monitor/blob/develop/examples/fetch_and_transform.ipynb)
   downloads the BIS file and stages it, as `fetch` and `transform` do;
 - [`examples/policy_rates.ipynb`](https://github.com/andrea-dm/policy-rate-monitor/blob/develop/examples/policy_rates.ipynb)
   loads the staged data through the provider, computes the 12-month change and plots the rates,
-  as `report` does.
+  as `report` does, then draws the same chart with Plotly, as the HTTP API's `/chart` returns it.
 
 The same steps as a script:
 
@@ -88,6 +89,25 @@ for snapshot in snapshots:
 ## Report
 
 ::: policy_rate_monitor.report
+
+## Service and chart
+
+`charts` needs the `interactive` extra (Plotly).
+
+::: policy_rate_monitor.service
+
+::: policy_rate_monitor.charts
+
+## HTTP API
+
+The [HTTP API](api.md) page describes the endpoints; these are the Python names behind them. They
+need the `web` extra.
+
+::: policy_rate_monitor.web.app
+
+::: policy_rate_monitor.web.jobs
+
+::: policy_rate_monitor.web.errors
 
 ## Command line
 

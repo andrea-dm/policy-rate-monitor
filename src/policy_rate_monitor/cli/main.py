@@ -1,10 +1,10 @@
 """The ``bis-prates`` command: fetch, transform and report on the policy-rate data.
 
-Each subcommand runs one step of the pipeline; ``config validate`` and ``config
-schema`` check the configuration and print its format. Errors raised on purpose
-end the command with a one-line message and the exit code of ``exit_codes``;
-``--debug`` adds the traceback. Any other error is a bug: it is logged with its
-traceback and ends the command with ``INTERNAL_ERROR``.
+Each subcommand runs one step of the pipeline; ``serve`` runs the HTTP API, and
+``config validate`` and ``config schema`` check the configuration and print its
+format. Errors raised on purpose end the command with a one-line message and the
+exit code of ``exit_codes``; ``--debug`` adds the traceback. Any other error is a
+bug: it is logged with its traceback and ends the command with ``INTERNAL_ERROR``.
 
 See also: [CLI reference](cli.md).
 """
@@ -44,6 +44,9 @@ if TYPE_CHECKING:
     from policy_rate_monitor.core.models import DataSnapshot, SeriesMetadata
 
 __all__ = ["main"]
+
+# The packages of the web extra: an ImportError naming one means the extra is missing.
+_WEB_PACKAGES = frozenset({"fastapi", "plotly", "starlette", "uvicorn"})
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +155,28 @@ def _parser() -> ArgumentParser:
     )
     report_cmd.set_defaults(command=_report)
 
+    serve_cmd = commands.add_parser(
+        "serve", parents=[with_data], help="run the HTTP API (needs the web extra)"
+    )
+    serve_cmd.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="the address to listen on (default: %(default)s)",
+    )
+    serve_cmd.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="the port to listen on (default: %(default)s)",
+    )
+    serve_cmd.add_argument(
+        "--out",
+        type=Path,
+        default=Path("out"),
+        help="where a report job writes its files (default: out)",
+    )
+    serve_cmd.set_defaults(command=_serve)
+
     config_cmd = commands.add_parser(
         "config", help="check the configuration, or print its format"
     )
@@ -231,6 +256,22 @@ def _report(args: Namespace, environ: Mapping[str, str]) -> int:
             "no requested country or area has a complete result (status ok)\n"
         )
         return ExitCode.NO_RESULT
+    return ExitCode.OK
+
+
+def _serve(args: Namespace, environ: Mapping[str, str]) -> int:
+    try:
+        from policy_rate_monitor.web import serve  # noqa: PLC0415 - an optional extra
+    except ImportError as error:
+        if (error.name or "").partition(".")[0] not in _WEB_PACKAGES:
+            raise
+        sys.stderr.write(
+            "error: bis-prates serve needs the web extra: "
+            "install policy-rate-monitor[web]\n"
+        )
+        return ExitCode.USAGE_ERROR
+    config, provider = _open(args, environ)
+    serve(config, provider, host=args.host, port=args.port, out_dir=args.out)
     return ExitCode.OK
 
 

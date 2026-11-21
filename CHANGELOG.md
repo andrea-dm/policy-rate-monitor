@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The HTTP API: `GET /ref-areas`, `/summary`, `/timeseries` and `/chart`, and `fetch`,
+  `transform` and `report` as background jobs with a status endpoint, one at a time. Errors
+  are one JSON body, `{"error": kind, "message": ...}`, with a status per kind. See
+  docs/api.md and decision 0014 (#27).
+- `bis-prates serve [--host] [--port] [--out]` runs the API; without the `web` extra it
+  ends with a message naming it and exit code 2. Ctrl+C waits for the running job.
+- The extras `interactive` (Plotly) and `web` (FastAPI, Starlette, uvicorn and `interactive`).
+- `examples/policy_rates.ipynb` also draws the interactive Plotly chart, as `/chart` returns it, and
+  uses the `service` steps instead of repeating them (#27).
+
 ### Changed
 
+- The steps the command line and the API share are in the new `service` module, and the
+  report's choice of charted series and valid rows is shared with the interactive chart
+  (`charts`), so both draw the same lines. The commands behave as before.
 - One name for a country or economic area, `ref_area`, everywhere. **Breaking:** the
   configuration key `area_aliases` is now `ref_area_aliases`, and the snapshot status
   `unknown_area` is now `unknown_ref_area` in `summary.csv`, `summary.json` and `report.md`. The

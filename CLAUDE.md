@@ -5,7 +5,7 @@ Guidance for Claude Code in this repository.
 ## Quick Start
 
 ```bash
-uv sync --group dev                                   # create/refresh the venv
+uv sync --all-groups --all-extras                     # create/refresh the venv (tests need every extra)
 uv sync --locked --only-group lint --no-install-project   # CI-style lint env
 ```
 

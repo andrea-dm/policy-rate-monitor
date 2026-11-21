@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -31,7 +33,7 @@ def test_help_lists_the_commands(capsys: pytest.CaptureFixture[str]) -> None:
 
     assert exit_info.value.code == 0
     out = capsys.readouterr().out
-    for command in ("fetch", "transform", "report", "config"):
+    for command in ("fetch", "transform", "report", "serve", "config"):
         assert command in out
 
 
@@ -220,3 +222,64 @@ def test_an_unknown_code_lists_the_codes_the_data_has(
     assert "no series for UK" in warning
     assert "US (United States), XM (Euro area)" in warning
     assert "EA stands for XM" in warning
+
+
+@pytest.mark.contract
+def test_serve_without_the_web_extra_names_it_and_exits_2(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # As if FastAPI were not installed: the web package must be imported afresh.
+    for name in [
+        name for name in sys.modules if name.startswith("policy_rate_monitor.web")
+    ]:
+        monkeypatch.delitem(sys.modules, name)
+    monkeypatch.setitem(sys.modules, "fastapi", None)
+
+    code = main(["serve", "--config", str(CONFIG)])
+
+    assert code == ExitCode.USAGE_ERROR
+    assert "policy-rate-monitor[web]" in capsys.readouterr().err
+
+
+@pytest.mark.contract
+def test_serve_with_a_bad_configuration_exits_4(tmp_path: Path) -> None:
+    code = main(["serve", "--config", str(tmp_path / "nope.json")])
+
+    assert code == ExitCode.CONFIG_ERROR
+
+
+@pytest.mark.contract
+def test_serve_runs_the_api_with_the_resolved_options(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_serve(config: object, provider: object, **options: object) -> None:
+        calls.append({"config": config, "provider": provider, **options})
+
+    monkeypatch.setattr("policy_rate_monitor.web.serve", fake_serve)
+    environ = {DATA_DIR_VARIABLE: str(tmp_path)}
+
+    code = main(["serve", "--config", str(CONFIG), "--port", "9000"], environ)
+
+    assert code == ExitCode.OK
+    (call,) = calls
+    assert call["host"] == "127.0.0.1"
+    assert call["port"] == 9000
+    assert call["out_dir"] == Path("out")
+    assert isinstance(call["provider"], BulkFileProvider)
+
+
+@pytest.mark.contract
+def test_the_base_commands_load_neither_fastapi_nor_plotly() -> None:
+    code = (
+        "import sys, policy_rate_monitor.cli.main; "
+        "print(sorted({name.split('.')[0] for name in sys.modules} "
+        "& {'fastapi', 'plotly', 'starlette', 'uvicorn'}))"
+    )
+
+    result = subprocess.run(  # noqa: S603 - our own interpreter and code
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+
+    assert result.stdout.strip() == "[]"

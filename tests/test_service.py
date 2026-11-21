@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -9,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from policy_rate_monitor.config import DatasetConfig, FileConfigSource
-from policy_rate_monitor.core.models import SeriesMetadata, SnapshotStatus
+from policy_rate_monitor.core.models import DataSnapshot, SeriesMetadata, SnapshotStatus
 from policy_rate_monitor.providers import InMemoryProvider
 from policy_rate_monitor.service import (
     Observation,
@@ -126,3 +127,18 @@ def test_summary_gives_one_snapshot_per_requested_code(
         SnapshotStatus.UNKNOWN_REF_AREA,
     ]
     assert snapshots[0].change_bps == Decimal(-75)
+
+
+def test_summaries_computed_at_once_from_the_same_data_agree(
+    config: DatasetConfig, data: StagedData
+) -> None:
+    # The API's routes run on a thread pool and share one StagedData.
+    expected = summary(config, data, ["US", "EA", "UK"])
+
+    def one(_: int) -> list[DataSnapshot]:
+        return summary(config, data, ["US", "EA", "UK"])
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(one, range(64)))
+
+    assert all(result == expected for result in results)

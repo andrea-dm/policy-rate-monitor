@@ -36,7 +36,7 @@ NOTEBOOKS = sorted((ROOT / "examples").glob("*.ipynb"))
 GOOD_NAME = re.compile(r"ref_?area|euro_area|economic_area", re.IGNORECASE)
 # The word "area" in text, unless it is one of the phrases below.
 LONE_AREA = re.compile(
-    r"(?<!euro )(?<!euro-)(?<!economic )(?<!or )(?<!reference )(?<!reference-)"
+    r"(?<!euro )(?<!euro-)(?<!economic )(?<!or )(?<!reference )(?<!reference-)(?<!ref-)"
     r"\bareas?\b",
     re.IGNORECASE,
 )

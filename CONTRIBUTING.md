@@ -82,7 +82,10 @@ the pull request.
 
 `pytest` runs the tests in `tests/` and the examples of the docstrings in `src/`
 (`--doctest-modules`, `testpaths = ["tests", "src"]` in `pyproject.toml`). The tests never use the
-network.
+network. They import every module, the optional ones too, so install every extra first:
+`uv sync --all-groups --all-extras`. The HTTP API tests (`tests/web/`) call the app with FastAPI's
+`TestClient`, which runs on `httpx2`, from plain test functions: the routes are `def` ones, so
+there is no `pytest-asyncio`.
 
 ```bash
 uv run pytest                   # everything

@@ -64,6 +64,24 @@ depends_on = [
     "policy_rate_monitor.snapshot",
 ]
 
+# Needs the interactive extra (Plotly).
+[[modules]]
+path = "policy_rate_monitor.charts"
+depends_on = ["policy_rate_monitor.core", "policy_rate_monitor.report"]
+
+# Needs the web extra (FastAPI, uvicorn). An adapter beside cli, over the same service.
+[[modules]]
+path = "policy_rate_monitor.web"
+depends_on = [
+    "policy_rate_monitor.charts",
+    "policy_rate_monitor.config",
+    "policy_rate_monitor.core",
+    "policy_rate_monitor.providers",
+    "policy_rate_monitor.report",
+    "policy_rate_monitor.service",
+]
+
+# cli imports web only inside `serve`, so the base install never loads it.
 [[modules]]
 path = "policy_rate_monitor.cli"
 depends_on = [
@@ -72,4 +90,5 @@ depends_on = [
     "policy_rate_monitor.core",
     "policy_rate_monitor.service",
     "policy_rate_monitor.settings",
+    "policy_rate_monitor.web",
 ]
