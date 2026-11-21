@@ -1,4 +1,4 @@
-"""Latest policy rate, the rate a year earlier and the change, per requested area.
+"""Latest policy rate, the rate a year earlier and the change, per country or area.
 
 Pure calculation on the staged observations: no I/O.
 
@@ -48,18 +48,18 @@ class SnapshotArgs:
             Arrow decimals (``to_pandas(types_mapper=ArrowDtype)``, as the CLI
             does).
         series: Metadata of every series in *observations*.
-        requested: Area codes as the user typed them. They are matched after
+        requested: The codes as the user typed them. They are matched after
             stripping and upper-casing, empty ones and repeats are dropped, and
             each snapshot keeps the code as typed, without the spaces.
         settings: Look-back and staleness thresholds.
-        area_aliases: Requested code to the code used in the data, e.g. EA to XM.
+        ref_area_aliases: Requested code to the code used in the data, e.g. EA to XM.
     """
 
     observations: DataFrame
     series: Sequence[SeriesMetadata]
     requested: Sequence[str]
     settings: SnapshotSection
-    area_aliases: Mapping[str, str]
+    ref_area_aliases: Mapping[str, str]
 
 
 def months_before(day: date, months: int) -> date:
@@ -89,7 +89,7 @@ def months_before(day: date, months: int) -> date:
 
 
 def compute_snapshots(args: SnapshotArgs) -> list[DataSnapshot]:
-    """Computes one snapshot per requested area, in request order.
+    """Computes one snapshot per requested country or area, in request order.
 
     The searches run on the arrays of ``analytics``, built for the requested series
     only.
@@ -104,7 +104,7 @@ def compute_snapshots(args: SnapshotArgs) -> list[DataSnapshot]:
     Raises:
         TypeError: The values in *observations* are not Arrow decimals.
     """
-    series_by_area = {item.ref_area: item for item in args.series}
+    series_by_ref_area = {item.ref_area: item for item in args.series}
     requests: list[tuple[str, str, SeriesMetadata | None]] = []
     seen: set[str] = set()
     for given in args.requested:
@@ -112,8 +112,8 @@ def compute_snapshots(args: SnapshotArgs) -> list[DataSnapshot]:
         if not code or code in seen:
             continue
         seen.add(code)
-        ref_area = args.area_aliases.get(code, code)
-        requests.append((given, ref_area, series_by_area.get(ref_area)))
+        ref_area = args.ref_area_aliases.get(code, code)
+        requests.append((given, ref_area, series_by_ref_area.get(ref_area)))
 
     observations = args.observations
     keys = [series.series_key for _, _, series in requests if series is not None]
@@ -128,11 +128,13 @@ def compute_snapshots(args: SnapshotArgs) -> list[DataSnapshot]:
             snapshot = DataSnapshot(
                 requested_ref_area=given,
                 ref_area=ref_area,
-                status=SnapshotStatus.UNKNOWN_AREA,
+                status=SnapshotStatus.UNKNOWN_REF_AREA,
             )
         else:
             found = _found(history, arrays, series.series_key)
-            snapshot = _area_snapshot(given, series, found, args.settings, last_date)
+            snapshot = _ref_area_snapshot(
+                given, series, found, args.settings, last_date
+            )
         snapshots.append(snapshot)
     return snapshots
 
@@ -156,7 +158,7 @@ def _found(history: RateHistory, arrays: SnapshotArrays, series_key: str) -> _Fo
     )
 
 
-def _area_snapshot(
+def _ref_area_snapshot(
     given: str,
     series: SeriesMetadata,
     found: _Found,

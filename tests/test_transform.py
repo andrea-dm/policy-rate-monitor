@@ -95,7 +95,7 @@ CONFIG = {
     ],
     "snapshot": {"lookback_months": 12, "stale_latest_days": 30, "stale_prior_days": 7},
     "output": {"metadata_fields": ["series_key", "title"]},
-    "area_aliases": {},
+    "ref_area_aliases": {},
 }
 
 HEADER = (

@@ -60,7 +60,7 @@ ROWS: list[Row] = [
 def _observations(rows: list[Row]) -> DataFrame:
     return DataFrame(
         {
-            "series_key": [f"D.{area}" for area, _, _, _ in rows],
+            "series_key": [f"D.{ref_area}" for ref_area, _, _, _ in rows],
             "date": Series(
                 [date.fromisoformat(day) for _, day, _, _ in rows],
                 dtype="date32[pyarrow]",
@@ -77,12 +77,12 @@ def _observations(rows: list[Row]) -> DataFrame:
 Expected = tuple[date | None, date | None, Decimal | None]
 
 
-def _bisect_snapshot(rows: list[Row], area: str, as_of: date) -> Expected:
-    """The v0.1.0 method: Python dates, Decimals and bisect, for one area."""
+def _bisect_snapshot(rows: list[Row], ref_area: str, as_of: date) -> Expected:
+    """The v0.1.0 method: Python dates, Decimals and bisect, for one country or area."""
     valid = sorted(
         (date.fromisoformat(day), Decimal(value))
-        for row_area, day, value, is_valid in rows
-        if row_area == area and is_valid and value is not None
+        for row_ref_area, day, value, is_valid in rows
+        if row_ref_area == ref_area and is_valid and value is not None
         if date.fromisoformat(day) <= as_of
     )
     if not valid:
@@ -96,9 +96,9 @@ def _bisect_snapshot(rows: list[Row], area: str, as_of: date) -> Expected:
     return latest_date, prior_date, (latest_value - prior_value) * 100
 
 
-def _fast_snapshot(history: RateHistory, area: str, as_of: date) -> Expected:
+def _fast_snapshot(history: RateHistory, ref_area: str, as_of: date) -> Expected:
     arrays = snapshot_at(history, day_number(as_of), MONTHS)
-    i = history.position(f"D.{area}")
+    i = history.position(f"D.{ref_area}")
     latest, prior = int(arrays.latest[i]), int(arrays.prior[i])
     if latest == NO_INDEX:
         return None, None, None
@@ -114,9 +114,12 @@ def test_snapshot_at_matches_the_bisect_method_at_every_date() -> None:
     as_of_dates |= {day - timedelta(days=1) for day in as_of_dates}
 
     for as_of in sorted(as_of_dates):
-        for area in ("US", "CH", "GB", "XM"):
-            expected = _bisect_snapshot(ROWS, area, as_of)
-            assert _fast_snapshot(history, area, as_of) == expected, (area, as_of)
+        for ref_area in ("US", "CH", "GB", "XM"):
+            expected = _bisect_snapshot(ROWS, ref_area, as_of)
+            assert _fast_snapshot(history, ref_area, as_of) == expected, (
+                ref_area,
+                as_of,
+            )
 
 
 def test_values_and_dates_come_back_exactly_as_staged() -> None:

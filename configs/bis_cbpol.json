@@ -79,5 +79,5 @@
   "output": {
     "metadata_fields": ["series_key", "ref_area_name", "title", "unit", "decimals"]
   },
-  "area_aliases": { "EA": "XM" }
+  "ref_area_aliases": { "EA": "XM" }
 }

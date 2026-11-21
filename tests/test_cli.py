@@ -181,26 +181,26 @@ def test_an_unknown_code_lists_the_codes_the_data_has(
     structure = FileConfigSource(CONFIG).load().structure
     rows = [
         {
-            "series_key": f"D.{area}",
+            "series_key": f"D.{ref_area}",
             "freq": "D",
-            "ref_area": area,
+            "ref_area": ref_area,
             "date": day,
             "value": Decimal("2.5"),
             "obs_status": "A",
             "is_valid": True,
         }
-        for area in ("US", "XM")
+        for ref_area in ("US", "XM")
         for day in (date(2025, 1, 2), date(2026, 1, 2))
     ]
     series = [
         SeriesMetadata(
-            series_key=f"D.{area}",
-            ref_area=area,
+            series_key=f"D.{ref_area}",
+            ref_area=ref_area,
             ref_area_name=name,
             frequency="D",
             title=f"Policy rate of {name}",
         )
-        for area, name in (("US", "United States"), ("XM", "Euro area"))
+        for ref_area, name in (("US", "United States"), ("XM", "Euro area"))
     ]
     provider = InMemoryProvider(structure, rows, series)
 

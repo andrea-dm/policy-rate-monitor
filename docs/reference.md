@@ -40,7 +40,7 @@ snapshots = compute_snapshots(
         series=series,
         requested=["US", "EA"],
         settings=config.snapshot,
-        area_aliases=config.area_aliases,
+        ref_area_aliases=config.ref_area_aliases,
     )
 )
 for snapshot in snapshots:

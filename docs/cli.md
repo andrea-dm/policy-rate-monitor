@@ -42,7 +42,7 @@ the release of 19 November 2026:
 
 ### `bis-prates report`
 
-For each requested area, finds the latest valid rate, the rate 12 months earlier and the change in
+For each requested country or economic area, finds the latest valid rate, the rate 12 months earlier and the change in
 basis points, and writes `out/summary.csv`, `out/summary.json`, `out/policy_rates.png` and
 `out/report.md`. Prints the paths of the four files. For a code the data does not have, it prints a
 warning listing every code the data has, with its name:
@@ -83,7 +83,7 @@ version.
 | `--config PATH` | all but `config schema` | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` | the dataset configuration ([Configuration](configuration.md)) |
 | `--data-dir PATH` | `fetch`, `transform`, `report` | `$BIS_PRATES_DATA_DIR`, else `dataset.data_dir` in the configuration (`data`) | where `raw/` and `staged/` go; a relative path is relative to the current folder |
 | `--debug` | all | off | show the full traceback of an error |
-| `--countries "US,EA"` | `report` | required | the area codes, separated by commas; matched without regard to case and spaces, de-duplicated, and written as typed next to the code used; aliases such as `EA → XM` applied |
+| `--countries "US,EA"` | `report` | required | the codes, separated by commas; matched without regard to case and spaces, de-duplicated, and written as typed next to the code used; aliases such as `EA → XM` applied |
 | `--start YYYY-MM-DD` | `report` | the whole history | the first date of the chart; the summary is not affected |
 | `--out DIR` | `report` | `out` | the output folder |
 
@@ -122,7 +122,7 @@ number alone ([decision 0010](adr/0010-cli-and-exit-codes.md)).
 | Code | Name | Meaning | What to do |
 |---|---|---|---|
 | 0 | `OK` | success | - |
-| 1 | `NO_RESULT` | no requested area has a complete result (status `ok`); the outputs are still written | check the area codes and the statuses in the summary |
+| 1 | `NO_RESULT` | no requested country or area has a complete result (status `ok`); the outputs are still written | check the codes and the statuses in the summary |
 | 2 | `USAGE_ERROR` | invalid arguments | fix the command line |
 | 3 | `INTERNAL_ERROR` | an unexpected error, that is a bug; the traceback is logged | report it |
 | 4 | `CONFIG_ERROR` | the configuration is missing or invalid | fix the configuration file |

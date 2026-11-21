@@ -638,7 +638,7 @@
       "$ref": "#/$defs/OutputSection",
       "description": "Output fields."
     },
-    "area_aliases": {
+    "ref_area_aliases": {
       "description": "Requested code to reference-area code. Keys are upper case; no alias maps to\nitself or to another alias.",
       "patternProperties": {
         "^[A-Za-z0-9_@$-]+$": {
@@ -646,7 +646,7 @@
           "type": "string"
         }
       },
-      "title": "Area Aliases",
+      "title": "Ref Area Aliases",
       "type": "object"
     }
   },
@@ -658,7 +658,7 @@
     "rules",
     "snapshot",
     "output",
-    "area_aliases"
+    "ref_area_aliases"
   ],
   "title": "DatasetConfig",
   "type": "object"

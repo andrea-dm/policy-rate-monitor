@@ -80,11 +80,11 @@ def test_output_field_must_be_a_series_metadata_field() -> None:
 @pytest.mark.parametrize(
     ("aliases", "expected"),
     [
-        ({"Q1": "Q1"}, "area_aliases.Q1: 'Q1' maps to itself"),
+        ({"Q1": "Q1"}, "ref_area_aliases.Q1: 'Q1' maps to itself"),
         (
             {"Q1": "Q2", "Q2": "Q3"},
             (
-                "area_aliases.Q1: 'Q1' maps to 'Q2', which is itself an alias:"
+                "ref_area_aliases.Q1: 'Q1' maps to 'Q2', which is itself an alias:"
                 " map 'Q1' to the final code"
             ),
         ),
@@ -92,7 +92,7 @@ def test_output_field_must_be_a_series_metadata_field() -> None:
     ids=["to_itself", "chain"],
 )
 def test_alias_must_map_to_a_final_code(aliases: dict[str, str], expected: str) -> None:
-    document = changed(minimal_document(), "area_aliases", aliases)
+    document = changed(minimal_document(), "ref_area_aliases", aliases)
 
     assert error_lines(document) == [expected]
 

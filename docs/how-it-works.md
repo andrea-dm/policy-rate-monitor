@@ -99,9 +99,9 @@ exact numbers.
 **How it is solved.** After loading the raw layer (section 1, step 7), `bis-prates transform` keeps
 the daily series only (`FREQ = D`, from the configuration) and builds three files in `staged/`:
 
-- `observations.parquet`: series key, frequency, area, date, rate, status and a validity flag, one
+- `observations.parquet`: series key, frequency, reference area, date, rate, status and a validity flag, one
   row per series and date, sorted by date within each series;
-- `series.json`: the description of each series (area name, title, unit, decimals and the other
+- `series.json`: the description of each series (reference area name, title, unit, decimals and the other
   attributes), once per series;
 - `data_quality.json`: the findings (section 4).
 
@@ -146,18 +146,17 @@ says so in its log ([decision 0011](adr/0011-data-quality-rules.md)).
     `test_duplicates_are_dropped_and_reported`, `test_unparseable_dates_are_dropped_and_reported`,
     `test_a_value_with_more_decimals_than_the_type_is_never_rounded`.
 
-## 5. The latest rate of each area (§1.3)
+## 5. The latest rate of each country or area (§1.3)
 
-**The problem.** The user wants to know the policy rate today for a list of countries. But areas do
+**The problem.** The user wants to know the policy rate today for a list of countries. But they do
 not publish on the same days: the UK can be a day behind the US, and some series stopped years ago.
 
-**How it is solved.** For each requested area, the latest rate is the last valid observation of its
-daily series, with its own date. Areas are not forced to a common date, so no area is shown with an
-invented value.
+**How it is solved.** For each requested country or area, the latest rate is the last valid observation of its
+daily series, with its own date. Dates are not forced to a common one, so no value is invented.
 
 ??? info "Checked by"
 
-    `tests/test_snapshot.py::test_each_area_looks_back_from_its_own_latest_date`,
+    `tests/test_snapshot.py::test_each_ref_area_looks_back_from_its_own_latest_date`,
     `test_invalid_observations_are_skipped`.
 
 ## 6. The rate 12 months earlier (§1.3)
@@ -166,7 +165,7 @@ invented value.
 report compares today's rate with the rate a year ago. But "a year ago" often falls on a weekend, a
 holiday or a gap in the data, where there is no published rate.
 
-**How it is solved.** From each area's latest date, the tool goes back 12 calendar months to the
+**How it is solved.** From the latest date of each one, the tool goes back 12 calendar months to the
 same day (the *target date*). If there is no valid rate that day, it takes the last valid rate
 published before it.
 
@@ -183,7 +182,7 @@ Examples from the release of 19 November 2026:
 
     The search is a binary search on each series' sorted dates: it halves the range of dates at each
     step, so it needs about 20 steps for 700,000 rows. The dates and rates are first laid out
-    as arrays of whole numbers, so one search answers for every requested area at once, exactly
+    as arrays of whole numbers, so one search answers for every requested country or area at once, exactly
     ([decisions 0006](adr/0006-twelve-month-look-back.md) and
     [0013](adr/0013-fast-analytics-numpy-numba.md)).
 
@@ -210,41 +209,41 @@ summary files. Only the chart uses approximate numbers, for drawing
     `tests/test_snapshot.py::test_change_is_exact_in_basis_points`; the five headline
     figures were also checked against an independent calculation on the raw file.
 
-## 8. Areas the tool cannot answer for (§1.3)
+## 8. Countries or areas the tool cannot answer for (§1.3)
 
-**The problem.** A user can ask for a code the data does not have, for an area with no valid rate,
+**The problem.** A user can ask for a code the data does not have, for one with no valid rate,
 or for a series too short to go back 12 months. One bad request must not spoil the whole report, and
 a stale figure must not pass for a current one.
 
-**How it is solved.** Each requested area gets a status, and every area appears in the outputs:
+**How it is solved.** Each requested country or economic area gets a status, and each one appears in the outputs:
 
 | Status | Meaning |
 |---|---|
 | `ok` | Latest rate, rate 12 months earlier and change are known |
-| `unknown_area` | The data has no series for this code |
+| `unknown_ref_area` | The data has no series for this code |
 | `no_valid_data` | The series exists but has no valid rate |
 | `insufficient_history` | There is a latest rate, but nothing on or before the target date |
 
-Flags warn without hiding a value: `stale_latest` when an area's latest rate is more than 30 days
+Flags warn without hiding a value: `stale_latest` when a latest rate is more than 30 days
 older than the newest date in the data (for example a series that stopped), and `stale_prior` when
 the rate used for 12 months earlier is more than 7 days before the target date. The thresholds are
 in the configuration. For an unknown code, `report` prints a warning that lists every code the data
-has, with its name. If no requested area is `ok`, the command still writes the outputs and ends
+has, with its name. If no requested country or area is `ok`, the command still writes the outputs and ends
 with exit code 1.
 
 ??? info "Checked by"
 
-    `tests/test_snapshot.py::test_unknown_area_insufficient_history_and_no_valid_data`,
+    `tests/test_snapshot.py::test_unknown_ref_area_insufficient_history_and_no_valid_data`,
     `test_stale_latest_and_stale_prior_are_flagged`;
     `tests/test_cli.py::test_an_unknown_code_lists_the_codes_the_data_has`.
 
-## 9. Areas named the way people name them (§1.3)
+## 9. Countries or areas named the way people name them (§1.3)
 
 **The problem.** The brief asks for `EA` (euro area), but the BIS file calls it `XM`. Users also
 type codes in lower case, with spaces, or twice.
 
 **How it is solved.** Requested codes are matched without regard to spaces and case, and a code
-asked for twice is kept once; `EA` is translated to `XM` through `area_aliases` in the
+asked for twice is kept once; `EA` is translated to `XM` through `ref_area_aliases` in the
 configuration. The outputs show both the code as the user typed it and the BIS code.
 
 ??? info "Checked by"
@@ -259,10 +258,10 @@ come from, without reading code.
 
 **How it is solved.** `bis-prates report` writes four files to `out/`:
 
-- `summary.csv` and `summary.json`: one row per requested area, with its status, flags and the
+- `summary.csv` and `summary.json`: one row per requested country or area, with its status, flags and the
   series fields chosen in the configuration; the JSON also nests the full series description and
   records the source release (address, retrieval time, fingerprint);
-- `policy_rates.png`: the daily rates of the requested areas from the start date, drawn as steps,
+- `policy_rates.png`: the daily rates of the requested countries or areas from the start date, drawn as steps,
   because policy rates change in steps;
 - `report.md`: the summary table, the chart, a description of the source, the method and its
   assumptions, the data-quality findings and the limitations, in plain English.

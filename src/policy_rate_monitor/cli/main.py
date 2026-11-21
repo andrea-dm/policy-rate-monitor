@@ -140,7 +140,7 @@ def _parser() -> argparse.ArgumentParser:
     report_cmd.add_argument(
         "--countries",
         required=True,
-        help='comma-separated area codes, e.g. "US,EA,GB"',
+        help='comma-separated codes of countries or areas, e.g. "US,EA,GB"',
     )
     report_cmd.add_argument(
         "--start",
@@ -236,7 +236,7 @@ def _report(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
             # compute_snapshots strips, upper-cases and drops the empty codes.
             requested=args.countries.split(","),
             settings=config.snapshot,
-            area_aliases=config.area_aliases,
+            ref_area_aliases=config.ref_area_aliases,
         )
     )
     paths = Report(config).export(
@@ -252,11 +252,13 @@ def _report(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
     )
     for path in paths:
         sys.stdout.write(f"{path}\n")
-    warning = _unknown_area_warning(snapshots, series, config.area_aliases)
+    warning = _unknown_ref_area_warning(snapshots, series, config.ref_area_aliases)
     if warning:
         sys.stderr.write(warning)
     if not any(item.status == SnapshotStatus.OK for item in snapshots):
-        sys.stderr.write("no requested area has a complete result (status ok)\n")
+        sys.stderr.write(
+            "no requested country or area has a complete result (status ok)\n"
+        )
         return ExitCode.NO_RESULT
     return ExitCode.OK
 
@@ -269,16 +271,17 @@ def _validate(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
 
 
 def _schema(_args: argparse.Namespace, _environ: Mapping[str, str]) -> int:
-    # TODO(andrea-dm): refuse under python -OO, which drops every description.
+    # TODO(andrea-dm): refuse to run under python -OO, which strips the docstrings
+    # the schema's descriptions are read from.
     # https://github.com/andrea-dm/policy-rate-monitor/issues/8
     sys.stdout.write(render_json_schema())
     return ExitCode.OK
 
 
-def _unknown_area_warning(
+def _unknown_ref_area_warning(
     snapshots: list[DataSnapshot],
     series: list[SeriesMetadata],
-    area_aliases: Mapping[str, str],
+    ref_area_aliases: Mapping[str, str],
 ) -> str:
     """Names the requested codes the data does not have, and lists the ones it has.
 
@@ -288,14 +291,15 @@ def _unknown_area_warning(
     unknown = [
         item.requested_ref_area
         for item in snapshots
-        if item.status == SnapshotStatus.UNKNOWN_AREA
+        if item.status == SnapshotStatus.UNKNOWN_REF_AREA
     ]
     if not unknown:
         return ""
     names = {item.ref_area: item.ref_area_name for item in series}
     available = ", ".join(f"{code} ({names[code]})" for code in sorted(names))
     aliases = "".join(
-        f"; {alias} stands for {code}" for alias, code in sorted(area_aliases.items())
+        f"; {alias} stands for {code}"
+        for alias, code in sorted(ref_area_aliases.items())
     )
     return (
         f"warning: no series for {', '.join(unknown)}. "

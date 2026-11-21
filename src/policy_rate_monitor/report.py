@@ -43,7 +43,7 @@ __all__ = ["Report", "ReportArgs"]
 CHART_FILE = "policy_rates.png"
 """File name of the chart in the output folder."""
 
-# Areas with a latest rate get a line on the chart.
+# A country or economic area with a latest rate gets a line on the chart.
 _CHARTED = (SnapshotStatus.OK, SnapshotStatus.INSUFFICIENT_HISTORY)
 
 _LIMITATIONS = (
@@ -52,8 +52,8 @@ _LIMITATIONS = (
         "correct or fill in any value."
     ),
     (
-        "- Areas are compared at their own latest date, so the dates in one table "
-        "can differ. A stale flag points out an area that lags behind."
+        "- Each country or area is compared at its own latest date, so the dates "
+        "in one table can differ. A stale flag points out one that lags behind."
     ),
     (
         "- A gap in a series makes the prior rate older than the target date; such "
@@ -68,7 +68,9 @@ _LIMITATIONS = (
 
 _STATUS_TEXT = {
     SnapshotStatus.OK: "the latest rate, the prior rate and the change are known.",
-    SnapshotStatus.UNKNOWN_AREA: "the dataset has no series for the requested code.",
+    SnapshotStatus.UNKNOWN_REF_AREA: (
+        "the dataset has no series for the requested code."
+    ),
     SnapshotStatus.NO_VALID_DATA: "the series exists but has no valid observation.",
     SnapshotStatus.INSUFFICIENT_HISTORY: (
         "a latest rate exists, but the series has no valid observation on or "
@@ -82,7 +84,7 @@ class ReportArgs:
     """What one report is built from.
 
     Attributes:
-        snapshots: One snapshot per requested area, in request order.
+        snapshots: One snapshot per requested country or area, in request order.
         observations: The staged observations (``series_key``, ``date``, ``value``,
             ``is_valid`` and the configured columns).
         series: Metadata of every staged series.
@@ -198,8 +200,8 @@ class Report:
         lines = [
             f"- Only the series with {selection} are used.",
             (
-                "- The latest rate of an area is its last valid observation; "
-                "each area keeps its own latest date."
+                "- The latest rate of a country or area is its last valid "
+                "observation; each one keeps its own latest date."
             ),
             (
                 f"- The target date is the same calendar date {months} months "
@@ -352,8 +354,8 @@ def _rate(value: Decimal | None, decimals: int | None) -> str:
 def _summary_table(snapshots: Sequence[DataSnapshot]) -> list[str]:
     lines = [
         (
-            "| Area | Code | Latest date | Latest (%) | Prior date | Prior (%) "
-            "| Change (bp) | Status | Flags |"
+            "| Country or area | Code | Latest date | Latest (%) | Prior date "
+            "| Prior (%) | Change (bp) | Status | Flags |"
         ),
         "|---|---|---|--:|---|--:|--:|---|---|",
     ]

@@ -32,7 +32,7 @@ error: configs/bis_cbpol.json: invalid configuration (1 error)
 | `rules` | The data-quality rules to run, each with a severity and its parameters (next section) | `{ "name": "exact_duplicate", "severity": "info" }` |
 | `snapshot` | The calculation: the look-back in months and the two staleness thresholds in days | `"lookback_months": 12` |
 | `output` | The series-metadata fields added to each row of `summary.csv`, in column order | `["series_key", "ref_area_name", …]` |
-| `area_aliases` | Requested codes that stand for a code in the data | `{ "EA": "XM" }` |
+| `ref_area_aliases` | Requested codes that stand for a code in the data | `{ "EA": "XM" }` |
 
 Every field, with its type, limits and description, is listed in `config.schema.json`, and in the
 [API reference](reference.md) under `DatasetConfig`.

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- One name for a country or economic area, `ref_area`, everywhere. **Breaking:** the
+  configuration key `area_aliases` is now `ref_area_aliases`, and the snapshot status
+  `unknown_area` is now `unknown_ref_area` in `summary.csv`, `summary.json` and `report.md`. The
+  report's table header and the messages say "country or area" (#27).
+
 ## [0.2.0] — 2026-11-21
 
 Fast analytics, the `config` commands and options from environment variables, and the full

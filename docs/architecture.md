@@ -69,7 +69,7 @@ flowchart BT
 | `providers` | The `DataProvider` interface, the canonical observations schema, and `InMemoryProvider` | nothing |
 | `bulk` | `BulkFileProvider`: the provider over the bulk-download file, built on `fetch` and `transform` | through `fetch` and `transform` |
 | `analytics` | The staged observations as fixed-point NumPy arrays, and the searches on them: the snapshot at any date, the change history, the rate moves | nothing |
-| `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested area | nothing |
+| `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested country or area | nothing |
 | `report` | Writes the summary files, the chart and the Markdown report from the snapshots it is given | `out/` |
 | `settings` | Where the configuration file and the data directory come from: the command line, an environment variable, the configuration or a default; shared by the CLI and the HTTP API | nothing |
 | `cli` | The `bis-prates` command: parses the arguments, calls the pieces above, prints, returns an exit code | nothing directly |

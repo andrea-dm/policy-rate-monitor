@@ -3,8 +3,8 @@
 ``DatasetConfig`` is the top-level model, with one section per concern: the dataset's
 identity, where its file comes from, its SDMX structure, how that structure is written
 in the file, the data-quality rules, the snapshot thresholds, the output fields and
-the area aliases. Nothing here names a real dataset: every fact comes from the
-configuration document.
+the reference-area aliases. Nothing here names a real dataset: every fact comes from
+the configuration document.
 
 Every model is frozen, forbids unknown keys and is strict: ``"24"`` is not an integer
 and ``"false"`` is not a boolean. Strict mode reads JSON text, so build a configuration
@@ -220,7 +220,7 @@ def _check_aliases(aliases: Mapping[str, str]) -> Mapping[str, str]:
         elif target in aliases:
             context = {"code": code, "target": target}
             problems.append(Problem(ALIAS_CHAIN, (code,), target, context))
-    raise_problems("area_aliases", problems)
+    raise_problems("ref_area_aliases", problems)
     return aliases
 
 
@@ -228,7 +228,7 @@ LocalPath = Annotated[Path, BeforeValidator(_check_local_path)]
 UniqueTuple = Annotated[tuple[_T, ...], AfterValidator(_unique)]
 _AsDict = PlainSerializer(_plain_dict, return_type=dict[str, str])
 Selection = Annotated[Mapping[ConceptId, Code], AfterValidator(_read_only), _AsDict]
-AreaAliases = Annotated[
+RefAreaAliases = Annotated[
     Mapping[Code, Code],
     AfterValidator(_check_aliases),
     AfterValidator(_read_only),
@@ -528,13 +528,13 @@ class StructureSection(_ConfigModel):
         dimensions = {d.id: d for d in self.dimensions}
         series = {a.id for a in self.series_attributes}
         problems: list[Problem] = []
-        area = dimensions.get(bound.ref_area)
-        if area is None:
+        ref_area = dimensions.get(bound.ref_area)
+        if ref_area is None:
             hint = did_you_mean(bound.ref_area, dimensions)
             context = {"id": bound.ref_area, "hint": hint}
             loc = ("series_metadata", "ref_area")
             problems.append(Problem(NOT_A_DIMENSION, loc, bound.ref_area, context))
-        elif not area.coded:
+        elif not ref_area.coded:
             loc = ("series_metadata", "ref_area")
             context = {"id": bound.ref_area}
             problems.append(Problem(REF_AREA_NOT_CODED, loc, bound.ref_area, context))
@@ -673,7 +673,7 @@ class DatasetConfig(_ConfigModel):
     """Snapshot parameters."""
     output: OutputSection
     """Output fields."""
-    area_aliases: AreaAliases
+    ref_area_aliases: RefAreaAliases
     """Requested code to reference-area code. Keys are upper case; no alias maps to
     itself or to another alias."""
 
@@ -719,7 +719,7 @@ class DatasetConfig(_ConfigModel):
                 context = {"id": concept_id}
                 problems.append(Problem(UNMAPPED_IS_DECLARED, loc, concept_id, context))
             elif (match := by_case.get(concept_id.casefold())) is not None:
-                # Ids are case-sensitive, so "area" next to a declared "AREA" would be
+                # Ids are case-sensitive, so "geo" next to a declared "GEO" would be
                 # a second, unmapped column: almost certainly a mistake, so rejected.
                 context = {"id": concept_id, "declared": match}
                 problems.append(Problem(UNMAPPED_CASE_CLASH, loc, concept_id, context))

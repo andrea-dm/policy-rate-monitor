@@ -46,7 +46,7 @@ def minimal_document() -> Document:
         "structure": {
             "dimensions": [
                 {"id": "FRQ", "coded": True, "column": "frq"},
-                {"id": "AREA", "coded": True, "column": "area"},
+                {"id": "GEO", "coded": True, "column": "geo"},
             ],
             "time_dimension": {"id": "DAY", "date_format": "%Y-%m-%d"},
             "measure": {
@@ -67,7 +67,7 @@ def minimal_document() -> Document:
                 {"id": "INFO", "coded": False},
             ],
             "series_metadata": {
-                "ref_area": "AREA",
+                "ref_area": "GEO",
                 "frequency": "FRQ",
                 "title": "TTL",
                 "unit": "UNT",
@@ -107,7 +107,7 @@ def minimal_document() -> Document:
                 "decimals",
             ]
         },
-        "area_aliases": {"Q1": "Q2"},
+        "ref_area_aliases": {"Q1": "Q2"},
     }
 
 

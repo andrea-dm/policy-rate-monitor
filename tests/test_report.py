@@ -67,7 +67,9 @@ def test_report_writes_the_four_files(tmp_path: Path) -> None:
             status=SnapshotStatus.OK,
         ),
         DataSnapshot(
-            requested_ref_area="ZZ", ref_area="ZZ", status=SnapshotStatus.UNKNOWN_AREA
+            requested_ref_area="ZZ",
+            ref_area="ZZ",
+            status=SnapshotStatus.UNKNOWN_REF_AREA,
         ),
     ]
     issues = [
@@ -123,7 +125,7 @@ def test_report_writes_the_four_files(tmp_path: Path) -> None:
         "flags": "",
     }
     assert rows[1]["ref_area"] == "ZZ"
-    assert rows[1]["status"] == "unknown_area"
+    assert rows[1]["status"] == "unknown_ref_area"
     assert rows[1]["latest_value"] == ""
 
     summary = json.loads(paths[1].read_text(encoding="utf-8"))
@@ -134,7 +136,7 @@ def test_report_writes_the_four_files(tmp_path: Path) -> None:
     assert summary["source"]["location"] == "https://example.org/data.zip"
     assert summary["snapshots"][0]["change_bps"] == 25
     assert summary["snapshots"][0]["latest_value"] == 4
-    assert summary["snapshots"][1]["status"] == "unknown_area"
+    assert summary["snapshots"][1]["status"] == "unknown_ref_area"
     assert summary["snapshots"][1]["series"] is None
 
     report = paths[3].read_text(encoding="utf-8")
