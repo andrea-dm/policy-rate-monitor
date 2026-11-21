@@ -13,7 +13,7 @@ all the same, so that the numbering stays in that order; its status says so.
 | Record | Decision | Decided | Status |
 |---|---|---|---|
 | [0001](0001-data-stack-pyarrow.md) | Arrow types and parquet for the data; Arrow tables at the provider interface | 2026-11-17 | Accepted |
-| [0002](0002-charting-and-report-format.md) | matplotlib for the PNG, Plotly for interactive charts; the report format | 2026-11-17 | Accepted, one open point |
+| [0002](0002-charting-and-report-format.md) | matplotlib for the PNG, Plotly for interactive charts; the report format | 2026-11-17 | Accepted; its open point settled by 0015 |
 | [0003](0003-web-extension-stack.md) | The web extension: a FastAPI service and a small React front end | 2026-11-17 | Accepted; the API is built, the front end is not |
 | [0004](0004-domain-model.md) | Frozen pydantic models with checked invariants, and their vocabulary | 2026-11-17 | Accepted |
 | [0005](0005-exact-decimal-rates.md) | Exact decimal rates end to end | 2026-11-17 | Accepted |
@@ -26,3 +26,4 @@ all the same, so that the numbering stays in that order; its status says so.
 | [0012](0012-elt-raw-and-staged-layers.md) | ELT, not ETL: load the source as it is, then stage it | 2026-11-19 | Accepted, partly built |
 | [0013](0013-fast-analytics-numpy-numba.md) | Fast analytics: fixed-point arrays, NumPy kernels, Numba optional | 2026-11-19 | Accepted |
 | [0014](0014-http-api.md) | The HTTP API: one service for both interfaces, jobs one at a time, errors as kinds | 2026-11-21 | Accepted |
+| [0015](0015-report-templates-and-html.md) | The report pages from templates, with an offline chart and a PNG fallback | 2026-11-21 | Accepted |

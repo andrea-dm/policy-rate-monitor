@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `bis-prates report` and the API's report job also write `out/report.html`: the same report as
+  `report.md`, with the interactive chart when the `interactive` extra is installed and the PNG
+  when it is not. The page is one file that works offline (Plotly's JavaScript is inside it, about
+  5 MB) and follows WCAG 2.2 level AA. See decision 0015 (#12).
+- Both report pages show an emoji beside each status, flag and finding severity (✅ ok, ⚠️ a
+  warning, ⏳ a stale rate, and so on); the name is always written too (#12).
 - `examples/http_api.ipynb`, which uses only the HTTP API: start `bis-prates serve`, then the
   notebook runs the jobs and reads the summary, a time series and the chart over HTTP.
 - The HTTP API: `GET /ref-areas`, `/summary`, `/timeseries` and `/chart`, and `fetch`,
@@ -23,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `report.md` is rendered from a Jinja template, like `report.html`, from the same values; its
+  text is the same as before, apart from the emoji. `jinja2` is a new dependency of the base
+  install (#12).
 - The steps the command line and the API share are in the new `service` module, and the
   report's choice of charted series and valid rows is shared with the interactive chart
   (`charts`), so both draw the same lines. The commands behave as before.

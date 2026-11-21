@@ -6,8 +6,9 @@ files to the output folder: ``summary.csv``, ``summary.json``, ``policy_rates.pn
 ``templates/``, filled from one context. Every text that names the dataset comes from
 the configuration.
 
-See also: [How it works](how-it-works.md), section 10, and [decision
-0002](adr/0002-charting-and-report-format.md).
+See also: [How it works](how-it-works.md), section 10, and decisions
+[0002](adr/0002-charting-and-report-format.md) and
+[0015](adr/0015-report-templates-and-html.md).
 """
 
 # pyright: reportUnknownMemberType=false

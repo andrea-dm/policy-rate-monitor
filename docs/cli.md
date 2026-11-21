@@ -43,8 +43,10 @@ the release of 19 November 2026:
 ### `bis-prates report`
 
 For each requested country or economic area, finds the latest valid rate, the rate 12 months earlier and the change in
-basis points, and writes `out/summary.csv`, `out/summary.json`, `out/policy_rates.png` and
-`out/report.md`. Prints the paths of the four files. For a code the data does not have, it prints a
+basis points, and writes `out/summary.csv`, `out/summary.json`, `out/policy_rates.png`,
+`out/report.md` and `out/report.html`. Prints the paths of the five files. `report.html` has the
+interactive chart with the `interactive` extra, and the PNG without it; it works offline either
+way ([decision 0015](adr/0015-report-templates-and-html.md)). For a code the data does not have, it prints a
 warning listing every code the data has, with its name:
 
 ```text

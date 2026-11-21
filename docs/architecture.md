@@ -17,7 +17,7 @@ flowchart LR
     report["report"]
     raw[("data/raw/<br/>ZIP, release record,<br/>CSV as loaded")]
     staged[("data/staged/<br/>observations, series,<br/>data quality")]
-    out[("out/<br/>summary.csv, summary.json,<br/>policy_rates.png, report.md")]
+    out[("out/<br/>summary.csv, summary.json,<br/>policy_rates.png, report.md, report.html")]
 
     bis --> fetch --> raw --> transform --> staged --> report --> out
 ```
@@ -66,12 +66,13 @@ flowchart BT
     service --> cli
     bulk --> cli
     web -.-> cli
+    charts -.-> report
     config --> settings
     settings --> cli
 ```
 
-The dotted arrow is a lazy import: `cli` imports `web` only inside `serve`, so the base install
-never loads FastAPI. The diagram shows the main arrows; the full list of allowed imports of each
+The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, and `report` imports
+`charts` only when Plotly is installed, so the base install never loads FastAPI or Plotly. The diagram shows the main arrows; the full list of allowed imports of each
 module is in `tach.toml`.
 
 | Module | What it does | Reads or writes |
@@ -84,7 +85,7 @@ module is in `tach.toml`.
 | `bulk` | `BulkFileProvider`: the provider over the bulk-download file, built on `fetch` and `transform` | through `fetch` and `transform` |
 | `analytics` | The staged observations as fixed-point NumPy arrays, and the searches on them: the snapshot at any date, the change history, the rate moves | nothing |
 | `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested country or area | nothing |
-| `report` | Writes the summary files, the chart and the Markdown report from the snapshots it is given | `out/` |
+| `report` | Writes the summary files, the chart and the two report pages, `report.md` and `report.html`, from the snapshots it is given, through the templates in `templates/`. Imports `charts` only inside the function that draws the HTML chart, when Plotly is installed | `out/` |
 | `service` | The steps the CLI and the HTTP API share: `load_staged`, `ref_areas`, `summary`, `timeseries` and `write_report`. Imports `report`, `snapshot`, `providers`, `config` and `core` | `out/`, through `report` |
 | `charts` | `rate_figure`: the Plotly figure of the policy rates, drawn from the same series and rows as the report's PNG. Imports `report` and `core`; needs the `interactive` extra | nothing |
 | `web` | The HTTP API (FastAPI): routes, background jobs, error bodies. An adapter beside `cli`. Imports `service`, `charts`, `report`, `providers`, `config` and `core`; needs the `web` extra | `data/raw/` and `data/staged/` through the provider (the `fetch` and `transform` jobs); `out/` for `report` jobs |
@@ -132,7 +133,7 @@ sequenceDiagram
     Service-->>CLI: the snapshots
     CLI->>Service: write_report(config, data, snapshots, out, start)
     Service->>Report: export(ReportArgs)
-    Report-->>Service: paths of the four files
+    Report-->>Service: paths of the five files
     Service-->>CLI: the paths
     CLI-->>User: the paths; a warning for an unknown code; exit code
 ```

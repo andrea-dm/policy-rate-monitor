@@ -204,7 +204,7 @@ curl http://127.0.0.1:8000/jobs/6f0c1b0a5e0d4e0c9c1d2f3a4b5c6d7e
 |---|---|
 | `fetch` | `{"release": {"location": ..., "version_id": ..., "checksum_sha256": ..., "retrieved_at": ...}}` |
 | `transform` | `{"observations": 709984, "series": 49, "findings": 0}` |
-| `report` | `{"files": ["out/summary.csv", "out/summary.json", "out/policy_rates.png", "out/report.md"]}` |
+| `report` | `{"files": ["out/summary.csv", "out/summary.json", "out/policy_rates.png", "out/report.md", "out/report.html"]}` |
 
 A `report` job takes a body and writes the files into the `--out` folder, as `bis-prates report`
 does:

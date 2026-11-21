@@ -23,9 +23,10 @@ flowchart LR
         JSON[summary.json]
         PNG[policy_rates.png]
         MD[report.md]
+        HTML[report.html]
     end
     ZIP --> PQ --> OBS & SER & DQ
-    OBS & SER & DQ & REL --> CSV & JSON & PNG & MD
+    OBS & SER & DQ & REL --> CSV & JSON & PNG & MD & HTML
 ```
 
 Tables are stored as parquet, a compact file format for tables that keeps each column's type. The
