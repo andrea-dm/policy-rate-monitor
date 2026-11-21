@@ -70,7 +70,7 @@ attribute as published, for example `COMPILATION` (how the series is compiled) a
 
 ### Outputs
 
-`summary.csv`, one row per requested area, in the order requested:
+`summary.csv`, one row per requested country or area, in the order requested:
 
 | Column | Content |
 |---|---|
@@ -103,11 +103,11 @@ for snapshot in summary["snapshots"]:
 |---|---|
 | The file is linked from `https://data.bis.org/bulkdownload` as `WS_CBPOL_csv_flat.zip`, next to similar files (`_csv_col`, SDMX formats) | Looks for that exact file name among the page's links |
 | Headers look like `FREQ:Frequency`, coded values like `D: Daily` | Splits code and label with the configured separators; keeps the code in the data and the label as the name |
-| 709,984 daily (`D`) and 25,172 monthly (`M`) rows; 49 daily areas | Keeps the code `D`, from the configuration |
+| 709,984 daily (`D`) and 25,172 monthly (`M`) rows; 49 daily series | Keeps the code `D`, from the configuration |
 | Missing values are the text `NaN` with the status `M`: 70,058 daily rows | Marks them invalid; a value is valid only if it is a number and its status is not `M` |
 | The euro area is `XM`; `EA` does not exist in the file | `EA` is an alias of `XM` in the configuration |
-| Areas cover days differently: some include weekends, others publish business days only | Takes the last valid rate on or before the target date, never an exact date |
-| Areas end on different dates; ten euro-area members stopped when they joined the euro, Argentina in July 2025 | Evaluates each area at its own latest date, and flags a stale one |
+| Series cover days differently: some include weekends, others publish business days only | Takes the last valid rate on or before the target date, never an exact date |
+| Series end on different dates; ten euro-area members stopped when they joined the euro, Argentina in July 2025 | Evaluates each series at its own latest date, and flags a stale one |
 | Each daily series has one `UNIT_MULT` (0), `DECIMALS` (4) and unit (per cent per year) | Stores them once per series; `DECIMALS` is used only to format the report |
 | `ACTION`, `OBS_CONF`, `OBS_PRE_BREAK` and `UNIT_MEASURE` hold the same value on every row | Checks the four against the expected values (`unexpected_value`), so a change in a future file is noticed. `ACTION` is checked too, although it is not kept in the staged data |
 | The current file has no duplicate (series, date) | Duplicate handling is still built and tested on hand-made files |
@@ -117,7 +117,7 @@ What each of these means for a reader of the report is in the README, under
 
 ## Assumptions
 
-- Only daily series are used, and each area keeps its own latest date.
+- Only daily series are used, and each series keeps its own latest date.
 - An observation is valid when its value is a number and its status is not `M`. Missing values are
   kept, marked invalid, and never filled in.
 - The prior rate is the most recent valid observation on or before the same calendar date 12

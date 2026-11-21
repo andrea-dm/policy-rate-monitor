@@ -41,6 +41,9 @@ flowchart BT
     analytics["analytics<br/>fixed-point arrays, searches"]
     snapshot["snapshot"]
     report["report"]
+    service["service<br/>the steps both adapters share"]
+    charts["charts<br/>Plotly figure (interactive extra)"]
+    web["web<br/>HTTP API (web extra)"]
     settings["settings<br/>where the options come from"]
     cli["cli"]
 
@@ -53,12 +56,23 @@ flowchart BT
     providers --> bulk
     analytics --> snapshot
     config --> report
+    providers --> service
+    snapshot --> service
+    report --> service
+    report --> charts
+    charts --> web
+    service --> web
+    providers --> web
+    service --> cli
     bulk --> cli
-    snapshot --> cli
-    report --> cli
+    web -.-> cli
     config --> settings
     settings --> cli
 ```
+
+The dotted arrow is a lazy import: `cli` imports `web` only inside `serve`, so the base install
+never loads FastAPI. The diagram shows the main arrows; the full list of allowed imports of each
+module is in `tach.toml`.
 
 | Module | What it does | Reads or writes |
 |---|---|---|
@@ -69,22 +83,27 @@ flowchart BT
 | `providers` | The `DataProvider` interface, the canonical observations schema, and `InMemoryProvider` | nothing |
 | `bulk` | `BulkFileProvider`: the provider over the bulk-download file, built on `fetch` and `transform` | through `fetch` and `transform` |
 | `analytics` | The staged observations as fixed-point NumPy arrays, and the searches on them: the snapshot at any date, the change history, the rate moves | nothing |
-| `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested area | nothing |
+| `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested country or area | nothing |
 | `report` | Writes the summary files, the chart and the Markdown report from the snapshots it is given | `out/` |
+| `service` | The steps the CLI and the HTTP API share: `load_staged`, `ref_areas`, `summary`, `timeseries` and `write_report`. Imports `report`, `snapshot`, `providers`, `config` and `core` | `out/`, through `report` |
+| `charts` | `rate_figure`: the Plotly figure of the policy rates, drawn from the same series and rows as the report's PNG. Imports `report` and `core`; needs the `interactive` extra | nothing |
+| `web` | The HTTP API (FastAPI): routes, background jobs, error bodies. An adapter beside `cli`. Imports `service`, `charts`, `report`, `providers`, `config` and `core`; needs the `web` extra | `data/raw/` and `data/staged/` through the provider (the `fetch` and `transform` jobs); `out/` for `report` jobs |
 | `settings` | Where the configuration file and the data directory come from: the command line, an environment variable, the configuration or a default; shared by the CLI and the HTTP API | nothing |
-| `cli` | The `bis-prates` command: parses the arguments, calls the pieces above, prints, returns an exit code | nothing directly |
+| `cli` | The `bis-prates` command: parses the arguments, calls `service` and the provider, prints, returns an exit code; `serve` imports `web` only when it runs | nothing directly |
 
-Three rules keep the design testable:
+Four rules keep the design testable:
 
 - **Only `fetch`, `transform` and `report` touch files.** `analytics` and `snapshot` are pure
   functions over tables, tested on small hand-made data; `config` reads only through a
   `ConfigSource`.
-- **Everything else reads data through the provider.** The `report` command asks the provider for
+- **Everything else reads data through the provider.** `service` asks the provider for
   the observations, the series, the findings and the release, and never opens `data/staged/` itself
   ([decision 0008](adr/0008-provider-interface.md)).
 - **Errors are typed in `core` and translated at the edge.** A module raises `MissingInputError`,
-  `SourceUnavailableError` and so on; `cli` turns them into exit codes, and the HTTP API will turn
-  them into HTTP statuses.
+  `SourceUnavailableError` and so on; `cli` turns them into exit codes, and `web` turns them into
+  HTTP statuses ([decision 0014](adr/0014-http-api.md)).
+- **The adapters share one service.** `cli` and `web` call `service` and keep only their own
+  concerns, so the numbers are the same on both sides.
 
 ## One run of `report`
 
@@ -92,6 +111,7 @@ Three rules keep the design testable:
 sequenceDiagram
     participant User
     participant CLI as cli
+    participant Service as service
     participant Config as FileConfigSource
     participant Provider as BulkFileProvider
     participant Snapshot as compute_snapshots
@@ -101,14 +121,19 @@ sequenceDiagram
     User->>CLI: bis-prates report --countries US,EA
     CLI->>Config: load()
     Config-->>CLI: DatasetConfig (validated)
-    CLI->>Provider: observations(), series_metadata(), data_quality_issues(), source_release()
-    Provider-->>CLI: Arrow table, SeriesMetadata, findings, SourceRelease
-    CLI->>Snapshot: SnapshotArgs(observations, series, requested codes, settings, aliases)
+    CLI->>Service: load_staged(provider)
+    Service->>Provider: observations(), series_metadata(), data_quality_issues(), source_release()
+    Provider-->>Service: Arrow table, SeriesMetadata, findings, SourceRelease
+    CLI->>Service: summary(config, data, codes)
+    Service->>Snapshot: SnapshotArgs(observations, series, requested codes, settings, aliases)
     Snapshot->>Analytics: rate_history(), snapshot_at()
     Analytics-->>Snapshot: latest and prior index per series
-    Snapshot-->>CLI: one DataSnapshot per requested code
-    CLI->>Report: export(ReportArgs)
-    Report-->>CLI: paths of the four files
+    Snapshot-->>Service: one DataSnapshot per requested code
+    Service-->>CLI: the snapshots
+    CLI->>Service: write_report(config, data, snapshots, out, start)
+    Service->>Report: export(ReportArgs)
+    Report-->>Service: paths of the four files
+    Service-->>CLI: the paths
     CLI-->>User: the paths; a warning for an unknown code; exit code
 ```
 
@@ -119,7 +144,8 @@ sequenceDiagram
 | A new dataset of the same shape | A new configuration file | The code ([decision 0007](adr/0007-config-driven-design.md)) |
 | A new source (a query engine, another API) | A new `DataProvider`, passing the contract tests | The snapshot, the report, the CLI |
 | A configuration served by a service | A new `ConfigSource` | The configuration models and their checks |
-| The HTTP API | A new adapter beside `cli`, calling the same pieces | Everything below `cli` ([decision 0003](adr/0003-web-extension-stack.md)) |
+| Another way to call the tool (a queue worker, a notebook service) | A new adapter beside `cli` and `web`, calling `service` | Everything below the adapters |
+| A front end | A page that calls the [HTTP API](api.md), which exists ([decision 0014](adr/0014-http-api.md)); the React front end is M8 ([decision 0003](adr/0003-web-extension-stack.md)) | The API and everything below it |
 | A data-quality rule | Its code in `transform`, and its entry in the configuration | The findings format and the report |
 
 ### A new source
@@ -204,6 +230,7 @@ class ServiceConfigSource(ConfigSource):
 
 ### Optional extras
 
-The parts that need more than the base install come as optional extras: `fast` (Numba) today, and
-later `interactive` (Plotly) and `web` (FastAPI, uvicorn). Nothing in the base layers imports
-them.
+The parts that need more than the base install come as optional extras: `fast` (Numba),
+`interactive` (Plotly, for `charts`) and `web` (FastAPI, Starlette, uvicorn, and `interactive`, for `web`).
+Nothing in the base layers imports them; `bis-prates serve` imports `web` only when it runs, and
+prints a message naming the extra when it is missing.

@@ -89,6 +89,9 @@ series to keep, the data-quality rules, the output fields) is declared in
   script or scheduler running the commands knows what to do from the number alone: try again later
   when the BIS site cannot be reached (6), stop until someone fixes the configuration (4), or run
   the earlier step when its output is missing (5). The full list is under Usage.
+- **An HTTP API over the same steps**: `bis-prates serve` exposes the available countries and
+  economic areas, the summary, the time series, a Plotly chart and `fetch`, `transform` and `report`
+  as background jobs, with the same numbers as the command line ([docs/api.md](docs/api.md)).
 - **Strict static analysis**: ruff with a strict rule set, pyright in strict mode, deptry, and
   tach for the module layering.
 
@@ -173,10 +176,11 @@ cd policy-rate-monitor
 uv sync --no-dev        # to run the tool: the package and its runtime dependencies only
 ```
 
-To work on the code, install the dependency groups as well:
+To work on the code, install every dependency group and every extra: the tests and pyright cover
+the optional parts too (the HTTP API, the chart, Numba).
 
 ```bash
-uv sync --all-groups
+uv sync --all-groups --all-extras
 ```
 
 | Group | Content |
@@ -194,8 +198,16 @@ run on NumPy with the same results:
 uv sync --no-dev --extra fast
 ```
 
-The planned web service and interactive chart will also come as extras, so a plain install stays
-small.
+Two more extras add the HTTP API; a plain install stays small without them:
+
+| Extra | Content |
+|---|---|
+| `interactive` | Plotly, for the interactive chart |
+| `web` | FastAPI, Starlette and uvicorn for the [HTTP API](docs/api.md), and `interactive` |
+
+```bash
+uv sync --no-dev --extra web
+```
 
 ### Usage
 
@@ -209,6 +221,14 @@ With the virtual environment activated, `bis-prates` works without `uv run`.
 `bis-prates config validate` checks the configuration, and `bis-prates config schema` prints its
 JSON Schema.
 
+`bis-prates serve` runs the same steps as an HTTP API (needs the `web` extra; endpoints, jobs and
+errors in [docs/api.md](docs/api.md)). The interactive documentation is at `/docs`:
+
+```bash
+uv run bis-prates serve                  # http://127.0.0.1:8000, options: --host, --port, --out
+curl 'http://127.0.0.1:8000/summary?countries=US,EA'
+```
+
 | Command | Reads | Writes |
 |---|---|---|
 | `fetch` | the BIS bulk-download page | `data/raw/WS_CBPOL_csv_flat.zip` and its release record (`.json`) |
@@ -220,19 +240,21 @@ Options, after the command:
 | Option | Commands | Default |
 |---|---|---|
 | `--config PATH` | all | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` |
-| `--data-dir PATH` | `fetch`, `transform`, `report` | `$BIS_PRATES_DATA_DIR`, else `data` (`dataset.data_dir` in the configuration) |
+| `--data-dir PATH` | `fetch`, `transform`, `report`, `serve` | `$BIS_PRATES_DATA_DIR`, else `data` (`dataset.data_dir` in the configuration) |
 | `--debug` | all | off; shows the full traceback of an error |
 | `--countries "US,EA"` | `report` | required; codes are matched without regard to case and spaces, de-duplicated, and written as typed next to the code used |
 | `--start YYYY-MM-DD` | `report` | the whole history; first date of the chart |
-| `--out DIR` | `report` | `out` |
+| `--out DIR` | `report`, `serve` | `out`; for `serve`, where the `report` jobs write |
+| `--host ADDRESS` | `serve` | `127.0.0.1` |
+| `--port N` | `serve` | `8000` |
 
 Exit codes:
 
 | Code | Meaning | What to do |
 |---|---|---|
 | 0 | success | - |
-| 1 | no requested area has a complete result (status `ok`); the outputs are still written | check the area codes and the statuses in the summary |
-| 2 | invalid arguments | fix the command line |
+| 1 | no requested country or area has a complete result (status `ok`); the outputs are still written | check the codes and the statuses in the summary |
+| 2 | invalid arguments, or `serve` without the `web` extra | fix the command line, or install the extra |
 | 3 | an unexpected error, i.e. a bug; the traceback is logged | report it |
 | 4 | invalid configuration | fix the configuration file |
 | 5 | a step's input is missing | run the previous step (e.g. `transform` before `report`) |
@@ -247,9 +269,10 @@ Two notebooks in `examples/` go through the three commands from Python, run in t
 1. [fetch_and_transform.ipynb](examples/fetch_and_transform.ipynb) downloads the BIS file and
    stages it, as `fetch` and `transform` do;
 2. [policy_rates.ipynb](examples/policy_rates.ipynb) loads the staged data through the provider,
-   computes the 12-month change for five areas and plots their rates, as `report` does.
+   computes the 12-month change for five countries or areas and plots their rates, as `report` does,
+   then draws the same chart with Plotly, as the HTTP API's `/chart` returns it.
 
-They need the `jupyter` group:
+They need the `jupyter` group, and the `interactive` extra for the Plotly chart:
 
 ```bash
 uv sync --all-groups --all-extras
@@ -286,7 +309,7 @@ snapshots = compute_snapshots(
         series=series,
         requested=["US", "EA", "GB", "JP", "CH"],
         settings=config.snapshot,
-        area_aliases=config.area_aliases,
+        ref_area_aliases=config.ref_area_aliases,
     )
 )
 pd.DataFrame([snapshot.model_dump(exclude={"series"}) for snapshot in snapshots])
@@ -327,14 +350,7 @@ updates the file regularly, so a later run gives later dates.
 
 ### Development Workflow
 
-Fix what can be fixed automatically:
-
-```bash
-uv run ruff check --fix
-uv run ruff format
-```
-
-Then run the checks in order. Each one stops the chain when it fails: the module layering first,
+Run the checks in order. Each one stops the chain when it fails: the module layering first,
 since a wrong import changes the code anyway, and the two slowest checks, pyright and pytest, last.
 
 ```bash
@@ -380,10 +396,10 @@ OFFLINE=true uv run mkdocs build --strict   # the same site, into site/
 | `obs_status` | string | the BIS observation status code |
 | `is_valid` | bool | false for a missing or non-numeric value or the status `M` |
 
-`data/staged/series.json` holds one record per series: key, area code and name, frequency, title,
+`data/staged/series.json` holds one record per series: key, reference-area code and name, frequency, title,
 unit, decimals and the other series attributes (for example the compilation note and the
 publication source). `out/summary.csv` carries the metadata fields chosen in the configuration;
-`out/summary.json` carries the full series record of each area and the source release.
+`out/summary.json` carries the full series record of each country or area and the source release.
 
 Each step validates its input: the configuration when it is loaded, the required columns when the
 CSV is read, and the data-quality rules listed in the configuration when the data is staged
@@ -393,7 +409,7 @@ CSV is read, and the data-quality rules listed in the configuration when the dat
 
 ## Assumptions
 
-- Only daily series (`FREQ = D`) are used. Each area keeps its own latest date: areas are not
+- Only daily series (`FREQ = D`) are used. Each series keeps its own latest date: series are not
   forced to a common date.
 - An observation is valid when its value is a number and its status is not `M` (missing). Missing
   values are kept in the data, marked invalid, and never filled in.
@@ -401,11 +417,11 @@ CSV is read, and the data-quality rules listed in the configuration when the dat
   months before the latest date (29 February → 28 February), so weekends, holidays and gaps fall
   back to the last published rate.
 - The change in basis points is `(latest − prior) × 100`, computed exactly.
-- `EA` (euro area) is read as the BIS code `XM` (configured in `area_aliases`).
+- `EA` (euro area) is read as the BIS code `XM` (configured in `ref_area_aliases`).
 - Exact duplicate rows are dropped; for two different values on the same date the last one in the
   file is kept (configurable).
-- An unknown area, a series with no valid data and a series too short for the look-back each get
-  their own status in the outputs and do not stop the other areas. A latest rate more than 30 days
+- An unknown code, a series with no valid data and a series too short for the look-back each get
+  their own status in the outputs and do not stop the others. A latest rate more than 30 days
   behind the newest date in the data, or a prior rate more than 7 days before the target date, is
   flagged as stale (thresholds in the configuration).
 
@@ -430,27 +446,27 @@ when the latest and prior rates are looked up; no value is filled in.
 **KNOWN ISSUE**: the series of ten euro-area national central banks end when their country
 joined the euro: AT, BE, DE, ES, FR, IT, NL and PT at the end of 1998, Greece on 31 December 2000
 and Croatia in 2022. Argentina's ends on 10 July 2025 (no policy rate adopted since, per the
-series' compilation note). **Handled:** such an area gets its last
+series' compilation note). **Handled:** such a series gets its last
 rate and the change over the 12 months before it, flagged `stale_latest`.
 
 **What you need to do:** read the flag; for the euro-area countries, request `EA`.
 
-### Areas published to different dates
+### Countries and economic areas published to different dates
 
 **KNOWN ISSUE**: the series do not end on the same day. On the recorded release, 16 series end on
 17 November 2026, 6 on 16 November and 11 more within the week before; Korea, Israel, Saudi
 Arabia, India and Morocco lag by two weeks to two and a half months; the discontinued series end
 years earlier. They also cover weekends differently: most include some weekend rows, Australia
-and Switzerland none. **Handled:** each area is reported
+and Switzerland none. **Handled:** each one is reported
 at its own latest date, and the look-back takes the last valid rate on or before the target date.
 
-**What you need to do:** compare the dates in the summary table before comparing two areas.
+**What you need to do:** compare the dates in the summary table before comparing two countries or areas.
 
 ### Codes and labels in one cell
 
 **KNOWN ISSUE**: the CSV headers carry a code and a label (`REF_AREA:Reference area`), and so do
 coded values (`US: United States`). **Handled:** the separator is configured; the staged data
-keeps the code, and the series metadata keeps the label as the area name.
+keeps the code, and the series metadata keeps the label as the reference-area name.
 
 **What you need to do:** nothing.
 
@@ -459,10 +475,10 @@ keeps the code, and the series metadata keeps the label as the area name.
 **KNOWN ISSUE**: the brief and most readers say `EA`; the BIS file uses `XM`. **Handled:** `EA` is
 an alias for `XM` in the configuration; `summary.csv` and `summary.json` show both the
 requested and the BIS code, `report.md` shows the BIS code. A code the data does not have (for
-example `UK` instead of `GB`) gets the status `unknown_area`, and `report` prints a warning that
+example `UK` instead of `GB`) gets the status `unknown_ref_area`, and `report` prints a warning that
 lists every code in the data with its name, so the right one can be found.
 
-**What you need to do:** add an alias to `area_aliases` for any other code you want to request
+**What you need to do:** add an alias to `ref_area_aliases` for any other code you want to request
 under a different name.
 
 ---
@@ -474,7 +490,7 @@ under a different name.
   ranges, attributes constant within a series) are not implemented yet; `transform` logs them.
 - The chart is drawn from floating-point values; the tables and summary files carry exact values.
 - The report is Markdown only; an HTML version with an interactive chart is planned.
-- Planned extensions: an HTTP API and a web front end, and the validation of area codes against
+- Planned extensions: a web front end over the HTTP API, and the validation of reference-area codes against
   the BIS SDMX metadata. The fast analytics for interactive use are in place (`analytics`, with
   Numba as the optional `fast` extra). See [docs/milestones.md](docs/milestones.md).
 
@@ -511,14 +527,20 @@ src/policy_rate_monitor/
 ├── fetch.py                # Download the source ZIP and keep a cached copy
 ├── transform.py            # Raw and staged tables from the cached ZIP
 ├── analytics.py            # Fixed-point arrays and the searches on them (pure; Numba optional)
-├── snapshot.py             # Latest rate, prior rate and change per area (pure)
+├── snapshot.py             # Latest rate, prior rate and change per country or area (pure)
 ├── report.py               # summary.csv, summary.json, policy_rates.png, report.md
+├── service.py              # The steps the CLI and the HTTP API share
+├── charts.py               # The Plotly figure of the policy rates (interactive extra)
+├── web/                    # The HTTP API (web extra)
+│   ├── app.py              # The FastAPI routes and serve
+│   ├── jobs.py             # fetch, transform and report as background jobs
+│   └── errors.py           # Error kinds, statuses and the one JSON body
 ├── settings.py             # Where the configuration and data directory come from
 └── py.typed                # PEP 561 marker
 tests/                      # pytest suite (see Testing)
 diagnostics/                # Spikes and benchmarks behind the technical choices
 examples/                   # Notebooks that use the package
-docs/                       # MkDocs site: how it works, architecture, data model, CLI, decisions
+docs/                       # MkDocs site: how it works, architecture, data model, CLI, HTTP API, decisions
 out/                        # The generated outputs of the recorded release
 ```
 
@@ -553,10 +575,14 @@ What the tests cover:
 |---|---|
 | `tests/test_transform.py` | missing values kept and marked invalid; exact and conflicting duplicates; the `FREQ = D` selection; the unit multiplier applied exactly; unparseable dates; the series metadata kept; missing columns and inputs named |
 | `tests/test_analytics.py` | the search against the plain `bisect` method at every date of a fixture; the NumPy and plain-loop versions of the searches agree, with and without Numba; the target date 12 months back; the change history and the rate moves against exact values; the arrays are read-only |
-| `tests/test_snapshot.py` | the 12-month change exactly in basis points; a target date on a weekend; 29 February; negative rates; invalid observations skipped; a different latest date per area; unknown area, insufficient history and no valid data; the `EA` alias; messy requested codes; the stale flags |
+| `tests/test_snapshot.py` | the 12-month change exactly in basis points; a target date on a weekend; 29 February; negative rates; invalid observations skipped; a different latest date per country or area; unknown code, insufficient history and no valid data; the `EA` alias; messy requested codes; the stale flags |
 | `tests/test_fetch.py` | the cache; the fallback URL; a download that is not a ZIP or holds two CSV files; the network down with and without a cached copy |
 | `tests/test_report.py` | the four files written from hand-made inputs, with the expected CSV and JSON values |
-| `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; `report` before `transform` gives a one-line error; `config validate` and `config schema`; a bad configuration says where its path came from |
+| `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; `report` before `transform` gives a one-line error; `config validate` and `config schema`; a bad configuration says where its path came from; `serve` without the `web` extra, with a bad configuration, and with its options; the base commands load neither FastAPI nor Plotly |
+| `tests/test_service.py` | the steps the CLI and the API share: the codes with their aliases, the valid observations of one series exactly, the summary; summaries computed at once on several threads agree |
+| `tests/web/` | `/summary` against the `summary.json` of `bis-prates report` for every status; exact rates in `/timeseries`; the chart's lines; every error with the same body (`404`, `405`, `409`, `422`, a bug as `500` without its detail); the jobs from queued to succeeded or failed, one at a time, new data after a transform, a report job writing the four files |
+| `tests/test_charts.py` | the Plotly chart has the same lines and rows as the PNG, in request order, from the start date |
+| `tests/test_vocabulary.py` | no name, configuration key or sentence uses the bare word for a country or economic area |
 | `tests/test_settings.py` | the order of the layers (flag, environment variable, configuration or default) for the configuration file and the data directory; an empty variable counts as unset |
 | `tests/providers/` | the provider contract (canonical schema, one row per series and date, sorted dates, validity, metadata for every series), run on both providers; the row checks fail on tables built to break them; a provider missing a method cannot be created; the schema follows the configuration |
 | `tests/config/`, `tests/core/` | the configuration checks and the domain models |

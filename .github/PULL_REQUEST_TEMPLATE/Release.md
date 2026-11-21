@@ -59,14 +59,15 @@ None
 | Check | Status | Evidence |
 |---|---|---|
 | IntegrationChecker verdict | <!-- GO / NO-GO / Not available --> | <!-- gate summary or "accepted from prior run" --> |
+| Module layering (`tach`) | <!-- Passed / Failed / Not run / Unknown --> | <!-- observed evidence --> |
 | Ruff (lint + format) | <!-- Passed / Failed / Not run / Unknown --> | <!-- observed evidence --> |
+| Dependency consistency (`deptry`) | <!-- Passed / Failed / Not run / Unknown --> | <!-- violation count or "consistent" --> |
 | Pyright | <!-- Passed / Failed / Not run / Unknown --> | <!-- observed evidence --> |
 | Pytest | <!-- Passed / Failed / Not run / Unknown --> | <!-- coverage % --> |
+| Docs build | <!-- Passed / Failed / Not run / Unknown --> | <!-- observed evidence --> |
 | SonarQube Quality Gate | <!-- OK / ERROR / WARN / Unknown --> | <!-- gate status + condition summary --> |
 | Dependency audit (`pip-audit`) | <!-- Passed / Failed / Not run / Unknown --> | <!-- vulnerability count or "clean" --> |
-| Dependency consistency (`deptry`) | <!-- Passed / Failed / Not run / Unknown --> | <!-- violation count or "consistent" --> |
 | Lock file (`uv lock --check`) | <!-- Consistent / Stale / Unknown --> | <!-- observed evidence --> |
-| Docs build | <!-- Passed / Failed / Not run / Unknown --> | <!-- observed evidence --> |
 
 ### Compatibility
 

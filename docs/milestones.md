@@ -11,7 +11,7 @@ everywhere after.
 
 - **Config-driven.** Everything specific to a dataset, a source or an environment is declared in
   configuration, not written into the code. That covers the source location, column roles,
-  encodings, validity rules, data-quality rules, thresholds, area aliases and output fields. The
+  encodings, validity rules, data-quality rules, thresholds, reference-area aliases and output fields. The
   configuration is nested JSON. It is read through a `ConfigSource` interface: today from a JSON
   file in `configs/`, outside the package, and potentially from a REST service or a NoSQL store
   later. Pydantic models validate it when it is loaded. Rule *implementations* are Python code; the
@@ -50,8 +50,8 @@ Four principles shaped the split:
    contract, so a stage can also be built against a fake of the stage before it (M3 is tested on
    small hand-made observation tables).
 4. **Every milestone is verifiable on its own.** Each one ends with a working CLI command or
-   function, tests that run without the network, and every repository check passing (ruff,
-   pyright, deptry, tach, pytest).
+   function, tests that run without the network, and every repository check passing (tach,
+   ruff, deptry, pyright, pytest, the docs build).
 
 ```mermaid
 flowchart LR
@@ -98,7 +98,7 @@ code depends on them.
 
 - Domain models in `core` (pydantic):
   - `SeriesMetadata`
-  - `DataSnapshot`, with `SnapshotStatus` (`OK`, `UNKNOWN_AREA`, `NO_VALID_DATA`,
+  - `DataSnapshot`, with `SnapshotStatus` (`OK`, `UNKNOWN_REF_AREA`, `NO_VALID_DATA`,
     `INSUFFICIENT_HISTORY`) and `SnapshotFlag` (`STALE_LATEST`, `STALE_PRIOR`)
   - `DataQualityIssue` and `DataQualitySeverity`
   - `SourceRelease`, which identifies a version of the source: its location, a version identifier
@@ -208,18 +208,18 @@ calculation, the reports and the API rely on.
 
 ## M3 — Snapshot calculation
 
-**Goal.** For each requested area, compute the latest valid rate, the rate 12 months earlier and the
+**Goal.** For each requested country or economic area, compute the latest valid rate, the rate 12 months earlier and the
 change in basis points.
 
 **Scope.**
 
 - The calculation is a pure function, `compute_snapshots(args)`, where `args` is a `SnapshotArgs`
   holding the observations, the requested codes and the settings, returning one
-  `DataSnapshot` per requested area. The `report` command reads the staged
+  `DataSnapshot` per requested country or area. The `report` command reads the staged
   observations and passes them in.
-- Take the parameters from the configuration: look-back length, staleness thresholds, area aliases.
+- Take the parameters from the configuration: look-back length, staleness thresholds, reference-area aliases.
 - Normalise the requested codes: case, whitespace, aliases, duplicates.
-- Latest **valid** observation per series. Each series uses its own latest date, since areas do not
+- Latest **valid** observation per series. Each series uses its own latest date, since they do not
   necessarily share one.
 - Target date = the latest date minus 12 calendar months. The prior rate is the most recent valid
   observation on or before the target date. This covers weekends, holidays and series that only
@@ -229,8 +229,8 @@ change in basis points.
   ([decision 0013](adr/0013-fast-analytics-numpy-numba.md)).
 - The change in basis points is computed in decimal arithmetic, so a move from `3.75` to `4.00` is
   exactly `25` bp.
-- Unknown areas, series with no valid data and series with too little history each return a status.
-  They are not errors and do not stop the other areas.
+- Unknown codes, series with no valid data and series with too little history each return a status.
+  They are not errors and do not stop the others.
 - Flags for a stale latest observation and for a prior observation well before the target date.
 
 **Done when.**
@@ -240,10 +240,10 @@ change in basis points.
   - 29 February
   - negative rates
   - history starting before 1970
-  - different latest dates per area
+  - different latest dates per country or area
   - insufficient history
   - a series with no valid data
-  - unknown area
+  - unknown code
   - the euro-area alias
   - stale latest and stale prior flags
   - requested codes with mixed case, whitespace and duplicates
@@ -263,7 +263,7 @@ on small hand-made observation tables, in parallel with M1 and M2.
 - The metadata fields included in the outputs are chosen by the configuration.
 - Data-quality findings and provenance are read through the provider, from the files `fetch` and
   `transform` write.
-- `out/summary.csv` and `out/summary.json`. Every requested area gets a row, including failed ones
+- `out/summary.csv` and `out/summary.json`. Every requested country or area gets a row, including failed ones
   with their status. Rows carry selected series metadata. The JSON adds the full metadata and the
   provenance from the `SourceRelease` (source location, version identifier, retrieval time),
   plus the generation time.
@@ -332,7 +332,7 @@ optional work begins.
 **Scope.**
 
 - Endpoints:
-  - available areas
+  - available countries or areas
   - summary for a list of countries
   - time series for one country
   - starting fetch and transform as background jobs, with a job-status endpoint
@@ -345,7 +345,7 @@ optional work begins.
 - The `config validate` and `config schema` commands, and options also read from environment
   variables and the configuration file, so the CLI and the API are configured the same way.
 - Follow-ups of the configuration package: clearer messages, earlier checks, less duplicated code.
-- Fast, exact analytics for the front end: the 12-month change of every area as of any date, the
+- Fast, exact analytics for the front end: the 12-month change of every country or area as of any date, the
   change history and every rate move, on NumPy arrays, with Numba as an optional extra. The
   report's snapshot uses the same search.
 
@@ -371,12 +371,12 @@ without a UI, and it has to be in place before the front end can be built.
   attributes match the dataflow definition.
 - The same code list validates the requested country codes in the CLI (and in the API, when M6 is
   in place), and suggests corrections, for example `GBR → GB` or `USA → US`.
-- Official area names in the report.
+- Official country or area names in the report.
 - The reference data comes **only** from BIS structural metadata. It is never derived from the data
   being validated, because data that has not yet been validated cannot be its own reference.
 - The reference is **not cached**. When the BIS SDMX API cannot be reached, the affected rules
   report "not evaluated" as an explicit data-quality finding instead of passing. Requested codes get
-  the core behaviour only: aliases are applied, an area with no series gets the `UNKNOWN_AREA`
+  the core behaviour only: aliases are applied, a code with no series gets the `UNKNOWN_REF_AREA`
   status, and no suggestions are made.
 - **Known limitation**, documented in the README and the report: SDMX validation depends on the
   availability of the BIS SDMX API at run time. A run without it is not SDMX-validated, and says so.
@@ -442,6 +442,6 @@ Each milestone is a GitHub milestone. Its work is tracked in issues and done on 
 | M3 Snapshot calculation | Done |
 | M4 Reporting | Done, together with M3 |
 | M5 Core release | Done, released as `v0.1.0`; three data-quality rules left for a later release |
-| M6 HTTP API | Started: the fast analytics are done (#13) |
+| M6 HTTP API | In progress: the fast analytics (#13), the `config` commands and options from the environment (#7), and the HTTP API (#27) are done; the HTML report (#12) and the configuration follow-ups (#8) remain |
 | M7 SDMX validation | Not started |
 | M8 Web front end | Not started |

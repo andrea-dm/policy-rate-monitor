@@ -23,7 +23,7 @@ object at a time.
   its dates are ordered (`prior_date ≤ target_date ≤ latest_date`); its change equals
   `(latest − prior) × 100` exactly. A snapshot for an unknown area carries no series, values or
   flags. A calculation bug therefore fails where it happens, not in the report.
-- **Status and flags kept apart.** A snapshot has exactly one `status` (`OK`, `UNKNOWN_AREA`,
+- **Status and flags kept apart.** A snapshot has exactly one `status` (`OK`, `UNKNOWN_REF_AREA`,
   `NO_VALID_DATA`, `INSUFFICIENT_HISTORY`) and zero or more `flags` (`STALE_LATEST`,
   `STALE_PRIOR`). A flag never hides a value. Flags are a sorted tuple, so the output files are
   identical from run to run.
@@ -63,3 +63,15 @@ object at a time.
   `test_ok_snapshot_rejects_unordered_dates`,
   `test_ok_snapshot_rejects_a_change_inconsistent_with_the_rates`, `test_models_are_frozen`,
   `test_every_model_round_trips_through_its_own_json`, `test_flags_are_sorted_and_deduplicated`.
+
+## Updates
+
+- 2026-11-21 (#27): `ref_area` is the one name of the concept everywhere, not only in the model
+  fields. Before the HTTP API froze them, the last public names that said "area" were renamed:
+  the configuration key `area_aliases` is now `ref_area_aliases`, and the status `unknown_area`
+  is now `unknown_ref_area`. Private names in the code and the tests follow, and prose says
+  "country or economic area" ("country or area" when short), as the brief does. A test
+  (`tests/test_vocabulary.py`) fails on any name in `src/`, `tests/` or the configuration files
+  that contains "area" outside `ref_area`, and on the bare word in docstrings, comments, messages
+  and the docs. Not taken: keeping "area" as a defined short form in prose, which reads more
+  lightly but leaves two names for one concept and let the old ones slip back.

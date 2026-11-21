@@ -1,8 +1,8 @@
 # CLI reference
 
 `bis-prates` has three pipeline commands, run in this order. Each one writes files the next one
-reads, so a step can be rerun on its own. Two more commands check the configuration and print its
-format. `python -m policy_rate_monitor.cli` works the same way, without the script on the `PATH`.
+reads, so a step can be rerun on its own. `serve` runs the [HTTP API](api.md), and two more
+commands check the configuration and print its format. `python -m policy_rate_monitor.cli` works the same way, without the script on the `PATH`.
 
 ```bash
 bis-prates fetch
@@ -42,7 +42,7 @@ the release of 19 November 2026:
 
 ### `bis-prates report`
 
-For each requested area, finds the latest valid rate, the rate 12 months earlier and the change in
+For each requested country or economic area, finds the latest valid rate, the rate 12 months earlier and the change in
 basis points, and writes `out/summary.csv`, `out/summary.json`, `out/policy_rates.png` and
 `out/report.md`. Prints the paths of the four files. For a code the data does not have, it prints a
 warning listing every code the data has, with its name:
@@ -50,6 +50,28 @@ warning listing every code the data has, with its name:
 ```text
 warning: no series for UK. Available codes: AR (Argentina), AT (Austria), … ; EA stands for XM.
 ```
+
+### `bis-prates serve`
+
+Runs the [HTTP API](api.md) until it is stopped. Ctrl+C stops accepting requests and waits for a
+running job to finish ([Jobs](api.md#jobs)); kill the process to stop at once. It reads the
+configuration and the data directory as the other commands do; the staged data is read when the
+first request needs it.
+
+```bash
+bis-prates serve                              # http://127.0.0.1:8000, docs at /docs
+bis-prates serve --host 0.0.0.0 --port 9000 --out results
+```
+
+It needs the `web` extra. Without it, the command prints a message naming the extra and ends with
+code 2:
+
+```text
+error: bis-prates serve needs the web extra: install policy-rate-monitor[web]
+```
+
+A missing or invalid configuration ends with code 4, as for the other commands. `--out` is where
+the API's `report` jobs write their files.
 
 ### `bis-prates config validate`
 
@@ -81,11 +103,13 @@ version.
 | Option | Commands | Default | Meaning |
 |---|---|---|---|
 | `--config PATH` | all but `config schema` | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` | the dataset configuration ([Configuration](configuration.md)) |
-| `--data-dir PATH` | `fetch`, `transform`, `report` | `$BIS_PRATES_DATA_DIR`, else `dataset.data_dir` in the configuration (`data`) | where `raw/` and `staged/` go; a relative path is relative to the current folder |
+| `--data-dir PATH` | `fetch`, `transform`, `report`, `serve` | `$BIS_PRATES_DATA_DIR`, else `dataset.data_dir` in the configuration (`data`) | where `raw/` and `staged/` go; a relative path is relative to the current folder |
 | `--debug` | all | off | show the full traceback of an error |
-| `--countries "US,EA"` | `report` | required | the area codes, separated by commas; matched without regard to case and spaces, de-duplicated, and written as typed next to the code used; aliases such as `EA → XM` applied |
+| `--countries "US,EA"` | `report` | required | the codes, separated by commas; matched without regard to case and spaces, de-duplicated, and written as typed next to the code used; aliases such as `EA → XM` applied |
 | `--start YYYY-MM-DD` | `report` | the whole history | the first date of the chart; the summary is not affected |
-| `--out DIR` | `report` | `out` | the output folder |
+| `--out DIR` | `report`, `serve` | `out` | the output folder; for `serve`, where the `report` jobs write |
+| `--host ADDRESS` | `serve` | `127.0.0.1` | the address the HTTP API listens on |
+| `--port N` | `serve` | `8000` | the port the HTTP API listens on |
 
 ## Where the options come from
 
@@ -122,8 +146,8 @@ number alone ([decision 0010](adr/0010-cli-and-exit-codes.md)).
 | Code | Name | Meaning | What to do |
 |---|---|---|---|
 | 0 | `OK` | success | - |
-| 1 | `NO_RESULT` | no requested area has a complete result (status `ok`); the outputs are still written | check the area codes and the statuses in the summary |
-| 2 | `USAGE_ERROR` | invalid arguments | fix the command line |
+| 1 | `NO_RESULT` | no requested country or area has a complete result (status `ok`); the outputs are still written | check the codes and the statuses in the summary |
+| 2 | `USAGE_ERROR` | invalid arguments, or `serve` without the `web` extra | fix the command line, or install the extra |
 | 3 | `INTERNAL_ERROR` | an unexpected error, that is a bug; the traceback is logged | report it |
 | 4 | `CONFIG_ERROR` | the configuration is missing or invalid | fix the configuration file |
 | 5 | `MISSING_INPUT` | a step's input is missing | run the previous step (`transform` before `report`) |

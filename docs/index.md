@@ -2,7 +2,7 @@
 
 `bis-prates` downloads the central bank policy rates published by the Bank for International
 Settlements (BIS), stages them as an exact, validated dataset, and reports for a list of countries
-or areas the latest policy rate, the rate 12 months earlier and the change in basis points, with a
+or economic areas the latest policy rate, the rate 12 months earlier and the change in basis points, with a
 chart and a short report.
 
 ## Quick start
@@ -55,7 +55,7 @@ chart and a short report.
             series=series,
             requested=["US", "EA", "GB", "JP", "CH"],
             settings=config.snapshot,
-            area_aliases=config.area_aliases,
+            ref_area_aliases=config.ref_area_aliases,
         )
     )
     pd.DataFrame([snapshot.model_dump(exclude={"series"}) for snapshot in snapshots])

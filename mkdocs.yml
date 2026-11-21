@@ -30,6 +30,7 @@ nav:
   - Architecture: architecture.md
   - Data model: data-model.md
   - CLI reference: cli.md
+  - HTTP API: api.md
   - Configuration: configuration.md
   - API reference: reference.md
   - Glossary: glossary.md
@@ -49,3 +50,4 @@ nav:
       - adr/0011-data-quality-rules.md
       - adr/0012-elt-raw-and-staged-layers.md
       - adr/0013-fast-analytics-numpy-numba.md
+      - adr/0014-http-api.md

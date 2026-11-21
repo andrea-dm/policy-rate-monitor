@@ -159,7 +159,7 @@ class SeriesMetadata(_FrozenModel):
 
     Attributes:
         series_key: The source's key of the series, e.g. ``"D.CH"``.
-        ref_area: Code of the area, a country or an economic area, e.g. ``"CH"``.
+        ref_area: Code of the country or economic area, e.g. ``"CH"``.
         ref_area_name: Its name, e.g. ``"Switzerland"``.
         frequency: Frequency code, e.g. ``"D"`` for daily.
         title: The series title.
@@ -180,11 +180,11 @@ class SeriesMetadata(_FrozenModel):
 
 
 class SnapshotStatus(StrEnum):
-    """Outcome of the snapshot calculation for one requested area."""
+    """Outcome of the snapshot calculation for one requested country or area."""
 
     OK = auto()
     """Latest rate, prior rate and change are all available."""
-    UNKNOWN_AREA = auto()
+    UNKNOWN_REF_AREA = auto()
     """No series exists for the requested code."""
     NO_VALID_DATA = auto()
     """The series exists but has no valid observation."""
@@ -213,7 +213,7 @@ class DataSnapshot(_FrozenModel):
     Attributes:
         requested_ref_area: The code as requested, e.g. ``"ea"`` (whitespace stripped).
         ref_area: The normalised code after aliases, e.g. ``"XM"``.
-        series: Metadata of the matched series; ``None`` only for ``UNKNOWN_AREA``.
+        series: Metadata of the matched series; ``None`` only for ``UNKNOWN_REF_AREA``.
         latest_date: Date of the latest valid observation.
         latest_value: Its rate, in per cent.
         target_date: ``latest_date`` minus the look-back.
@@ -287,10 +287,10 @@ class DataSnapshot(_FrozenModel):
 
     @model_validator(mode="after")
     def _check_consistency(self) -> Self:
-        if self.status is SnapshotStatus.UNKNOWN_AREA:
+        if self.status is SnapshotStatus.UNKNOWN_REF_AREA:
             self._require_absent("series", *self._value_fields())
             if self.flags:
-                msg = "an UNKNOWN_AREA snapshot carries no flags"
+                msg = "an UNKNOWN_REF_AREA snapshot carries no flags"
                 raise ValueError(msg)
             return self
         if self.series is None:

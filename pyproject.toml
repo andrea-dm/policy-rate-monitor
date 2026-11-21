@@ -31,6 +31,15 @@ bis-prates = "policy_rate_monitor.cli.main:main"
 fast = [
     "numba>=0.68.1",
 ]
+interactive = [
+    "plotly>=7.1.0",
+]
+web = [
+    "fastapi>=0.165.0",
+    "starlette>=1.10.0",
+    "uvicorn>=0.54.0",
+    "policy-rate-monitor[interactive]",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -279,6 +288,9 @@ docstring-code-format = true
 
 [tool.deptry]
 known_first_party = ["policy_rate_monitor"]
+# The web extra lists the package itself to include the interactive extra; there is
+# nothing to import.
+per_rule_ignores = { DEP002 = ["policy-rate-monitor"] }
 
 # ══════════════════════════════════════════════════════════════════════ UV CONFIG ═══ #
 
@@ -300,6 +312,7 @@ test = [
     "pytest-mock>=3.14",
     "pytest-cov>=7.0.0",
     "hypothesis>=6.100",
+    "httpx2>=2.16.2",
 ]
 
 dev = [
