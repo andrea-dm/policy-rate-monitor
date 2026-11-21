@@ -15,12 +15,16 @@ repos:
   - repo: builtin
     hooks:
       - id: trailing-whitespace
-        exclude: \.tsv$  # a trailing tab is an empty last column, not whitespace
+        # A trailing tab is an empty last column, not whitespace. report.html carries
+        # Plotly's own code, which the hook must not change.
+        exclude: \.tsv$|^out/report\.html$
       - id: end-of-file-fixer
       - id: mixed-line-ending
       - id: fix-byte-order-marker
       - id: check-added-large-files
         args: ["--maxkb=2000"]
+        # Plotly's JavaScript is inline in report.html so the page works offline: 5-7 MB.
+        exclude: ^out/report\.html$
       - id: check-case-conflict
       - id: check-merge-conflict
       - id: detect-private-key

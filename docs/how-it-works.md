@@ -12,7 +12,7 @@ flowchart LR
     BIS[BIS bulk-download page] -->|fetch| ZIP[raw/ ZIP + release record]
     ZIP -->|transform: load| RAW[raw/ parquet, as loaded]
     RAW -->|transform: stage| STAGED[staged/ observations, series, findings]
-    STAGED -->|report, through the provider| OUT[out/ summary.csv, summary.json, chart, report.md]
+    STAGED -->|report, through the provider| OUT[out/ summary.csv, summary.json, chart, report.md, report.html]
 ```
 
 ---
@@ -256,20 +256,49 @@ configuration. The outputs show both the code as the user typed it and the BIS c
 **The problem.** The figures are only useful if a reader can trust them and understand where they
 come from, without reading code.
 
-**How it is solved.** `bis-prates report` writes four files to `out/`:
+**How it is solved.** `bis-prates report` writes five files to `out/`:
 
 - `summary.csv` and `summary.json`: one row per requested country or area, with its status, flags and the
   series fields chosen in the configuration; the JSON also nests the full series description and
   records the source release (address, retrieval time, fingerprint);
 - `policy_rates.png`: the daily rates of the requested countries or areas from the start date, drawn as steps,
   because policy rates change in steps;
-- `report.md`: the summary table, the chart, a description of the source, the method and its
-  assumptions, the data-quality findings and the limitations, in plain English.
+- `report.md` and `report.html`: the same report as two pages, the first for reading in Git or a
+  text editor, the second for a web browser. Each has the summary table, the chart, a description
+  of the source, the method and its assumptions, the data-quality findings and the limitations, in
+  plain English. A status, a flag or a finding's severity has an emoji beside its name (✅ ok,
+  ❓ unknown code, 🚫 no valid data, ⚠️ insufficient history or a warning, ⏳ a stale rate), so
+  the rows that need a look stand out.
+
+The two pages are filled from the same values, so they cannot disagree: the code works out the
+figures and the texts once, and a template for each page lays them out.
+
+`report.html` is a single file that works without a network: it can be opened from a folder,
+attached to an email or moved on its own. With the `interactive` extra installed, its chart can be
+zoomed and hovered for the exact dates; without it, the page shows the PNG chart instead. The page
+follows the accessibility guidelines for the web (WCAG 2.2, level AA): its tables can be read by a
+screen reader cell by cell with their headers, it can be used with the keyboard alone, and its text
+contrast is high ([decision 0015](adr/0015-report-templates-and-html.md)).
+
+**What can go wrong, and what happens.**
+
+| Situation | What the tool does |
+|---|---|
+| The `interactive` extra is not installed | `report.html` shows the PNG chart, embedded in the page |
+| The page is opened without a network | It works: Plotly's code is inside the page, which loads nothing else |
+| A name or a finding in the data holds text that looks like HTML | It is shown as text in `report.html`, never run as code |
+| The emoji do not show (an old system, or a screen reader) | The name is always written beside them, and the HTML page hides them from screen readers |
 
 ??? info "Checked by"
 
-    `tests/test_report.py::test_report_writes_the_four_files`, which writes the four
-    files from hand-made inputs and checks the values in the CSV and JSON.
+    `tests/test_report.py`: `test_report_writes_the_five_files`, which writes the five
+    files from hand-made inputs and checks the values in the CSV and JSON;
+    `test_report_md_matches_the_expected_page`,
+    `test_report_html_has_the_sections_of_report_md`,
+    `test_report_html_shows_the_interactive_chart_and_loads_nothing`,
+    `test_without_plotly_report_html_embeds_the_png`,
+    `test_text_from_the_data_is_escaped_in_report_html`,
+    `test_report_html_hides_its_emoji_from_screen_readers`.
 
 ## 11. Run it from a script or a scheduler (§2)
 

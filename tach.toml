@@ -32,9 +32,10 @@ depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
 path = "policy_rate_monitor.snapshot"
 depends_on = ["policy_rate_monitor.analytics", "policy_rate_monitor.config", "policy_rate_monitor.core"]
 
+# report imports charts only when Plotly is installed, for report.html.
 [[modules]]
 path = "policy_rate_monitor.report"
-depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
+depends_on = ["policy_rate_monitor.charts", "policy_rate_monitor.config", "policy_rate_monitor.core"]
 
 [[modules]]
 path = "policy_rate_monitor.providers"

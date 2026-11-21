@@ -35,6 +35,10 @@ pre-commit hooks set for a committed file in `out/`), or from a CDN (small, but 
 internet to show). The leaning is the CDN, with the PNG as the offline fallback. It is settled in
 #12.
 
+**Update, 2026-11-21:** settled by [0015](0015-report-templates-and-html.md): the JavaScript is
+inline, so the page works offline, and the file is exempt from the size limit. The test cited in
+Evidence is now `test_report_writes_the_five_files`.
+
 ## Alternatives considered
 
 | Alternative | Why not |

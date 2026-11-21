@@ -16,8 +16,8 @@ chart and a short report.
     uv run bis-prates report --countries "US,EA,GB,JP,CH" --start 2015-01-01
     ```
 
-    The four files land in `out/`: `summary.csv`, `summary.json`, `policy_rates.png` and
-    `report.md`. Every command and option is in the [CLI reference](cli.md).
+    The five files land in `out/`: `summary.csv`, `summary.json`, `policy_rates.png`,
+    `report.md` and `report.html`. Every command and option is in the [CLI reference](cli.md).
 
 === "Jupyter Notebook"
 

@@ -110,7 +110,7 @@ flowchart LR
     report["report"]
     raw[("data/raw/<br/>ZIP, release record,<br/>CSV as loaded")]
     staged[("data/staged/<br/>observations, series,<br/>data quality")]
-    out[("out/<br/>summary.csv, summary.json,<br/>policy_rates.png, report.md")]
+    out[("out/<br/>summary.csv, summary.json,<br/>policy_rates.png, report.md, report.html")]
 
     bis --> fetch --> raw --> transform --> staged --> report --> out
 ```
@@ -233,7 +233,7 @@ curl 'http://127.0.0.1:8000/summary?countries=US,EA'
 |---|---|---|
 | `fetch` | the BIS bulk-download page | `data/raw/WS_CBPOL_csv_flat.zip` and its release record (`.json`) |
 | `transform` | the cached ZIP | `data/raw/WS_CBPOL_csv_flat.parquet` (the file as loaded), `data/staged/observations.parquet`, `series.json`, `data_quality.json` |
-| `report` | the staged data | `out/summary.csv`, `out/summary.json`, `out/policy_rates.png`, `out/report.md` |
+| `report` | the staged data | `out/summary.csv`, `out/summary.json`, `out/policy_rates.png`, `out/report.md`, `out/report.html` |
 
 Options, after the command:
 
@@ -479,7 +479,7 @@ keeps the code, and the series metadata keeps the label as the reference-area na
 
 **KNOWN ISSUE**: the brief and most readers say `EA`; the BIS file uses `XM`. **Handled:** `EA` is
 an alias for `XM` in the configuration; `summary.csv` and `summary.json` show both the
-requested and the BIS code, `report.md` shows the BIS code. A code the data does not have (for
+requested and the BIS code, `report.md` and `report.html` show the BIS code. A code the data does not have (for
 example `UK` instead of `GB`) gets the status `unknown_ref_area`, and `report` prints a warning that
 lists every code in the data with its name, so the right one can be found.
 
@@ -494,7 +494,8 @@ under a different name.
 - Some data-quality rules named in the configuration (more decimals than declared, plausible
   ranges, attributes constant within a series) are not implemented yet; `transform` logs them.
 - The chart is drawn from floating-point values; the tables and summary files carry exact values.
-- The report is Markdown only; an HTML version with an interactive chart is planned.
+- The chart has no full text alternative yet, and its colours are not chosen for colour-blind
+  readers; both are planned (#29).
 - Planned extensions: a web front end over the HTTP API, and the validation of reference-area codes against
   the BIS SDMX metadata. The fast analytics for interactive use are in place (`analytics`, with
   Numba as the optional `fast` extra). See [docs/milestones.md](docs/milestones.md).
@@ -533,7 +534,8 @@ src/policy_rate_monitor/
 ├── transform.py            # Raw and staged tables from the cached ZIP
 ├── analytics.py            # Fixed-point arrays and the searches on them (pure; Numba optional)
 ├── snapshot.py             # Latest rate, prior rate and change per country or area (pure)
-├── report.py               # summary.csv, summary.json, policy_rates.png, report.md
+├── report.py               # summary.csv, summary.json, policy_rates.png, report.md, report.html
+├── templates/              # report.md.j2 and report.html.j2, the two report pages
 ├── service.py              # The steps the CLI and the HTTP API share
 ├── charts.py               # The Plotly figure of the policy rates (interactive extra)
 ├── web/                    # The HTTP API (web extra)
@@ -582,10 +584,10 @@ What the tests cover:
 | `tests/test_analytics.py` | the search against the plain `bisect` method at every date of a fixture; the NumPy and plain-loop versions of the searches agree, with and without Numba; the target date 12 months back; the change history and the rate moves against exact values; the arrays are read-only |
 | `tests/test_snapshot.py` | the 12-month change exactly in basis points; a target date on a weekend; 29 February; negative rates; invalid observations skipped; a different latest date per country or area; unknown code, insufficient history and no valid data; the `EA` alias; messy requested codes; the stale flags |
 | `tests/test_fetch.py` | the cache; the fallback URL; a download that is not a ZIP or holds two CSV files; the network down with and without a cached copy |
-| `tests/test_report.py` | the four files written from hand-made inputs, with the expected CSV and JSON values |
+| `tests/test_report.py` | the five files written from hand-made inputs, with the expected CSV and JSON values; `report.md` the same as before the templates; `report.html` with the same sections, its data escaped, nothing loaded from the network, and the PNG when Plotly is missing |
 | `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; `report` before `transform` gives a one-line error; `config validate` and `config schema`; a bad configuration says where its path came from; `serve` without the `web` extra, with a bad configuration, and with its options; the base commands load neither FastAPI nor Plotly |
 | `tests/test_service.py` | the steps the CLI and the API share: the codes with their aliases, the valid observations of one series exactly, the summary; summaries computed at once on several threads agree |
-| `tests/web/` | `/summary` against the `summary.json` of `bis-prates report` for every status; exact rates in `/timeseries`; the chart's lines; every error with the same body (`404`, `405`, `409`, `422`, a bug as `500` without its detail); the jobs from queued to succeeded or failed, one at a time, new data after a transform, a report job writing the four files |
+| `tests/web/` | `/summary` against the `summary.json` of `bis-prates report` for every status; exact rates in `/timeseries`; the chart's lines; every error with the same body (`404`, `405`, `409`, `422`, a bug as `500` without its detail); the jobs from queued to succeeded or failed, one at a time, new data after a transform, a report job writing the five files |
 | `tests/test_charts.py` | the Plotly chart has the same lines and rows as the PNG, in request order, from the start date |
 | `tests/test_vocabulary.py` | no name, configuration key or sentence uses the bare word for a country or economic area |
 | `tests/test_settings.py` | the order of the layers (flag, environment variable, configuration or default) for the configuration file and the data directory; an empty variable counts as unset |

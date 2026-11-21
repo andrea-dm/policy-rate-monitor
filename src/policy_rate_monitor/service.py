@@ -226,7 +226,7 @@ def write_report(
     out_dir: Path,
     start: date | None = None,
 ) -> list[Path]:
-    """Writes the summary files, the chart and the Markdown report.
+    """Writes the summary files, the chart and the Markdown and HTML reports.
 
     Args:
         config: The dataset configuration.
