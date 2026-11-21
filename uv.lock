@@ -1739,6 +1739,7 @@ name = "policy-rate-monitor"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "jinja2" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
@@ -1803,6 +1804,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.165.0" },
+    { name = "jinja2", specifier = ">=3.1.6" },
     { name = "matplotlib", specifier = ">=3.11.2" },
     { name = "numba", marker = "extra == 'fast'", specifier = ">=0.68.1" },
     { name = "numpy", specifier = ">=2.5.5" },

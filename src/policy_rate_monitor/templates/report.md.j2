@@ -1,0 +1,64 @@
+# {{ title }}
+
+Generated on {{ generated_date }} at {{ generated_time }} UTC.
+
+## Summary
+
+| Country or area | Code | Latest date | Latest (%) | Prior date | Prior (%) | Change (bp) | Status | Flags |
+|---|---|---|--:|---|--:|--:|---|---|
+{% for row in summary_rows %}
+| {{ row | map("md_cell") | join(" | ") }} |
+{% endfor %}
+
+![{{ title }}]({{ chart_file }})
+
+## About the data
+
+{{ description }}
+
+{{ attribution }}.
+
+{% if release is none %}
+No record of the source file's retrieval was found.
+{% else %}
+- Downloaded from: {{ release.location }}
+- Retrieved at: {{ release.retrieved_at }}
+{% if release.version_id is not none %}
+- Version: {{ release.version_id }}
+{% endif %}
+{% if release.checksum is not none %}
+- SHA-256 of the file: `{{ release.checksum }}`
+{% endif %}
+{% endif %}
+
+The staged data holds {{ series_count }} series.
+
+## Method and assumptions
+
+{% for line in method %}
+- {{ line }}
+{% endfor %}
+
+Statuses:
+
+{% for status, text in statuses %}
+- {{ status }}: {{ text }}
+{% endfor %}
+
+## Data quality
+
+{% if issue_rows %}
+| Rule | Severity | Series | Count | Detail |
+|---|---|---|--:|---|
+{% for row in issue_rows %}
+| {{ row | map("md_cell") | join(" | ") }} |
+{% endfor %}
+{% else %}
+No findings.
+{% endif %}
+
+## Limitations
+
+{% for line in limitations %}
+- {{ line }}
+{% endfor %}

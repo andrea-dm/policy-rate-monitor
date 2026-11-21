@@ -1,8 +1,10 @@
-"""Write the report: a CSV and a JSON summary, a chart and a Markdown page.
+"""Write the report: a CSV and a JSON summary, a chart, a Markdown and an HTML page.
 
-``Report(config).export(args)`` takes the snapshots and the staged data and writes four
-files to the output folder: ``summary.csv``, ``summary.json``, ``policy_rates.png`` and
-``report.md``. Every text that names the dataset comes from the configuration.
+``Report(config).export(args)`` takes the snapshots and the staged data and writes five
+files to the output folder: ``summary.csv``, ``summary.json``, ``policy_rates.png``,
+``report.md`` and ``report.html``. Both pages are rendered from the templates in
+``templates/``, filled from one context. Every text that names the dataset comes from
+the configuration.
 
 See also: [How it works](how-it-works.md), section 10, and [decision
 0002](adr/0002-charting-and-report-format.md).
@@ -12,15 +14,21 @@ See also: [How it works](how-it-works.md), section 10, and [decision
 
 from __future__ import annotations
 
+import base64
 import csv
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from jinja2 import Environment, PackageLoader, select_autoescape
 from matplotlib.figure import Figure
 
-from policy_rate_monitor.core.models import SnapshotFlag, SnapshotStatus
+from policy_rate_monitor.core.models import (
+    DataQualitySeverity,
+    SnapshotFlag,
+    SnapshotStatus,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -38,7 +46,14 @@ if TYPE_CHECKING:
         SourceRelease,
     )
 
-__all__ = ["Report", "ReportArgs", "charted_series", "summary_document", "valid_rows"]
+__all__ = [
+    "ICONS",
+    "Report",
+    "ReportArgs",
+    "charted_series",
+    "summary_document",
+    "valid_rows",
+]
 
 CHART_FILE = "policy_rates.png"
 """File name of the chart in the output folder."""
@@ -48,20 +63,20 @@ _CHARTED = (SnapshotStatus.OK, SnapshotStatus.INSUFFICIENT_HISTORY)
 
 _LIMITATIONS = (
     (
-        "- The report shows the rates as the source publishes them; it does not "
+        "The report shows the rates as the source publishes them; it does not "
         "correct or fill in any value."
     ),
     (
-        "- Each country or area is compared at its own latest date, so the dates "
+        "Each country or area is compared at its own latest date, so the dates "
         "in one table can differ. A stale flag points out one that lags behind."
     ),
     (
-        "- A gap in a series makes the prior rate older than the target date; such "
+        "A gap in a series makes the prior rate older than the target date; such "
         "a gap is flagged when it is longer than the configured threshold."
     ),
-    "- The data is as of the retrieval time above, not real time.",
+    "The data is as of the retrieval time above, not real time.",
     (
-        "- The chart draws the rates as floating-point numbers; the tables and the "
+        "The chart draws the rates as floating-point numbers; the tables and the "
         "summary files carry the exact values."
     ),
 )
@@ -77,6 +92,19 @@ _STATUS_TEXT = {
         "before the target date, so there is no change."
     ),
 }
+
+ICONS: dict[str, str] = {
+    SnapshotStatus.OK: "✅",
+    SnapshotStatus.UNKNOWN_REF_AREA: "❓",
+    SnapshotStatus.NO_VALID_DATA: "🚫",
+    SnapshotStatus.INSUFFICIENT_HISTORY: "⚠️",
+    SnapshotFlag.STALE_LATEST: "⏳",
+    SnapshotFlag.STALE_PRIOR: "⏳",
+    DataQualitySeverity.INFO: "ℹ️",  # the emoji, not the letter i # noqa: RUF001
+    DataQualitySeverity.WARNING: "⚠️",
+    DataQualitySeverity.ERROR: "❌",
+}
+"""The emoji beside each status, flag and severity name, never instead of it."""
 
 
 @dataclass(frozen=True)
@@ -104,26 +132,35 @@ class ReportArgs:
 
 
 class Report:
-    """The summary files, the chart and the Markdown report of one dataset."""
+    """The summary files, the chart and the two report pages of one dataset."""
 
     def __init__(self, config: DatasetConfig) -> None:
-        """Keeps the configuration every text and output field comes from.
+        """Keeps the configuration and loads the page templates.
 
         Args:
-            config: The dataset configuration.
+            config: The dataset configuration every text and output field comes from.
         """
         super().__init__()
         self._config = config
+        # Autoescaping for the HTML page only: Markdown has no escaping of its own.
+        self._templates = Environment(
+            loader=PackageLoader("policy_rate_monitor", "templates"),
+            autoescape=select_autoescape(["html.j2"]),
+            trim_blocks=True,
+            lstrip_blocks=True,
+            keep_trailing_newline=True,
+        )
+        self._templates.filters["md_cell"] = _md_cell
 
     def export(self, args: ReportArgs) -> list[Path]:
-        """Writes the four files to ``args.out_dir``.
+        """Writes the five files to ``args.out_dir``.
 
         Args:
             args: The snapshots, the staged data and where to write.
 
         Returns:
-            The paths of ``summary.csv``, ``summary.json``, the chart and
-            ``report.md``.
+            The paths of ``summary.csv``, ``summary.json``, the chart,
+            ``report.md`` and ``report.html``.
         """
         config = self._config
         out_dir = args.out_dir
@@ -140,48 +177,41 @@ class Report:
         chart_path = out_dir / CHART_FILE
         _write_chart(args, config.dataset.title, chart_path)
 
+        context = self._context(args, generated_at)
+        context["chart_html"] = _interactive_chart(args, config.dataset.title)
+        context["chart_png"] = base64.b64encode(chart_path.read_bytes()).decode("ascii")
+
         md_path = out_dir / "report.md"
-        md_path.write_text(self._markdown(args, generated_at), encoding="utf-8")
+        md_path.write_text(self._render("report.md.j2", context), encoding="utf-8")
 
-        return [csv_path, json_path, chart_path, md_path]
+        html_path = out_dir / "report.html"
+        html_path.write_text(self._render("report.html.j2", context), encoding="utf-8")
 
-    # TODO(andrea-dm): render this page from a Jinja template.
-    # https://github.com/andrea-dm/policy-rate-monitor/issues/12
-    def _markdown(self, args: ReportArgs, generated_at: datetime) -> str:
-        config = self._config
-        lines = [
-            f"# {config.dataset.title}",
-            "",
-            f"Generated on {generated_at:%Y-%m-%d at %H:%M} UTC.",
-            "",
-            "## Summary",
-            "",
-            *_summary_table(args.snapshots),
-            "",
-            f"![{config.dataset.title}]({CHART_FILE})",
-            "",
-            "## About the data",
-            "",
-            config.dataset.description,
-            "",
-            f"{config.dataset.attribution}.",
-            "",
-            *_release_lines(args.release, len(args.series)),
-            "",
-            "## Method and assumptions",
-            "",
-            *self._method_lines(),
-            "",
-            "## Data quality",
-            "",
-            *_issue_table(args.issues),
-            "",
-            "## Limitations",
-            "",
-            *_LIMITATIONS,
-            "",
-        ]
-        return "\n".join(lines)
+        return [csv_path, json_path, chart_path, md_path, html_path]
+
+    def _render(self, name: str, context: dict[str, object]) -> str:
+        return self._templates.get_template(name).render(context)
+
+    def _context(self, args: ReportArgs, generated_at: datetime) -> dict[str, object]:
+        """The values both pages show; the templates hold the layout."""
+        dataset = self._config.dataset
+        return {
+            "title": dataset.title,
+            "generated_iso": generated_at.isoformat(),
+            "generated_date": f"{generated_at:%Y-%m-%d}",
+            "generated_time": f"{generated_at:%H:%M}",
+            "summary_rows": _summary_rows(args.snapshots),
+            "chart_file": CHART_FILE,
+            "description": dataset.description,
+            "attribution": dataset.attribution,
+            "release": _release(args.release),
+            "series_count": len(args.series),
+            "method": self._method_lines(),
+            "statuses": [(str(status), text) for status, text in _STATUS_TEXT.items()],
+            "issue_rows": _issue_rows(args.issues),
+            "limitations": _LIMITATIONS,
+            "icons": ICONS,
+        }
 
     def _method_lines(self) -> list[str]:
         config = self._config
@@ -192,24 +222,24 @@ class Report:
         months = config.snapshot.lookback_months
         missing = ", ".join(f"`{value}`" for value in config.columns.missing_values)
         lines = [
-            f"- Only the series with {selection} are used.",
+            f"Only the series with {selection} are used.",
             (
-                "- The latest rate of a country or area is its last valid "
+                "The latest rate of a country or area is its last valid "
                 "observation; each one keeps its own latest date."
             ),
             (
-                f"- The target date is the same calendar date {months} months "
+                f"The target date is the same calendar date {months} months "
                 "before the latest date (29 February becomes 28 February). The "
                 "prior rate is the most recent valid observation on or before the "
                 "target date."
             ),
             (
-                "- The change is the latest rate minus the prior rate, in basis "
+                "The change is the latest rate minus the prior rate, in basis "
                 "points (1 percentage point = 100 bp), computed exactly in decimal "
                 "arithmetic."
             ),
             (
-                f"- Missing values (empty or {missing}) are kept and marked "
+                f"Missing values (empty or {missing}) are kept and marked "
                 "invalid, and so is a value that is not a number."
             ),
         ]
@@ -217,22 +247,18 @@ class Report:
             if attribute.invalid_codes:
                 codes = ", ".join(attribute.invalid_codes)
                 lines += [
-                    f"- Observations with {attribute.id} {codes} are marked invalid."
+                    f"Observations with {attribute.id} {codes} are marked invalid."
                 ]
-        lines += [f"- {self._duplicates_text()}"]
+        lines += [self._duplicates_text()]
         lines += [
             (
-                f"- A latest rate more than {config.snapshot.stale_latest_days} days "
+                f"A latest rate more than {config.snapshot.stale_latest_days} days "
                 "older than the newest date in the data is flagged "
                 f"{SnapshotFlag.STALE_LATEST}; a prior rate more than "
                 f"{config.snapshot.stale_prior_days} days before the target date is "
                 f"flagged {SnapshotFlag.STALE_PRIOR}. A flag never hides a value."
-            ),
-            "",
-            "Statuses:",
-            "",
+            )
         ]
-        lines += [f"- {status}: {text}" for status, text in _STATUS_TEXT.items()]
         return lines
 
     def _duplicates_text(self) -> str:
@@ -389,8 +415,25 @@ def _write_chart(args: ReportArgs, title: str, path: Path) -> None:
     figure.savefig(path, dpi=120)
 
 
-def _cell(text: object) -> str:
-    return str(text).replace("|", "\\|")
+def _interactive_chart(args: ReportArgs, title: str) -> str | None:
+    """The Plotly chart with its JavaScript inline, or ``None`` without the extra."""
+    try:
+        # Plotly is in the interactive extra, so a base install must not need it.
+        from policy_rate_monitor.charts import rate_figure  # noqa: PLC0415
+    except ImportError as error:
+        if (error.name or "").partition(".")[0] != "plotly":
+            raise
+        return None
+    figure = rate_figure(title, args.snapshots, args.observations, args.start)
+    # Inline, not from a CDN, so the chart shows without a network. The height is fixed
+    # because the page gives the chart's box none.
+    return figure.to_html(
+        full_html=False, include_plotlyjs=True, default_height="34rem"
+    )
+
+
+def _md_cell(text: str) -> str:
+    return text.replace("|", "\\|")
 
 
 def _rate(value: Decimal | None, decimals: int | None) -> str:
@@ -401,61 +444,46 @@ def _rate(value: Decimal | None, decimals: int | None) -> str:
     return f"{value:.{decimals}f}"
 
 
-def _summary_table(snapshots: Sequence[DataSnapshot]) -> list[str]:
-    lines = [
-        (
-            "| Country or area | Code | Latest date | Latest (%) | Prior date "
-            "| Prior (%) | Change (bp) | Status | Flags |"
-        ),
-        "|---|---|---|--:|---|--:|--:|---|---|",
-    ]
+def _summary_rows(snapshots: Sequence[DataSnapshot]) -> list[list[str]]:
+    rows: list[list[str]] = []
     for snapshot in snapshots:
         name = "-" if snapshot.series is None else snapshot.series.ref_area_name
         decimals = None if snapshot.series is None else snapshot.series.decimals
-        cells = [
-            name,
-            snapshot.ref_area,
-            snapshot.latest_date or "-",
-            _rate(snapshot.latest_value, decimals),
-            snapshot.prior_date or "-",
-            _rate(snapshot.prior_value, decimals),
-            _plain(snapshot.change_bps) or "-",
-            snapshot.status,
-            ", ".join(snapshot.flags) or "-",
+        rows += [
+            [
+                name,
+                snapshot.ref_area,
+                str(snapshot.latest_date or "-"),
+                _rate(snapshot.latest_value, decimals),
+                str(snapshot.prior_date or "-"),
+                _rate(snapshot.prior_value, decimals),
+                _plain(snapshot.change_bps) or "-",
+                str(snapshot.status),
+                ", ".join(snapshot.flags) or "-",
+            ]
         ]
-        lines += ["| " + " | ".join(_cell(cell) for cell in cells) + " |"]
-    return lines
+    return rows
 
 
-def _release_lines(release: SourceRelease | None, series_count: int) -> list[str]:
+def _release(release: SourceRelease | None) -> dict[str, str | None] | None:
     if release is None:
-        lines = ["No record of the source file's retrieval was found."]
-    else:
-        lines = [
-            f"- Downloaded from: {release.location}",
-            f"- Retrieved at: {release.retrieved_at:%Y-%m-%d %H:%M %Z}",
-        ]
-        if release.version_id is not None:
-            lines += [f"- Version: {release.version_id}"]
-        if release.checksum_sha256 is not None:
-            lines += [f"- SHA-256 of the file: `{release.checksum_sha256}`"]
-    return [*lines, "", f"The staged data holds {series_count} series."]
+        return None
+    return {
+        "location": release.location,
+        "retrieved_at": f"{release.retrieved_at:%Y-%m-%d %H:%M %Z}",
+        "version_id": release.version_id,
+        "checksum": release.checksum_sha256,
+    }
 
 
-def _issue_table(issues: Sequence[DataQualityIssue]) -> list[str]:
-    if not issues:
-        return ["No findings."]
-    lines = [
-        "| Rule | Severity | Series | Count | Detail |",
-        "|---|---|---|--:|---|",
-    ]
-    for issue in issues:
-        cells = [
+def _issue_rows(issues: Sequence[DataQualityIssue]) -> list[list[str]]:
+    return [
+        [
             issue.rule,
-            issue.severity,
+            str(issue.severity),
             issue.series_key or "all",
-            issue.count,
+            str(issue.count),
             issue.detail,
         ]
-        lines += ["| " + " | ".join(_cell(cell) for cell in cells) + " |"]
-    return lines
+        for issue in issues
+    ]

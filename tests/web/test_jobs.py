@@ -193,7 +193,13 @@ def test_a_report_job_writes_the_report_files(
     assert response.status_code == 202
     done = _finished(app, response.json()["id"])
     assert done["status"] == JobStatus.SUCCEEDED
-    names = ["summary.csv", "summary.json", "policy_rates.png", "report.md"]
+    names = [
+        "summary.csv",
+        "summary.json",
+        "policy_rates.png",
+        "report.md",
+        "report.html",
+    ]
     assert done["result"] == {"files": [str(out_dir / name) for name in names]}
     snapshots = json.loads((out_dir / "summary.json").read_text())["snapshots"]
     assert [item["requested_ref_area"] for item in snapshots] == ["US", "EA"]
