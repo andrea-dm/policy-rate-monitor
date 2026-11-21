@@ -1,4 +1,7 @@
-"""A provider that holds a few observations in memory, for tests."""
+"""A provider that holds a few observations in memory, for tests.
+
+See also: [decision 0008](adr/0008-provider-interface.md).
+"""
 
 from __future__ import annotations
 
@@ -28,7 +31,8 @@ _RELEASE = SourceRelease(
 class InMemoryProvider(DataProvider):
     """Canonical data given as plain rows; ``fetch`` and ``transform`` do nothing.
 
-    The snapshot, the report and the API can be tested on it without a source file.
+    The snapshot and the report can be tested on it without a source file, and the
+    planned HTTP API will be too.
     """
 
     def __init__(
@@ -60,28 +64,34 @@ class InMemoryProvider(DataProvider):
 
     @override
     def fetch(self) -> SourceRelease:
+        """Returns the release given to the constructor; nothing is downloaded."""
         return self._release
 
     @override
     def transform(self) -> None:
-        return
+        """Does nothing: the rows are already canonical."""
 
     @override
     def list_series(self) -> list[str]:
+        """Returns the keys of the series given, sorted."""
         return sorted(self._series)
 
     @override
     def series_metadata(self, series_key: str) -> SeriesMetadata:
+        """Returns the metadata given for one series; ``KeyError`` if there is none."""
         return self._series[series_key]
 
     @override
     def observations(self, series_keys: Sequence[str] | None = None) -> Table:
+        """Returns the rows given, as a table in the canonical schema."""
         return select_series(self._observations, series_keys)
 
     @override
     def data_quality_issues(self) -> list[DataQualityIssue]:
+        """Returns the findings given to the constructor."""
         return list(self._issues)
 
     @override
     def source_release(self) -> SourceRelease | None:
+        """Returns the release given to the constructor."""
         return self._release

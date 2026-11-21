@@ -17,13 +17,19 @@ rejects machine-scoped keys there).
 ## Checks
 
 ```bash
-uv run ruff check src/ tests/ --fix   # always before the formatter
+uv run ruff check --fix   # fixes first, always before the formatter
 uv run ruff format
-uv run pyright src/ tests/
-uv run deptry src/ tests/
-uv run tach check
-uv run pytest
+uv run tach check && \
+uv run ruff check && \
+uv run ruff format --check && \
+uv run deptry src/ tests/ && \
+uv run pyright src/ tests/ && \
+uv run pytest && \
+uv run mkdocs build --strict
 ```
+
+The checks run in this order, each stopping the chain when it fails: layering first, the slowest
+(pyright, pytest) last. The pre-commit/pre-push hooks and CI follow the same order.
 
 ## Code Style
 

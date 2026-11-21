@@ -6,7 +6,7 @@
             <img src="https://github.com/andrea-dm/policy-rate-monitor/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI">
         </a>
         <a href="https://github.com/andrea-dm/policy-rate-monitor/releases" target="_blank">
-            <img src="https://img.shields.io/badge/release-v0.1.0-blue" alt="Release">
+            <img src="https://img.shields.io/badge/release-v0.2.0-blue" alt="Release">
         </a>
         <a href="pyproject.toml" target="_blank">
             <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue" alt="Python version">
@@ -49,6 +49,7 @@ series to keep, the data-quality rules, the output fields) is declared in
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Usage](#usage)
+  - [Using the package in a notebook](#using-the-package-in-a-notebook)
   - [Reproducing `out/` from a clean clone](#reproducing-out-from-a-clean-clone)
   - [Development Workflow](#development-workflow)
 - [Data Model](#data-model)
@@ -74,9 +75,11 @@ series to keep, the data-quality rules, the output fields) is declared in
   second configuration, not new code.
 - **Exact arithmetic**: rates are read as text and kept as decimals end to end; the change in
   basis points is computed in decimal arithmetic, never through floating point.
-- **Extract, load, transform**: the CSV is first stored exactly as loaded, then staged as tidy
-  daily observations and series metadata, so every staged value can be traced back to its row.
-- **Cache and failure handling**: a second download within 24 hours makes no request; a broken
+- **Extract, load, transform (ELT)**: the CSV is first stored exactly as loaded, then staged as
+  tidy daily observations and series metadata, so the source as received is kept next to the
+  staged data; a staged value is found in the raw file by its series and date.
+- **Cache and failure handling**: a second download within 24 hours (`cache_ttl_hours` in the
+  configuration) makes no request; a broken
   download never replaces a good cached copy; with the network down, the cached copy is used with
   a warning.
 - **Data quality reported, not hidden**: missing values are kept and marked invalid, duplicates are
@@ -122,6 +125,7 @@ flowchart BT
     transform["transform"]
     providers["providers<br/>DataProvider, schema, in-memory fake"]
     bulk["bulk<br/>BulkFileProvider"]
+    analytics["analytics<br/>fixed-point arrays, searches"]
     snapshot["snapshot"]
     report["report"]
     cli["cli"]
@@ -132,7 +136,8 @@ flowchart BT
     fetch --> transform
     transform --> bulk
     providers --> bulk
-    config --> snapshot
+    config --> analytics
+    analytics --> snapshot
     config --> report
     bulk --> cli
     snapshot --> cli
@@ -180,10 +185,17 @@ uv sync --all-groups
 | `test` | pytest, pytest-mock, pytest-cov, hypothesis |
 | `dev` | `lint` and `test` together; plain `uv sync` installs it by default |
 | `docs` | MkDocs and its plugins, for `mkdocs serve` and `mkdocs build` |
-| `jupyter` | JupyterLab and a kernel, for the notebooks in `diagnostics/` |
+| `jupyter` | JupyterLab and a kernel, for the example notebooks in `examples/` |
 
-The package has no optional extras yet; the planned web service and interactive chart will come as
-extras, so a plain install stays small.
+One optional extra, `fast`, installs Numba, which compiles the analytics search loops; without it they
+run on NumPy with the same results:
+
+```bash
+uv sync --no-dev --extra fast
+```
+
+The planned web service and interactive chart will also come as extras, so a plain install stays
+small.
 
 ### Usage
 
@@ -194,6 +206,8 @@ uv run bis-prates report --countries "US,EA,GB,JP,CH" --start "2015-01-01"
 ```
 
 With the virtual environment activated, `bis-prates` works without `uv run`.
+`bis-prates config validate` checks the configuration, and `bis-prates config schema` prints its
+JSON Schema.
 
 | Command | Reads | Writes |
 |---|---|---|
@@ -205,10 +219,10 @@ Options, after the command:
 
 | Option | Commands | Default |
 |---|---|---|
-| `--config PATH` | all | `configs/bis_cbpol.json` |
-| `--data-dir PATH` | all | `data` (`dataset.data_dir` in the configuration) |
+| `--config PATH` | all | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` |
+| `--data-dir PATH` | `fetch`, `transform`, `report` | `$BIS_PRATES_DATA_DIR`, else `data` (`dataset.data_dir` in the configuration) |
 | `--debug` | all | off; shows the full traceback of an error |
-| `--countries "US,EA"` | `report` | required; codes are trimmed, upper-cased and de-duplicated |
+| `--countries "US,EA"` | `report` | required; codes are matched without regard to case and spaces, de-duplicated, and written as typed next to the code used |
 | `--start YYYY-MM-DD` | `report` | the whole history; first date of the chart |
 | `--out DIR` | `report` | `out` |
 
@@ -224,7 +238,85 @@ Exit codes:
 | 5 | a step's input is missing | run the previous step (e.g. `transform` before `report`) |
 | 6 | source unavailable | retry later |
 | 7 | unexpected source format | check the BIS file; the configuration may need updating |
-| 8 | the outputs cannot be written | check the output folder |
+| 8 | a file cannot be read or written | check the data and output folders |
+
+### Using the package in a notebook
+
+Two notebooks in `examples/` go through the three commands from Python, run in this order:
+
+1. [fetch_and_transform.ipynb](examples/fetch_and_transform.ipynb) downloads the BIS file and
+   stages it, as `fetch` and `transform` do;
+2. [policy_rates.ipynb](examples/policy_rates.ipynb) loads the staged data through the provider,
+   computes the 12-month change for five areas and plots their rates, as `report` does.
+
+They need the `jupyter` group:
+
+```bash
+uv sync --all-groups --all-extras
+uv run jupyter lab examples/
+```
+
+The same steps in any Python session started at the repository root. Download and stage the
+data:
+
+```python
+from pathlib import Path
+
+from policy_rate_monitor.bulk import BulkFileProvider
+from policy_rate_monitor.config import FileConfigSource
+
+config = FileConfigSource("configs/bis_cbpol.json").load()
+provider = BulkFileProvider(config, Path(config.dataset.data_dir))
+provider.fetch()      # downloads the BIS file, unless the cached copy is recent
+provider.transform()  # stages it
+```
+
+Compute the 12-month change:
+
+```python
+import pandas as pd
+
+from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
+
+observations = provider.observations().to_pandas(types_mapper=pd.ArrowDtype)
+series = [provider.series_metadata(key) for key in provider.list_series()]
+snapshots = compute_snapshots(
+    SnapshotArgs(
+        observations=observations,
+        series=series,
+        requested=["US", "EA", "GB", "JP", "CH"],
+        settings=config.snapshot,
+        area_aliases=config.area_aliases,
+    )
+)
+pd.DataFrame([snapshot.model_dump(exclude={"series"}) for snapshot in snapshots])
+```
+
+Plot the rates since 2015:
+
+```python
+from datetime import date
+
+import matplotlib.pyplot as plt
+
+figure, axes = plt.subplots(figsize=(10, 5.5), layout="constrained")
+for snapshot in snapshots:
+    if snapshot.series is None:
+        continue
+    rows = observations[
+        (observations["series_key"] == snapshot.series.series_key)
+        & observations["is_valid"]
+        & (observations["date"] >= date(2015, 1, 1))
+    ]
+    axes.step(
+        rows["date"],
+        rows["value"].astype(float),
+        where="post",
+        label=snapshot.series.ref_area_name,
+    )
+axes.set_ylabel("Per cent")
+axes.legend()
+```
 
 ### Reproducing `out/` from a clean clone
 
@@ -235,14 +327,42 @@ updates the file regularly, so a later run gives later dates.
 
 ### Development Workflow
 
+Fix what can be fixed automatically:
+
 ```bash
-uv run ruff check           # lint
-uv run ruff format --check  # format check
-uv run pyright src/ tests/  # type check, strict
-uv run deptry src/ tests/   # declared dependencies match the imports
-uv run tach check           # module layering
-uv run pytest               # tests
-uv run mkdocs serve         # docs preview
+uv run ruff check --fix
+uv run ruff format
+```
+
+Then run the checks in order. Each one stops the chain when it fails: the module layering first,
+since a wrong import changes the code anyway, and the two slowest checks, pyright and pytest, last.
+
+```bash
+uv run tach check && \
+uv run ruff check && \
+uv run ruff format --check && \
+uv run deptry src/ tests/ && \
+uv run pyright src/ tests/ && \
+uv run pytest && \
+uv run mkdocs build --strict
+```
+
+| Check | What it checks |
+|---|---|
+| `tach check` | module layering: each module imports only the ones below it |
+| `ruff check` | lint |
+| `ruff format --check` | format |
+| `deptry` | declared dependencies match the imports |
+| `pyright` | types, strict |
+| `pytest` | tests and docstring examples |
+| `mkdocs build --strict` | the docs site, with every link and anchor |
+
+Preview the docs with `uv run mkdocs serve`. Each GitHub release also carries the built site,
+`policy-rate-monitor-docs-<tag>.zip`: unzip it and open `index.html`. The diagrams need an
+internet connection; the rest works offline.
+
+```bash
+OFFLINE=true uv run mkdocs build --strict   # the same site, into site/
 ```
 
 ---
@@ -354,9 +474,9 @@ under a different name.
   ranges, attributes constant within a series) are not implemented yet; `transform` logs them.
 - The chart is drawn from floating-point values; the tables and summary files carry exact values.
 - The report is Markdown only; an HTML version with an interactive chart is planned.
-- Planned extensions: an HTTP API and a web front end, faster analytics for interactive use
-  (`diagnostics/bench_kernels.py` compares pure Python, Numba and Cython on one kernel), and the
-  validation of area codes against the BIS SDMX metadata. See [docs/milestones.md](docs/milestones.md).
+- Planned extensions: an HTTP API and a web front end, and the validation of area codes against
+  the BIS SDMX metadata. The fast analytics for interactive use are in place (`analytics`, with
+  Numba as the optional `fast` extra). See [docs/milestones.md](docs/milestones.md).
 
 The main technical decisions, with their alternatives and costs, are recorded in
 [docs/adr/](docs/adr/index.md).
@@ -385,17 +505,20 @@ src/policy_rate_monitor/
 │   └── memory.py           # InMemoryProvider, a fake for tests
 ├── bulk.py                 # BulkFileProvider: the provider over the bulk-download file
 ├── cli/                    # The bis-prates command
-│   ├── main.py             # Argument parsing and the three commands
+│   ├── main.py             # Argument parsing, the pipeline and config commands
 │   ├── exit_codes.py       # ExitCode and the mapping from the typed errors
 │   └── __main__.py         # python -m policy_rate_monitor.cli
 ├── fetch.py                # Download the source ZIP and keep a cached copy
 ├── transform.py            # Raw and staged tables from the cached ZIP
+├── analytics.py            # Fixed-point arrays and the searches on them (pure; Numba optional)
 ├── snapshot.py             # Latest rate, prior rate and change per area (pure)
 ├── report.py               # summary.csv, summary.json, policy_rates.png, report.md
+├── settings.py             # Where the configuration and data directory come from
 └── py.typed                # PEP 561 marker
 tests/                      # pytest suite (see Testing)
 diagnostics/                # Spikes and benchmarks behind the technical choices
-docs/                       # MkDocs site: configuration reference, milestones
+examples/                   # Notebooks that use the package
+docs/                       # MkDocs site: how it works, architecture, data model, CLI, decisions
 out/                        # The generated outputs of the recorded release
 ```
 
@@ -413,7 +536,7 @@ uv run pytest
 
 ```bash
 uv run pytest -m unit          # fast, isolated unit tests only
-uv run pytest -m contract      # tests at a boundary, with temp files and stand-ins
+uv run pytest -m contract      # tests at a boundary, with temp files and a fake web server
 ```
 
 | Marker | Description |
@@ -429,10 +552,12 @@ What the tests cover:
 | File | Behaviour |
 |---|---|
 | `tests/test_transform.py` | missing values kept and marked invalid; exact and conflicting duplicates; the `FREQ = D` selection; the unit multiplier applied exactly; unparseable dates; the series metadata kept; missing columns and inputs named |
+| `tests/test_analytics.py` | the search against the plain `bisect` method at every date of a fixture; the NumPy and plain-loop versions of the searches agree, with and without Numba; the target date 12 months back; the change history and the rate moves against exact values; the arrays are read-only |
 | `tests/test_snapshot.py` | the 12-month change exactly in basis points; a target date on a weekend; 29 February; negative rates; invalid observations skipped; a different latest date per area; unknown area, insufficient history and no valid data; the `EA` alias; messy requested codes; the stale flags |
 | `tests/test_fetch.py` | the cache; the fallback URL; a download that is not a ZIP or holds two CSV files; the network down with and without a cached copy |
 | `tests/test_report.py` | the four files written from hand-made inputs, with the expected CSV and JSON values |
-| `tests/test_cli.py` | the help lists the three commands; errors map to their exit codes; `report` before `transform` gives a one-line error |
+| `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; `report` before `transform` gives a one-line error; `config validate` and `config schema`; a bad configuration says where its path came from |
+| `tests/test_settings.py` | the order of the layers (flag, environment variable, configuration or default) for the configuration file and the data directory; an empty variable counts as unset |
 | `tests/providers/` | the provider contract (canonical schema, one row per series and date, sorted dates, validity, metadata for every series), run on both providers; the row checks fail on tables built to break them; a provider missing a method cannot be created; the schema follows the configuration |
 | `tests/config/`, `tests/core/` | the configuration checks and the domain models |
 

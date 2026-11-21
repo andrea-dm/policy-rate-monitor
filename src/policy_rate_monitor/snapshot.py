@@ -1,16 +1,25 @@
 """Latest policy rate, the rate a year earlier and the change, per requested area.
 
 Pure calculation on the staged observations: no I/O.
+
+See also: [How it works](how-it-works.md), sections 5 to 8, and
+[decision 0006](adr/0006-twelve-month-look-back.md).
 """
 
 from __future__ import annotations
 
 import calendar
-from bisect import bisect_right
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
+from policy_rate_monitor.analytics import (
+    EPOCH,
+    NO_INDEX,
+    day_number,
+    rate_history,
+    snapshot_at,
+)
 from policy_rate_monitor.core.models import (
     BASIS_POINTS_PER_PERCENT,
     DataSnapshot,
@@ -20,10 +29,10 @@ from policy_rate_monitor.core.models import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
-    from decimal import Decimal
 
     from pandas import DataFrame
 
+    from policy_rate_monitor.analytics import RateHistory, SnapshotArrays
     from policy_rate_monitor.config.models import SnapshotSection
     from policy_rate_monitor.core.models import SeriesMetadata
 
@@ -35,14 +44,15 @@ class SnapshotArgs:
     """The inputs of ``compute_snapshots``.
 
     Attributes:
-        observations: Staged observations with ``date``, ``value`` and ``is_valid``
-            columns and the reference-area column.
+        observations: Staged observations with the canonical columns, values as
+            Arrow decimals (``to_pandas(types_mapper=ArrowDtype)``, as the CLI
+            does).
         series: Metadata of every series in *observations*.
-        requested: Area codes as the user typed them; they are stripped and
-            upper-cased, empty ones and repeats are dropped.
+        requested: Area codes as the user typed them. They are matched after
+            stripping and upper-casing, empty ones and repeats are dropped, and
+            each snapshot keeps the code as typed, without the spaces.
         settings: Look-back and staleness thresholds.
         area_aliases: Requested code to the code used in the data, e.g. EA to XM.
-        ref_area_column: Name of the reference-area column in *observations*.
     """
 
     observations: DataFrame
@@ -50,7 +60,6 @@ class SnapshotArgs:
     requested: Sequence[str]
     settings: SnapshotSection
     area_aliases: Mapping[str, str]
-    ref_area_column: str
 
 
 def months_before(day: date, months: int) -> date:
@@ -82,20 +91,21 @@ def months_before(day: date, months: int) -> date:
 def compute_snapshots(args: SnapshotArgs) -> list[DataSnapshot]:
     """Computes one snapshot per requested area, in request order.
 
+    The searches run on the arrays of ``analytics``, built for the requested series
+    only.
+
     Args:
         args: The observations, the series metadata, the requested codes and the
             settings.
 
     Returns:
         The snapshots, one per distinct requested code.
-    """
-    observations = args.observations
-    series_by_area = {item.ref_area: item for item in args.series}
-    all_dates: list[date] = observations["date"].dropna().tolist()
-    as_of = max(all_dates, default=None)
-    valid = observations[observations.is_valid]
 
-    snapshots: list[DataSnapshot] = []
+    Raises:
+        TypeError: The values in *observations* are not Arrow decimals.
+    """
+    series_by_area = {item.ref_area: item for item in args.series}
+    requests: list[tuple[str, str, SeriesMetadata | None]] = []
     seen: set[str] = set()
     for given in args.requested:
         code = given.strip().upper()
@@ -103,31 +113,57 @@ def compute_snapshots(args: SnapshotArgs) -> list[DataSnapshot]:
             continue
         seen.add(code)
         ref_area = args.area_aliases.get(code, code)
-        area_series = series_by_area.get(ref_area)
-        if area_series is None:
+        requests.append((given, ref_area, series_by_area.get(ref_area)))
+
+    observations = args.observations
+    keys = [series.series_key for _, _, series in requests if series is not None]
+    history = rate_history(observations[observations["series_key"].isin(keys)])
+    # Staleness is measured from the last date in the whole file, valid or not.
+    last_date: date = observations["date"].max() if len(observations) else EPOCH
+    arrays = snapshot_at(history, day_number(last_date), args.settings.lookback_months)
+
+    snapshots: list[DataSnapshot] = []
+    for given, ref_area, series in requests:
+        if series is None:
             snapshot = DataSnapshot(
                 requested_ref_area=given,
                 ref_area=ref_area,
                 status=SnapshotStatus.UNKNOWN_AREA,
             )
         else:
-            rows = valid[valid[args.ref_area_column] == ref_area]
-            snapshot = _area_snapshot(given, area_series, rows, args.settings, as_of)
+            found = _found(history, arrays, series.series_key)
+            snapshot = _area_snapshot(given, series, found, args.settings, last_date)
         snapshots.append(snapshot)
     return snapshots
+
+
+@dataclass(frozen=True)
+class _Found:
+    """The latest and prior observation the search found for one series."""
+
+    history: RateHistory
+    latest: int = NO_INDEX
+    prior: int = NO_INDEX
+    target_day: int = 0
+
+
+def _found(history: RateHistory, arrays: SnapshotArrays, series_key: str) -> _Found:
+    if series_key not in history.keys:
+        return _Found(history)
+    i = history.position(series_key)
+    return _Found(
+        history, int(arrays.latest[i]), int(arrays.prior[i]), int(arrays.target[i])
+    )
 
 
 def _area_snapshot(
     given: str,
     series: SeriesMetadata,
-    rows: DataFrame,
+    found: _Found,
     settings: SnapshotSection,
-    as_of: date | None,
+    last_date: date,
 ) -> DataSnapshot:
-    rows = rows.sort_values("date")
-    dates: list[date] = rows["date"].tolist()
-    values: list[Decimal] = rows["value"].tolist()
-    if not dates:
+    if found.latest == NO_INDEX:
         return DataSnapshot(
             requested_ref_area=given,
             ref_area=series.ref_area,
@@ -135,15 +171,15 @@ def _area_snapshot(
             status=SnapshotStatus.NO_VALID_DATA,
         )
 
-    latest_date = dates[-1]
-    latest_value = values[-1]
-    target_date = months_before(latest_date, settings.lookback_months)
+    history = found.history
+    latest_date = history.date_at(found.latest)
+    latest_value = history.value_at(found.latest)
+    target_date = EPOCH + timedelta(days=found.target_day)
     flags: list[SnapshotFlag] = []
-    if as_of is not None and (as_of - latest_date).days > settings.stale_latest_days:
+    if (last_date - latest_date).days > settings.stale_latest_days:
         flags.append(SnapshotFlag.STALE_LATEST)
 
-    prior_index = bisect_right(dates, target_date) - 1
-    if prior_index < 0:
+    if found.prior == NO_INDEX:
         return DataSnapshot(
             requested_ref_area=given,
             ref_area=series.ref_area,
@@ -155,8 +191,8 @@ def _area_snapshot(
             flags=tuple(flags),
         )
 
-    prior_date = dates[prior_index]
-    prior_value = values[prior_index]
+    prior_date = history.date_at(found.prior)
+    prior_value = history.value_at(found.prior)
     if (target_date - prior_date).days > settings.stale_prior_days:
         flags.append(SnapshotFlag.STALE_PRIOR)
     return DataSnapshot(

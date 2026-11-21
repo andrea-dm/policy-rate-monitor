@@ -197,6 +197,31 @@ def test_a_value_with_more_decimals_than_the_type_is_never_rounded(
     assert (issue.rule, issue.count) == ("non_numeric_value", 1)
 
 
+def test_values_that_are_not_plain_numbers_are_read_as_decimal_reads_them(
+    tmp_path: Path,
+) -> None:
+    # Plain numbers take a fast cast; these forms take the exact Decimal path.
+    texts = ["5.250000000", "1E-2", " 4.5", "-.5", "1234567890"]
+    write_zip(
+        tmp_path,
+        *(
+            f"{US},2024-01-{day:02d},{text},{US_SERIES},A: Normal"
+            for day, text in enumerate(texts, start=1)
+        ),
+    )
+    transform(make_config(), tmp_path)
+
+    values = load_observations(tmp_path)["value"]
+    assert values.tolist()[:4] == [
+        Decimal("5.25"),
+        Decimal("0.01"),
+        Decimal("4.5"),
+        Decimal("-0.5"),
+    ]
+    # Ten whole digits do not fit precision 15 and scale 6.
+    assert values.isna().tolist() == [False, False, False, False, True]
+
+
 def test_unparseable_dates_are_dropped_and_reported(tmp_path: Path) -> None:
     write_zip(
         tmp_path,
@@ -222,6 +247,19 @@ def test_series_metadata_is_kept(tmp_path: Path) -> None:
     assert series.unit == "Per cent per year"
     assert series.decimals == 2
     assert dict(series.attributes) == {"UNIT_MULT": "0"}
+
+
+def test_the_csv_in_the_zip_is_found_whatever_the_case_of_its_extension(
+    tmp_path: Path,
+) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    with zipfile.ZipFile(raw / "rates.zip", "w") as archive:
+        archive.writestr("RATES.CSV", f"{HEADER}\n{US},2024-01-01,5.25,{US_SERIES},A\n")
+
+    summary = transform(make_config(), tmp_path)
+
+    assert summary.observations == 1
 
 
 def test_missing_required_column_is_named(tmp_path: Path) -> None:

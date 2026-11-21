@@ -1,8 +1,11 @@
 name: CI
 
 # One workflow for every check, build and release step. The `route` job decides which jobs
-# a run needs (see its comment); every other job depends only on `route` unless it consumes
-# another job's output, so independent checks start in parallel. A job that is allowed to
+# a run needs (see its comment). The code checks run as a chain, in the order of the
+# README's development workflow, each starting only when the one before passed: tach, ruff,
+# deptry, pyright, pytest, then the docs build. A failure stops the chain, so the slow jobs
+# do not run on code that already failed a cheap check. Every other job depends only on
+# `route` unless it consumes another job's output, so it starts in parallel. A job that is allowed to
 # fail says so with `continue-on-error`, and when (e.g. informational on pull requests).
 #
 # Optional parts stay off until the repository is configured for them (Settings -> Secrets
@@ -179,7 +182,7 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────────────── lint ─── #
   ruff:
-    needs: route
+    needs: [route, tach]
     if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -189,13 +192,13 @@ jobs:
         with:
           python-version: ${{ env.PY_VERSION }}
       - run: uv sync --locked --only-group lint --no-install-project
-      - name: ruff format
-        run: uv run ruff format --check
       - name: ruff check
         run: uv run ruff check --output-format github
+      - name: ruff format
+        run: uv run ruff format --check
 
   deptry:
-    needs: route
+    needs: [route, ruff]
     if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -277,7 +280,7 @@ jobs:
   # published. Runs on pull requests as well as main and develop, so a broken page is
   # caught before it merges.
   docs-build:
-    needs: route
+    needs: [route, pytest]
     if: needs.route.outputs.docs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -291,7 +294,7 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────── typecheck ─── #
   pyright:
-    needs: route
+    needs: [route, deptry]
     if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -308,7 +311,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────── test ─── #
   pytest:
     name: pytest (${{ matrix.python }})
-    needs: route
+    needs: [route, pyright]
     if: needs.route.outputs.checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -447,6 +450,32 @@ jobs:
           path: sbom.json
           retention-days: 90 # the default maximum on a private repository
 
+  # The documentation site as a ZIP that opens from the disk, attached to each release, so
+  # the docs can be read without GitHub Pages.
+  docs-site:
+    needs: route
+    if: needs.route.outputs.kind == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true # never blocks a release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      - run: uv sync --locked --only-group docs
+      - run: uv run mkdocs build --strict --site-dir site
+        env:
+          OFFLINE: "true"
+      - name: Zip the site
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: cd site && zip -qr "../policy-rate-monitor-docs-$TAG.zip" .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docs-site
+          path: policy-rate-monitor-docs-*.zip
+
   # Versioned docs with mike on the gh-pages branch, which GitHub Pages serves as it is:
   # `dev` follows develop, `stable` the latest release.
   build-docs:
@@ -509,7 +538,7 @@ jobs:
   # Attaches the built distributions and the SBOM to the published GitHub release, so
   # every release carries the exact files that passed the smoke test.
   release-github:
-    needs: [route, build-package, wheel-smoke, sbom]
+    needs: [route, build-package, wheel-smoke, sbom, docs-site]
     if: >-
       ${{ !cancelled() && needs.route.outputs.kind == 'release'
       && needs.build-package.result == 'success' && needs.wheel-smoke.result == 'success' }}
@@ -529,6 +558,10 @@ jobs:
         continue-on-error: true # the SBOM never blocks a release
         with:
           name: sbom
+      - uses: actions/download-artifact@v8
+        continue-on-error: true # nor does the docs site
+        with:
+          name: docs-site
       - name: Attach the assets to the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -537,6 +570,9 @@ jobs:
           files=(dist/*)
           if [ -f sbom.json ]; then
             files+=(sbom.json)
+          fi
+          if [ -f "policy-rate-monitor-docs-$TAG.zip" ]; then
+            files+=("policy-rate-monitor-docs-$TAG.zip")
           fi
           gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY"
 

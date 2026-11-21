@@ -75,7 +75,6 @@ def _snapshots(rows: list[Row], requested: list[str]) -> list[DataSnapshot]:
         requested=requested,
         settings=SETTINGS,
         area_aliases=ALIASES,
-        ref_area_column="ref_area",
     )
     return compute_snapshots(args)
 

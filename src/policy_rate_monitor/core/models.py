@@ -1,16 +1,19 @@
 """Domain models exchanged between the layers.
 
-Providers produce ``SeriesMetadata``, ``DataQualityIssue`` and ``SourceRelease``;
-analytics produces ``DataSnapshot``; reporting and the API serialise them. All models
-are frozen pydantic models whose invariants are checked whenever they are built through
-the constructor or ``model_validate``/``model_validate_json``. pydantic's
-``model_copy(update=...)`` and ``model_construct`` skip validation by design: derive a
-changed object with ``Model.model_validate({**obj.model_dump(), "field": value})``.
+``fetch`` produces ``SourceRelease``; ``transform`` produces ``SeriesMetadata`` and
+``DataQualityIssue``; ``snapshot`` produces ``DataSnapshot``; providers serve them, and
+the report serialises them. All models are frozen pydantic models whose invariants are
+checked whenever they are built through the constructor or
+``model_validate``/``model_validate_json``. pydantic's ``model_copy(update=...)`` and
+``model_construct`` skip validation by design: derive a changed object with
+``Model.model_validate({**obj.model_dump(), "field": value})``.
 
 Rates are ``Decimal`` end to end. In JSON they are written as numbers, not as strings
 (pydantic's default for ``Decimal``), so ``summary.json`` and the API stay numeric. A
 JSON number is a double, so a rate is limited to 15 significant digits, which a double
 carries exactly: the JSON then reads back as an equal object.
+
+See also: [Glossary](glossary.md) and [decision 0004](adr/0004-domain-model.md).
 """
 
 from __future__ import annotations
@@ -156,7 +159,7 @@ class SeriesMetadata(_FrozenModel):
 
     Attributes:
         series_key: The source's key of the series, e.g. ``"D.CH"``.
-        ref_area: Code of the country or economic area, e.g. ``"CH"``.
+        ref_area: Code of the area, a country or an economic area, e.g. ``"CH"``.
         ref_area_name: Its name, e.g. ``"Switzerland"``.
         frequency: Frequency code, e.g. ``"D"`` for daily.
         title: The series title.
@@ -177,7 +180,7 @@ class SeriesMetadata(_FrozenModel):
 
 
 class SnapshotStatus(StrEnum):
-    """Outcome of the snapshot calculation for one requested country or area."""
+    """Outcome of the snapshot calculation for one requested area."""
 
     OK = auto()
     """Latest rate, prior rate and change are all available."""
@@ -193,9 +196,11 @@ class SnapshotFlag(StrEnum):
     """Warnings about a snapshot. A flag never suppresses a value."""
 
     STALE_LATEST = auto()
-    """The latest valid observation is much older than the dataset's latest date."""
+    """The latest valid observation is more than ``stale_latest_days`` (in the
+    configuration) before the newest date in the data."""
     STALE_PRIOR = auto()
-    """The prior observation is much older than the target date (a gap in the data)."""
+    """The prior observation is more than ``stale_prior_days`` (in the configuration)
+    before the target date: a gap in the data."""
 
 
 class DataSnapshot(_FrozenModel):
@@ -383,11 +388,12 @@ class DataQualityIssue(_FrozenModel):
     """One finding of a data-quality rule.
 
     Attributes:
-        rule: Name of the rule as registered and configured, e.g. ``"excess_decimals"``.
+        rule: Name of the rule, as configured, e.g. ``"exact_duplicate"``.
         severity: How serious the finding is.
         series_key: The affected series; ``None`` for a finding about the whole dataset.
         detail: Human-readable explanation, including what was done about it.
-        count: Number of affected observations (0 when the rule could not be evaluated).
+        count: Number of affected observations. At least 1 today; 0 is kept for a
+            rule that could not be evaluated, which no rule reports yet.
     """
 
     rule: NonEmptyStr
@@ -402,8 +408,8 @@ class SourceRelease(_FrozenModel):
 
     Attributes:
         location: Where the data was read from: a URL or a file path.
-        version_id: The source's own version identifier, if it has one (for the bulk
-            download, the HTTP ETag).
+        version_id: The source's own version identifier, if it has one. The bulk
+            download has none, so it is ``None``.
         checksum_sha256: SHA-256 of the retrieved content, as 64 hex digits.
         retrieved_at: When the content was retrieved, timezone-aware.
     """

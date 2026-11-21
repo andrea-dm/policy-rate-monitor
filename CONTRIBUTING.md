@@ -14,17 +14,22 @@ local development workflow.
    intact; `tach.toml` declares which module may import which.
 4. **Test**: add tests in `tests/` with the right marker (see [Testing](#testing)). One test per
    behaviour, each meaningful on its own; no test written only to raise the coverage.
-5. **Lint and type-check** before pushing:
+5. **Check** before pushing: fix what ruff can fix, then run the checks in order, each stopping
+   the chain when it fails:
    ```bash
-   uv run ruff check src tests --fix
-   uv run ruff format src tests
-   uv run pyright src/ tests/
-   uv run deptry src/ tests/
-   uv run tach check
-   uv run pytest
+   uv run ruff check --fix
+   uv run ruff format
+   uv run tach check && \
+   uv run ruff check && \
+   uv run ruff format --check && \
+   uv run deptry src/ tests/ && \
+   uv run pyright src/ tests/ && \
+   uv run pytest && \
+   uv run mkdocs build --strict
    ```
-   The hooks in `.pre-commit-config.yaml` run ruff at every commit and pyright, deptry and tach at
-   every push (pytest is not a hook); install both once with `uvx pre-commit install`.
+   The hooks in `.pre-commit-config.yaml` follow the same order and stop at the first failure:
+   tach and ruff at every commit, deptry and pyright at every push. pytest and the docs build run
+   in CI. Install the hooks once with `uvx pre-commit install`.
 6. **Update the changelog**: add an entry under `## [Unreleased]` in `CHANGELOG.md`.
 7. **Open a pull request** against `develop`, saying what changed and why, and linking the issue
    (`Closes #<number>`).
@@ -153,7 +158,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 6. On GitHub, create a **Release** with a new tag `vX.Y.Z` on `main`, named `X.Y.Z`, with the
    changelog section as its description. Publishing the release starts the CI release run, which
    checks that the tag matches the version in `pyproject.toml`, builds the package and tests the
-   wheel.
+   wheel. The release gets the wheel, the sdist, the SBOM (`sbom.json`) and the documentation
+   site as `policy-rate-monitor-docs-vX.Y.Z.zip`.
 
 ---
 

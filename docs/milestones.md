@@ -62,8 +62,9 @@ flowchart LR
     M3 --> M4
     M4 --> M5[M5 Core release v0.1.0]
     M5 --> M6[M6 HTTP API]
-    M6 --> M7[M7 Web front end]
-    M5 --> M8[M8 SDMX validation]
+    M5 --> M7[M7 SDMX validation]
+    M6 --> M7
+    M6 --> M8[M8 Web front end]
 ```
 
 M3 depends only on M0. Its input is canonical data, so it can be built and tested on small
@@ -83,8 +84,8 @@ API metadata) are the two optional extensions in its §5.
 | M4 Reporting | `bis-prates report`: the four output files | §1.4, §3.2 | Core |
 | M5 Core release | README (with the AI-usage note), documentation, verified outputs, `DataProvider` interface, tag `v0.1.0` | §3.1, §3.4 | Core |
 | M6 HTTP API | FastAPI endpoints over the same service layer | §2 Option B, Ext. 1 | Extension |
-| M7 Web front end | React interface driving the workflow | Ext. 1 | Extension |
-| M8 SDMX validation | Data-quality rules and country-code checks against BIS structural metadata | Ext. 2 | Extension |
+| M7 SDMX validation | Data-quality rules and country-code checks against BIS structural metadata | Ext. 2 | Extension |
+| M8 Web front end | React interface driving the workflow | Ext. 1 | Extension |
 
 ---
 
@@ -173,8 +174,8 @@ it as parquet for the next stages.
 - Produce canonical data:
   - **observations**: series key, dimensions, date, value as an exact decimal, status, validity
     flag
-  - **series metadata**: title, unit, unit multiplier, decimals, source, notes on breaks, coverage
-    dates
+  - **series metadata**: title, unit, decimals, and the other series attributes (unit multiplier,
+    source, notes on breaks)
 - Missing values are kept and marked invalid, using the configured encoding. The source encodes
   them as `NaN` with status `M`. A value is valid only when the status is not `M` **and** the value
   is a valid number.
@@ -186,7 +187,8 @@ it as parquet for the next stages.
   - attribute values that differ from the configured expected values (source drift)
 
   The other rules named in the configuration (more decimals than the series declares, plausible
-  ranges, metadata constant within a series) come with M5.
+  ranges, metadata constant within a series) were planned for M5 and left for a later release
+  ([decision 0011](adr/0011-data-quality-rules.md)).
 - Every rule result is written to a machine-readable data-quality report.
 - The canonical data is stored as parquet: a raw copy of the source file as loaded, then the
   staged daily observations and the series metadata. The observations hold at most one row per
@@ -211,7 +213,8 @@ change in basis points.
 
 **Scope.**
 
-- The calculation is a pure function, `compute_snapshots(observations, requests)`, returning one
+- The calculation is a pure function, `compute_snapshots(args)`, where `args` is a `SnapshotArgs`
+  holding the observations, the requested codes and the settings, returning one
   `DataSnapshot` per requested area. The `report` command reads the staged
   observations and passes them in.
 - Take the parameters from the configuration: look-back length, staleness thresholds, area aliases.
@@ -222,7 +225,8 @@ change in basis points.
   observation on or before the target date. This covers weekends, holidays and series that only
   have business days.
 - The lookup is a binary search on each series' sorted dates, relying on the order of the
-  observations that M2 guarantees.
+  observations that M2 guarantees. Since #13 it is one search over all series
+  ([decision 0013](adr/0013-fast-analytics-numpy-numba.md)).
 - The change in basis points is computed in decimal arithmetic, so a move from `3.75` to `4.00` is
   exactly `25` bp.
 - Unknown areas, series with no valid data and series with too little history each return a status.
@@ -257,7 +261,8 @@ on small hand-made observation tables, in parallel with M1 and M2.
 **Scope.**
 
 - The metadata fields included in the outputs are chosen by the configuration.
-- Data-quality findings and provenance are read from the files `fetch` and `transform` write.
+- Data-quality findings and provenance are read through the provider, from the files `fetch` and
+  `transform` write.
 - `out/summary.csv` and `out/summary.json`. Every requested area gets a row, including failed ones
   with their status. Rows carry selected series metadata. The JSON adds the full metadata and the
   provenance from the `SourceRelease` (source location, version identifier, retrieval time),
@@ -303,11 +308,12 @@ checkpoint.
     versus written, how the code was validated, and concrete issues found
 - Documentation pages: architecture, configuration reference, data model and assumptions, CLI
   reference.
-- Manual check of a few computed values against the BIS Data Portal, recorded in the docs.
+- A check of the headline figures against an independent calculation on the raw CSV.
 - The `DataProvider` interface in front of the canonical data, an in-memory **fake provider** for
   tests, and shared interface tests that every provider passes: at most one row per series and
   date, sorted by date within each series, with the validity flag set.
-- The remaining data-quality rules of M2.
+- The remaining data-quality rules of M2. Left for a later release
+  ([decision 0011](adr/0011-data-quality-rules.md)): three configured rules are not built yet.
 - Committed outputs in `out/` and a `v0.1.0` tag.
 
 **Done when.** A fresh clone, following only the README, reproduces `out/`, and every deliverable
@@ -339,6 +345,9 @@ optional work begins.
 - The `config validate` and `config schema` commands, and options also read from environment
   variables and the configuration file, so the CLI and the API are configured the same way.
 - Follow-ups of the configuration package: clearer messages, earlier checks, less duplicated code.
+- Fast, exact analytics for the front end: the 12-month change of every area as of any date, the
+  change history and every rate move, on NumPy arrays, with Numba as an optional extra. The
+  report's snapshot uses the same search.
 
 **Done when.** API tests pass against the fake provider, and on the same canonical data the
 endpoints return the same numbers as `bis-prates report`.
@@ -348,29 +357,7 @@ without a UI, and it has to be in place before the front end can be built.
 
 ---
 
-## M7 — Web front end (extension)
-
-**Goal.** A small React interface for the workflow.
-
-**Scope.**
-
-- React with Vite, kept to a few small components.
-- Country selection.
-- Buttons to run retrieval, transformation and report generation, with processing status and
-  readable error messages.
-- A table of latest rates.
-- An interactive history chart, rendered with `react-plotly.js` from figure JSON that the API sends.
-- The front end computes nothing and talks only to the M6 API.
-
-**Done when.** One documented command starts the API and the UI, and the full workflow can be run
-from the browser.
-
-**Why it is its own milestone.** It is a separate technology stack with its own build and tests.
-Separating it from M6 keeps the concerns apart: the API is the contract, and the UI only consumes it.
-
----
-
-## M8 — SDMX validation (extension)
+## M7 — SDMX validation (extension)
 
 **Goal.** Validate the data, and the requested country codes, against BIS structural metadata.
 
@@ -395,12 +382,34 @@ Separating it from M6 keeps the concerns apart: the API is the contract, and the
   availability of the BIS SDMX API at run time. A run without it is not SDMX-validated, and says so.
 
 **Done when.** The new rules run as part of `transform`, invalid codes produce suggestions in the
-CLI (and in the API, when M6 is in place), tests cover a reachable, an unreachable and a mismatching
+CLI and in the API, tests cover a reachable, an unreachable and a mismatching
 reference using a fake reference source, and the known limitation is documented.
 
 **Why it is its own milestone.** It adds a second external source with its own failure modes. The
 core already handles unknown codes safely through statuses, so this strengthens validation and
 the user experience without being needed for correctness.
+
+---
+
+## M8 — Web front end (extension)
+
+**Goal.** A small React interface for the workflow.
+
+**Scope.**
+
+- React with Vite, kept to a few small components.
+- Country selection.
+- Buttons to run retrieval, transformation and report generation, with processing status and
+  readable error messages.
+- A table of latest rates.
+- An interactive history chart, rendered with `react-plotly.js` from figure JSON that the API sends.
+- The front end computes nothing and talks only to the M6 API.
+
+**Done when.** One documented command starts the API and the UI, and the full workflow can be run
+from the browser.
+
+**Why it is its own milestone.** It is a separate technology stack with its own build and tests.
+Separating it from M6 keeps the concerns apart: the API is the contract, and the UI only consumes it.
 
 ---
 
@@ -411,7 +420,7 @@ the user experience without being needed for correctness.
   can be built and tested alone, and a placeholder pipeline would add little confidence.
 - **Merging transform and snapshot.** Rejected. Data cleaning and the calculation fail in different
   ways and need different tests. Keeping them apart also keeps the calculation a pure function.
-- **One milestone for the whole web extension.** Rejected. Splitting the API (M6) from the UI (M7)
+- **One milestone for the whole web extension.** Rejected. Splitting the API (M6) from the UI (M8)
   keeps each pull request reviewable. It also makes the backend/frontend boundary explicit, which
   is the part of the extension that matters most.
 - **Building an SDMX data provider up front.** Rejected: with only one real source, the provider
@@ -427,12 +436,12 @@ Each milestone is a GitHub milestone. Its work is tracked in issues and done on 
 
 | Milestone | Status |
 |---|---|
-| M0 Foundations | Not started (project scaffold in place) |
-| M1 Acquisition | Not started |
-| M2 Canonical data & quality | Not started |
-| M3 Snapshot calculation | Not started |
-| M4 Reporting | Not started |
-| M5 Core release | Not started |
-| M6 HTTP API | Not started |
-| M7 Web front end | Not started |
-| M8 SDMX validation | Not started |
+| M0 Foundations | Done |
+| M1 Acquisition | Done |
+| M2 Canonical data & quality | Done, together with M1 |
+| M3 Snapshot calculation | Done |
+| M4 Reporting | Done, together with M3 |
+| M5 Core release | Done, released as `v0.1.0`; three data-quality rules left for a later release |
+| M6 HTTP API | Started: the fast analytics are done (#13) |
+| M7 SDMX validation | Not started |
+| M8 Web front end | Not started |
