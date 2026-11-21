@@ -1,16 +1,16 @@
 # Central bank policy rates
 
-Generated on 2026-11-21 at 16:28 UTC.
+Generated on 2026-11-21 at 21:02 UTC.
 
 ## Summary
 
 | Country or area | Code | Latest date | Latest (%) | Prior date | Prior (%) | Change (bp) | Status | Flags |
 |---|---|---|--:|---|--:|--:|---|---|
-| United States | US | 2026-11-17 | 3.8750 | 2025-11-17 | 3.8750 | 0 | ok | - |
-| Euro area | XM | 2026-11-17 | 2.5000 | 2025-11-17 | 2.0000 | 50 | ok | - |
-| United Kingdom | GB | 2026-11-16 | 4.0000 | 2025-11-14 | 4.0000 | 0 | ok | - |
-| Japan | JP | 2026-11-17 | 1.2500 | 2025-11-17 | 0.5000 | 75 | ok | - |
-| Switzerland | CH | 2026-11-17 | 0.0000 | 2025-11-17 | 0.0000 | 0 | ok | - |
+| United States | US | 2026-11-17 | 3.8750 | 2025-11-17 | 3.8750 | 0 | ✅ ok | - |
+| Euro area | XM | 2026-11-17 | 2.5000 | 2025-11-17 | 2.0000 | 50 | ✅ ok | - |
+| United Kingdom | GB | 2026-11-16 | 4.0000 | 2025-11-14 | 4.0000 | 0 | ✅ ok | - |
+| Japan | JP | 2026-11-17 | 1.2500 | 2025-11-17 | 0.5000 | 75 | ✅ ok | - |
+| Switzerland | CH | 2026-11-17 | 0.0000 | 2025-11-17 | 0.0000 | 0 | ✅ ok | - |
 
 ![Central bank policy rates](policy_rates.png)
 
@@ -37,16 +37,16 @@ The staged data holds 49 series.
 - Exact duplicate rows are dropped. When a series has two different values on the same date, the last one in the file is kept.
 - A latest rate more than 30 days older than the newest date in the data is flagged stale_latest; a prior rate more than 7 days before the target date is flagged stale_prior. A flag never hides a value.
 
-Statuses:
+### Status legend
 
-- ok: the latest rate, the prior rate and the change are known.
-- unknown_ref_area: the dataset has no series for the requested code.
-- no_valid_data: the series exists but has no valid observation.
-- insufficient_history: a latest rate exists, but the series has no valid observation on or before the target date, so there is no change.
+- ✅ ok: the latest rate, the prior rate and the change are known.
+- ❓ unknown_ref_area: the dataset has no series for the requested code.
+- 🚫 no_valid_data: the series exists but has no valid observation.
+- ⚠️ insufficient_history: a latest rate exists, but the series has no valid observation on or before the target date, so there is no change.
 
 ## Data quality
 
-No findings.
+✅ No findings.
 
 ## Limitations
 
