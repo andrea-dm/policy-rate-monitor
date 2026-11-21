@@ -27,3 +27,4 @@ all the same, so that the numbering stays in that order; its status says so.
 | [0013](0013-fast-analytics-numpy-numba.md) | Fast analytics: fixed-point arrays, NumPy kernels, Numba optional | 2026-11-19 | Accepted |
 | [0014](0014-http-api.md) | The HTTP API: one service for both interfaces, jobs one at a time, errors as kinds | 2026-11-21 | Accepted |
 | [0015](0015-report-templates-and-html.md) | The report pages from templates, with an offline chart and a PNG fallback | 2026-11-21 | Accepted |
+| [0016](0016-accessible-charts.md) | Accessible charts: tableau-colorblind10, dash patterns and line labels, shared by both charts | 2026-11-21 | Accepted |

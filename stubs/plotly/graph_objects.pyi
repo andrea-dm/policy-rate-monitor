@@ -1,5 +1,5 @@
-# The part of plotly.graph_objects that policy_rate_monitor.charts and report use (plotly ships no
-# types).
+# The part of plotly.graph_objects that policy_rate_monitor.chart.interactive uses (plotly
+# ships no types).
 from collections.abc import Sequence
 from datetime import date
 from typing import Any
@@ -13,6 +13,8 @@ class Scatter:
         name: str,
         mode: str = ...,
         line_shape: str = ...,
+        line: dict[str, Any] = ...,
+        hovertemplate: str = ...,
     ) -> None: ...
 
 class Figure:

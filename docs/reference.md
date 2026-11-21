@@ -93,13 +93,29 @@ for snapshot in snapshots:
 
 ::: policy_rate_monitor.report
 
-## Service and chart
+::: policy_rate_monitor.report.export
 
-`charts` needs the `interactive` extra (Plotly).
+::: policy_rate_monitor.report.summary
+
+::: policy_rate_monitor.report.pages
+
+## Charts
+
+`chart.interactive` needs the `interactive` extra (Plotly).
+
+::: policy_rate_monitor.chart
+
+::: policy_rate_monitor.chart.lines
+
+::: policy_rate_monitor.chart.style
+
+::: policy_rate_monitor.chart.static
+
+::: policy_rate_monitor.chart.interactive
+
+## Service
 
 ::: policy_rate_monitor.service
-
-::: policy_rate_monitor.charts
 
 ## HTTP API
 

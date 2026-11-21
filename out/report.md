@@ -1,6 +1,6 @@
 # Central bank policy rates
 
-Generated on 2026-11-21 at 21:02 UTC.
+Generated on 2026-11-21 at 22:14 UTC.
 
 ## Summary
 
@@ -12,7 +12,7 @@ Generated on 2026-11-21 at 21:02 UTC.
 | Japan | JP | 2026-11-17 | 1.2500 | 2025-11-17 | 0.5000 | 75 | ✅ ok | - |
 | Switzerland | CH | 2026-11-17 | 0.0000 | 2025-11-17 | 0.0000 | 0 | ✅ ok | - |
 
-![Central bank policy rates](policy_rates.png)
+![Central bank policy rates: a step chart of United States, Euro area, United Kingdom, Japan and Switzerland, in per cent, from 2015-01-01.](policy_rates.png)
 
 ## About the data
 

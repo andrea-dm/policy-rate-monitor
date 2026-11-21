@@ -117,9 +117,9 @@ def compute_snapshots(args: SnapshotArgs) -> list[DataSnapshot]:
 
     observations = args.observations
     keys = [series.series_key for _, _, series in requests if series is not None]
-    history = rate_history(observations[observations["series_key"].isin(keys)])
+    history = rate_history(observations[observations.series_key.isin(keys)])
     # Staleness is measured from the last date in the whole file, valid or not.
-    last_date: date = observations["date"].max() if len(observations) else EPOCH
+    last_date: date = observations.date.max() if len(observations) else EPOCH
     arrays = snapshot_at(history, day_number(last_date), args.settings.lookback_months)
 
     snapshots: list[DataSnapshot] = []

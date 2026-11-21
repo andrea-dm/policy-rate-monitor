@@ -148,13 +148,29 @@ It returns a [Plotly](https://plotly.com/javascript/) figure in JSON, with one s
 charted series, in the order requested: the same series and rows as `out/policy_rates.png`. A
 browser draws it with `Plotly.newPlot(div, figure.data, figure.layout)`.
 
+The n-th line has the same colour and dash as in the PNG, from the colour-blind palette of
+[decision 0016](adr/0016-accessible-charts.md). Each line is named at its right end by an
+annotation, the legend is below the plot, and the hover shows the date and the rate with the
+series' decimals. `layout.meta.description` holds the chart's text alternative, for the page that
+shows it. With nothing to chart, the figure has no lines and one annotation, "No data to plot".
+
 ```json
 {
   "data": [
-    {"name": "United States", "mode": "lines", "line": {"shape": "hv"}, "x": ["2015-01-01", "..."], "y": [0.125, "..."], "type": "scatter"},
-    {"name": "Euro area", "mode": "lines", "line": {"shape": "hv"}, "x": ["2015-01-01", "..."], "y": [0.05, "..."], "type": "scatter"}
+    {"name": "United States", "mode": "lines", "line": {"color": "#006BA4", "dash": "solid", "shape": "hv", "width": 2}, "hovertemplate": "%{x|%Y-%m-%d}: %{y:.4f}%", "x": ["2015-01-01", "..."], "y": [0.125, "..."], "type": "scatter"},
+    {"name": "Euro area", "mode": "lines", "line": {"color": "#C85200", "dash": "solid", "shape": "hv", "width": 2}, "hovertemplate": "%{x|%Y-%m-%d}: %{y:.4f}%", "x": ["2015-01-01", "..."], "y": [0.05, "..."], "type": "scatter"}
   ],
-  "layout": {"title": {"text": "Central bank policy rates"}, "yaxis": {"title": {"text": "Per cent"}}, "...": "..."}
+  "layout": {
+    "title": {"text": "Central bank policy rates"},
+    "yaxis": {"title": {"text": "Per cent"}},
+    "annotations": [
+      {"text": "United States", "x": "2026-11-17", "y": 3.875, "xanchor": "left", "xshift": 6, "showarrow": false, "font": {"color": "#006BA4"}},
+      {"text": "Euro area", "x": "2026-11-17", "y": 2.5, "xanchor": "left", "xshift": 6, "showarrow": false, "font": {"color": "#C85200"}}
+    ],
+    "legend": {"orientation": "h", "yanchor": "top", "y": -0.12},
+    "meta": {"description": "Central bank policy rates: a step chart of United States and Euro area, in per cent, from 2015-01-01."},
+    "...": "..."
+  }
 }
 ```
 

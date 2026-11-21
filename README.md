@@ -534,10 +534,17 @@ src/policy_rate_monitor/
 ├── transform.py            # Raw and staged tables from the cached ZIP
 ├── analytics.py            # Fixed-point arrays and the searches on them (pure; Numba optional)
 ├── snapshot.py             # Latest rate, prior rate and change per country or area (pure)
-├── report.py               # summary.csv, summary.json, policy_rates.png, report.md, report.html
-├── templates/              # report.md.j2 and report.html.j2, the two report pages
+├── report/                 # The five output files
+│   ├── export.py           # Report and ReportArgs: writes the five files
+│   ├── summary.py          # summary.csv and summary.json
+│   ├── pages.py            # report.md and report.html, from one context
+│   └── templates/          # report.md.j2 and report.html.j2
 ├── service.py              # The steps the CLI and the HTTP API share
-├── charts.py               # The Plotly figure of the policy rates (interactive extra)
+├── chart/                  # The two charts and the style they share
+│   ├── lines.py            # Which series get a line, and their valid rows
+│   ├── style.py            # Palette, dashes, line labels, text alternative (no plotting library)
+│   ├── static.py           # The PNG (matplotlib)
+│   └── interactive.py      # The Plotly figure (interactive extra)
 ├── web/                    # The HTTP API (web extra)
 │   ├── app.py              # The FastAPI routes and serve
 │   ├── jobs.py             # fetch, transform and report as background jobs
@@ -584,11 +591,12 @@ What the tests cover:
 | `tests/test_analytics.py` | the search against the plain `bisect` method at every date of a fixture; the NumPy and plain-loop versions of the searches agree, with and without Numba; the target date 12 months back; the change history and the rate moves against exact values; the arrays are read-only |
 | `tests/test_snapshot.py` | the 12-month change exactly in basis points; a target date on a weekend; 29 February; negative rates; invalid observations skipped; a different latest date per country or area; unknown code, insufficient history and no valid data; the `EA` alias; messy requested codes; the stale flags |
 | `tests/test_fetch.py` | the cache; the fallback URL; a download that is not a ZIP or holds two CSV files; the network down with and without a cached copy |
-| `tests/test_report.py` | the five files written from hand-made inputs, with the expected CSV and JSON values; `report.md` the same as before the templates; `report.html` with the same sections, its data escaped, nothing loaded from the network, and the PNG when Plotly is missing |
+| `tests/test_report.py` | the five files written from hand-made inputs, with the expected CSV and JSON values; the PNG in the same line styles as the Plotly chart, with the line ends named, "No data to plot" when empty, and its text alternative in the PNG, `report.md` and `report.html`; `report.md` the same as before the templates; `report.html` with the same sections, its data escaped, nothing loaded from the network, and the PNG when Plotly is missing |
 | `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; `report` before `transform` gives a one-line error; `config validate` and `config schema`; a bad configuration says where its path came from; `serve` without the `web` extra, with a bad configuration, and with its options; the base commands load neither FastAPI nor Plotly |
 | `tests/test_service.py` | the steps the CLI and the API share: the codes with their aliases, the valid observations of one series exactly, the summary; summaries computed at once on several threads agree |
 | `tests/web/` | `/summary` against the `summary.json` of `bis-prates report` for every status; exact rates in `/timeseries`; the chart's lines; every error with the same body (`404`, `405`, `409`, `422`, a bug as `500` without its detail); the jobs from queued to succeeded or failed, one at a time, new data after a transform, a report job writing the five files |
-| `tests/test_charts.py` | the Plotly chart has the same lines and rows as the PNG, in request order, from the start date |
+| `tests/chart/test_interactive.py` | the Plotly chart has the same lines and rows as the PNG, in request order, from the start date; the n-th line in the n-th style; the line ends named; "No data to plot" when empty; the text alternative; the hover with the series' decimals |
+| `tests/chart/test_style.py` | every line colour at 3:1 and every label colour at 4.5:1 on white; the colours apart under simulated protanopia, deuteranopia and tritanopia; the first 24 lines all different; the labels kept apart in order; the text alternative |
 | `tests/test_vocabulary.py` | no name, configuration key or sentence uses the bare word for a country or economic area |
 | `tests/test_settings.py` | the order of the layers (flag, environment variable, configuration or default) for the configuration file and the data directory; an empty variable counts as unset |
 | `tests/providers/` | the provider contract (canonical schema, one row per series and date, sorted dates, validity, metadata for every series), run on both providers; the row checks fail on tables built to break them; a provider missing a method cannot be created; the schema follows the configuration |

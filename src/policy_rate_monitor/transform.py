@@ -320,11 +320,11 @@ def _stage_observations(
                 attribute_values = _code(attribute_values, columns)
             staged[attribute.keep_as] = attribute_values
 
-    has_value = staged["value"].notna()
+    has_value = staged.value.notna()
     invalid_status = _invalid_status(data, config)
     staged["is_valid"] = has_value & ~invalid_status
 
-    no_date = staged["date"].isna()
+    no_date = staged.date.isna()
     is_missing = data[measure.id].isin(["", *columns.missing_values])
     _add_issues(
         issues,
@@ -530,7 +530,7 @@ def _series_metadata(
     """Builds one SeriesMetadata per kept series, from its last row in the file."""
     # Any row would do if the series attributes are constant within a series; that is
     # assumed, not checked, until the series_attribute_not_constant rule is built.
-    kept = set(observations["series_key"])
+    kept = set(observations.series_key)
     last_rows = keys.drop_duplicates(keep="last").sort_values()
     records = data.loc[last_rows.index].to_dict("records")
     series: list[SeriesMetadata] = []

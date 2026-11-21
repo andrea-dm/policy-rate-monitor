@@ -19,8 +19,9 @@ from typing import TYPE_CHECKING
 from pandas import ArrowDtype
 from pydantic import BaseModel, ConfigDict
 
+from policy_rate_monitor.chart.lines import valid_rows
 from policy_rate_monitor.core.models import Rate, SeriesMetadata
-from policy_rate_monitor.report import Report, ReportArgs, valid_rows
+from policy_rate_monitor.report import Report, ReportArgs
 from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
 
 if TYPE_CHECKING:
@@ -214,7 +215,7 @@ def timeseries(
         series=series,
         observations=tuple(
             Observation(date=day, value=value)
-            for day, value in zip(rows["date"], rows["value"], strict=True)
+            for day, value in zip(rows.date, rows.value, strict=True)
         ),
     )
 
