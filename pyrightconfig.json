@@ -35,6 +35,16 @@
       "reportUnnecessaryComparison": "none"
     },
     {
+      "root": "examples",
+      "extraPaths": ["./src"],
+      "reportMissingParameterType": "none",
+      "reportUnknownParameterType": "none",
+      "reportUnknownMemberType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportUnknownVariableType": "none",
+      "reportMissingTypeStubs": "none"
+    },
+    {
       "root": "housekeeping",
       "extraPaths": ["./housekeeping"],
       "reportUninitializedInstanceVariable": "none",

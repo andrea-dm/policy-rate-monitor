@@ -76,6 +76,12 @@ commands are the local equivalents.
 Do not silence a lint or type error without a reason; when a trade-off is needed, explain it in
 the pull request.
 
+The example notebooks in `examples/` are outside these checks. In the editor, Pylance checks them
+in strict mode, with the `examples` entry of `executionEnvironments` in `pyrightconfig.json`
+turning off the rules on missing or unknown types. The notebooks are short teaching code, with
+untyped helpers and matplotlib and Plotly calls. A `# pyright: basic` comment would not do the
+same: in a notebook it reaches only the cell it is in.
+
 ---
 
 ## Testing

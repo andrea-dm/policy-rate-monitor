@@ -272,7 +272,12 @@ Two notebooks in `examples/` go through the three commands from Python, run in t
    computes the 12-month change for five countries or areas and plots their rates, as `report` does,
    then draws the same chart with Plotly, as the HTTP API's `/chart` returns it.
 
-They need the `jupyter` group, and the `interactive` extra for the Plotly chart:
+A third one, [http_api.ipynb](examples/http_api.ipynb), uses only the HTTP API, as a web page
+would. Start `bis-prates serve` in a terminal first; the notebook then runs the jobs and reads the
+summary, a time series and the chart over HTTP, without importing the package.
+
+They need the `jupyter` group, and the `interactive` extra for the Plotly chart (and `web` for
+`serve`):
 
 ```bash
 uv sync --all-groups --all-extras

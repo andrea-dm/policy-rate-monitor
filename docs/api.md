@@ -320,6 +320,10 @@ checks who calls.
 
 ## See also
 
+[`examples/http_api.ipynb`](https://github.com/andrea-dm/policy-rate-monitor/blob/develop/examples/http_api.ipynb)
+calls every endpoint from Python, without importing the package: start `bis-prates serve`, then
+run it.
+
 [`policy_rate_monitor.web.app`](reference.md#policy_rate_monitor.web.app),
 [`policy_rate_monitor.web.jobs`](reference.md#policy_rate_monitor.web.jobs),
 [`policy_rate_monitor.web.errors`](reference.md#policy_rate_monitor.web.errors) and

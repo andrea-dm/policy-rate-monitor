@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `examples/http_api.ipynb`, which uses only the HTTP API: start `bis-prates serve`, then the
+  notebook runs the jobs and reads the summary, a time series and the chart over HTTP.
 - The HTTP API: `GET /ref-areas`, `/summary`, `/timeseries` and `/chart`, and `fetch`,
   `transform` and `report` as background jobs with a status endpoint, one at a time. Errors
   are one JSON body, `{"error": kind, "message": ...}`, with a status per kind. See

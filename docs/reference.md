@@ -5,7 +5,7 @@ the docstrings run as tests, so they are kept true.
 
 ## Use from Python
 
-The package can be used without the command line, for example in a notebook. Two example
+The package can be used without the command line, for example in a notebook. Three example
 notebooks, which need the `jupyter` dependency group (and the `interactive` extra for the Plotly
 chart), do what the commands do:
 
@@ -13,7 +13,10 @@ chart), do what the commands do:
   downloads the BIS file and stages it, as `fetch` and `transform` do;
 - [`examples/policy_rates.ipynb`](https://github.com/andrea-dm/policy-rate-monitor/blob/develop/examples/policy_rates.ipynb)
   loads the staged data through the provider, computes the 12-month change and plots the rates,
-  as `report` does, then draws the same chart with Plotly, as the HTTP API's `/chart` returns it.
+  as `report` does, then draws the same chart with Plotly, as the HTTP API's `/chart` returns it;
+- [`examples/http_api.ipynb`](https://github.com/andrea-dm/policy-rate-monitor/blob/develop/examples/http_api.ipynb)
+  does the same over HTTP only, against a running `bis-prates serve`: the jobs, the summary, a
+  time series, the chart, the report job and the error bodies.
 
 The same steps as a script:
 
