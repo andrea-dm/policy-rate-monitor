@@ -65,7 +65,8 @@ without a network. This record settles the open point of
   missing.
   - The emoji is never the only cue: the name is always written beside it (WCAG 1.3.3), so a
     reader who does not know an emoji, or whose system does not draw it, loses nothing.
-  - The list of statuses shows the same emoji, so it doubles as the key.
+  - The list of statuses shows the same emoji, so it doubles as the key. On both pages it has a
+    sub-heading of its own, "Status legend", so a reader, or a screen reader, can jump to it.
   - In the HTML page the emoji is hidden from screen readers (`aria-hidden="true"`), which would
     otherwise read its name before each value. Markdown has no such attribute, so a screen
     reader reads the emoji's name there; the HTML page is the one to use with one.

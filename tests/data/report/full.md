@@ -35,7 +35,7 @@ The staged data holds 1 series.
 - Exact duplicate rows are dropped. When a series has two different values on the same date, the last one in the file is kept.
 - A latest rate more than 30 days older than the newest date in the data is flagged stale_latest; a prior rate more than 7 days before the target date is flagged stale_prior. A flag never hides a value.
 
-Statuses:
+### Status legend
 
 - ✅ ok: the latest rate, the prior rate and the change are known.
 - ❓ unknown_ref_area: the dataset has no series for the requested code.

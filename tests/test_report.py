@@ -226,6 +226,7 @@ def test_report_html_has_the_sections_of_report_md(
         "Limitations",
     ]
     assert re.findall(r"<h2 id=\"[a-z]+\">(.+)</h2>", page) == sections
+    assert '<h3 id="status-legend">Status legend</h3>\n\n<dl>' in page
     assert f"<h1>{config.dataset.title}</h1>" in page
     rows = re.findall(r"<tr>\n(.*?)\n</tr>", page, re.DOTALL)
     assert rows[1] == (
