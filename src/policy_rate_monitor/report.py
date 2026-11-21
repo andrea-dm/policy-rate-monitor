@@ -38,7 +38,7 @@ if TYPE_CHECKING:
         SourceRelease,
     )
 
-__all__ = ["Report", "ReportArgs"]
+__all__ = ["Report", "ReportArgs", "charted_series", "summary_document", "valid_rows"]
 
 CHART_FILE = "policy_rates.png"
 """File name of the chart in the output folder."""
@@ -134,13 +134,7 @@ class Report:
         _write_csv(args.snapshots, config.output.metadata_fields, csv_path)
 
         json_path = out_dir / "summary.json"
-        release = args.release
-        summary = {
-            "generated_at": generated_at.isoformat(),
-            "source": None if release is None else release.model_dump(mode="json"),
-            "dataset": {"id": config.dataset.id, "title": config.dataset.title},
-            "snapshots": [item.model_dump(mode="json") for item in args.snapshots],
-        }
+        summary = summary_document(config, args.snapshots, args.release, generated_at)
         json_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
         chart_path = out_dir / CHART_FILE
@@ -303,36 +297,92 @@ def _write_csv(
             )
 
 
+def summary_document(
+    config: DatasetConfig,
+    snapshots: Sequence[DataSnapshot],
+    release: SourceRelease | None,
+    generated_at: datetime,
+) -> dict[str, object]:
+    """Returns the content of ``summary.json``, which the HTTP API also returns.
+
+    Args:
+        config: The dataset configuration.
+        snapshots: One snapshot per requested country or area.
+        release: Where and when the source file was retrieved; ``None`` if unknown.
+        generated_at: When the summary was made.
+
+    Returns:
+        A JSON-ready dict: ``generated_at``, ``source``, ``dataset`` and
+        ``snapshots``.
+    """
+    return {
+        "generated_at": generated_at.isoformat(),
+        "source": None if release is None else release.model_dump(mode="json"),
+        "dataset": {"id": config.dataset.id, "title": config.dataset.title},
+        "snapshots": [item.model_dump(mode="json") for item in snapshots],
+    }
+
+
+def charted_series(snapshots: Sequence[DataSnapshot]) -> list[SeriesMetadata]:
+    """Returns the series that get a line on a chart, once each, in request order.
+
+    A country or economic area gets a line when it has a latest rate (status ok or
+    insufficient history).
+
+    Args:
+        snapshots: One snapshot per requested country or area.
+
+    Returns:
+        The metadata of each charted series.
+    """
+    charted: dict[str, SeriesMetadata] = {}
+    for snapshot in snapshots:
+        series = snapshot.series
+        if snapshot.status in _CHARTED and series is not None:
+            charted.setdefault(series.series_key, series)
+    return list(charted.values())
+
+
+def valid_rows(
+    observations: DataFrame, series_key: str, start: date | None = None
+) -> DataFrame:
+    """Returns the valid observations of one series, from *start* on.
+
+    Args:
+        observations: The staged observations.
+        series_key: The series to keep.
+        start: The first date to keep; ``None`` keeps the whole history.
+
+    Returns:
+        The rows, in the order of *observations* (by date for staged data).
+    """
+    rows = observations[
+        (observations["series_key"] == series_key) & observations["is_valid"]
+    ]
+    if start is not None:
+        rows = rows[rows["date"] >= start]
+    return rows
+
+
 def _write_chart(args: ReportArgs, title: str, path: Path) -> None:
-    observations = args.observations
     # A bare Figure draws with the Agg canvas and leaves pyplot's global state alone.
     figure = Figure(figsize=(10, 5.5), layout="constrained")
     axes = figure.add_subplot()
-    plotted: set[str] = set()
-    for snapshot in args.snapshots:
-        if snapshot.status not in _CHARTED or snapshot.series is None:
-            continue
-        key = snapshot.series.series_key
-        if key in plotted:
-            continue
-        plotted.add(key)
-        rows = observations[
-            (observations["series_key"] == key) & observations["is_valid"]
-        ]
-        if args.start is not None:
-            rows = rows[rows["date"] >= args.start]
+    charted = charted_series(args.snapshots)
+    for series in charted:
+        rows = valid_rows(args.observations, series.series_key, args.start)
         # Floats only for drawing; every number in the files stays an exact decimal.
         values = [float(value) for value in rows["value"]]
         axes.step(
             rows["date"].tolist(),
             values,
             where="post",
-            label=snapshot.series.ref_area_name,
+            label=series.ref_area_name,
         )
     axes.set_title(title)
     axes.set_ylabel("Per cent")
     axes.grid(visible=True, alpha=0.3)
-    if plotted:
+    if charted:
         axes.legend()
     else:
         axes.text(0.5, 0.5, "No data to plot", ha="center", transform=axes.transAxes)

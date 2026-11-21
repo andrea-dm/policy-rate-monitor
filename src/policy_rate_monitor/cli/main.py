@@ -11,15 +11,13 @@ See also: [CLI reference](cli.md).
 
 from __future__ import annotations
 
-import argparse
 import logging
 import os
 import sys
+from argparse import ArgumentParser, Namespace
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-from pandas import ArrowDtype
 
 from policy_rate_monitor import __version__
 from policy_rate_monitor.bulk import BulkFileProvider
@@ -28,7 +26,7 @@ from policy_rate_monitor.config import FileConfigSource
 from policy_rate_monitor.config.schema import render_json_schema
 from policy_rate_monitor.core.errors import ConfigError, PolicyRateMonitorError
 from policy_rate_monitor.core.models import SnapshotStatus
-from policy_rate_monitor.report import Report, ReportArgs
+from policy_rate_monitor.service import load_staged, summary, write_report
 from policy_rate_monitor.settings import (
     CONFIG_VARIABLE,
     DATA_DIR_VARIABLE,
@@ -38,7 +36,6 @@ from policy_rate_monitor.settings import (
     config_path,
     data_dir,
 )
-from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -96,19 +93,19 @@ def main(
         return ExitCode.INTERNAL_ERROR
 
 
-def _parser() -> argparse.ArgumentParser:
-    debug = argparse.ArgumentParser(add_help=False)
+def _parser() -> ArgumentParser:
+    debug = ArgumentParser(add_help=False)
     debug.add_argument(
         "--debug", action="store_true", help="show the traceback of an error"
     )
-    with_config = argparse.ArgumentParser(add_help=False, parents=[debug])
+    with_config = ArgumentParser(add_help=False, parents=[debug])
     with_config.add_argument(
         "--config",
         type=Path,
         help=f"the dataset configuration (default: ${CONFIG_VARIABLE}, "
         f"else {DEFAULT_CONFIG})",
     )
-    with_data = argparse.ArgumentParser(add_help=False, parents=[with_config])
+    with_data = ArgumentParser(add_help=False, parents=[with_config])
     with_data.add_argument(
         "--data-dir",
         type=Path,
@@ -116,7 +113,7 @@ def _parser() -> argparse.ArgumentParser:
         "else dataset.data_dir in the configuration)",
     )
 
-    parser = argparse.ArgumentParser(
+    parser = ArgumentParser(
         prog="bis-prates", description="Monitor central-bank policy rates."
     )
     parser.add_argument(
@@ -192,21 +189,21 @@ def _where(path: Setting) -> str:
 
 
 def _open(
-    args: argparse.Namespace, environ: Mapping[str, str]
+    args: Namespace, environ: Mapping[str, str]
 ) -> tuple[DatasetConfig, BulkFileProvider]:
     config = _load(config_path(args.config, environ))
     directory = data_dir(args.data_dir, environ, config)
     return config, BulkFileProvider(config, directory.value)
 
 
-def _fetch(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
+def _fetch(args: Namespace, environ: Mapping[str, str]) -> int:
     _config, provider = _open(args, environ)
     release = provider.fetch()
     sys.stdout.write(f"{release.location} (sha256 {release.checksum_sha256})\n")
     return ExitCode.OK
 
 
-def _transform(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
+def _transform(args: Namespace, environ: Mapping[str, str]) -> int:
     _config, provider = _open(args, environ)
     provider.transform()
     observations = provider.observations().num_rows
@@ -219,40 +216,14 @@ def _transform(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
     return ExitCode.OK
 
 
-def _report(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
+def _report(args: Namespace, environ: Mapping[str, str]) -> int:
     config, provider = _open(args, environ)
-    # Arrow types kept, so values stay Decimal. The stubs leave a parameter of
-    # to_pandas untyped.
-    table = provider.observations()
-    observations = table.to_pandas(types_mapper=ArrowDtype)  # pyright: ignore[reportUnknownMemberType]
-    series = [provider.series_metadata(key) for key in provider.list_series()]
-    issues = provider.data_quality_issues()
-    release = provider.source_release()
-
-    snapshots = compute_snapshots(
-        SnapshotArgs(
-            observations=observations,
-            series=series,
-            # compute_snapshots strips, upper-cases and drops the empty codes.
-            requested=args.countries.split(","),
-            settings=config.snapshot,
-            ref_area_aliases=config.ref_area_aliases,
-        )
-    )
-    paths = Report(config).export(
-        ReportArgs(
-            snapshots=snapshots,
-            observations=observations,
-            series=series,
-            issues=issues,
-            release=release,
-            out_dir=args.out,
-            start=args.start,
-        )
-    )
-    for path in paths:
+    data = load_staged(provider)
+    # The summary strips, upper-cases and drops the empty codes.
+    snapshots = summary(config, data, args.countries.split(","))
+    for path in write_report(config, data, snapshots, args.out, args.start):
         sys.stdout.write(f"{path}\n")
-    warning = _unknown_ref_area_warning(snapshots, series, config.ref_area_aliases)
+    warning = _unknown_ref_area_warning(snapshots, data.series, config.ref_area_aliases)
     if warning:
         sys.stderr.write(warning)
     if not any(item.status == SnapshotStatus.OK for item in snapshots):
@@ -263,14 +234,14 @@ def _report(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
     return ExitCode.OK
 
 
-def _validate(args: argparse.Namespace, environ: Mapping[str, str]) -> int:
+def _validate(args: Namespace, environ: Mapping[str, str]) -> int:
     path = config_path(args.config, environ)
     _load(path)
     sys.stdout.write(f"{path.value}: valid ({_where(path)})\n")
     return ExitCode.OK
 
 
-def _schema(_args: argparse.Namespace, _environ: Mapping[str, str]) -> int:
+def _schema(_args: Namespace, _environ: Mapping[str, str]) -> int:
     # TODO(andrea-dm): refuse to run under python -OO, which strips the docstrings
     # the schema's descriptions are read from.
     # https://github.com/andrea-dm/policy-rate-monitor/issues/8
