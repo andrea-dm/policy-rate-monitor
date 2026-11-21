@@ -450,6 +450,32 @@ jobs:
           path: sbom.json
           retention-days: 90 # the default maximum on a private repository
 
+  # The documentation site as a ZIP that opens from the disk, attached to each release, so
+  # the docs can be read without GitHub Pages.
+  docs-site:
+    needs: route
+    if: needs.route.outputs.kind == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true # never blocks a release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PY_VERSION }}
+      - run: uv sync --locked --only-group docs
+      - run: uv run mkdocs build --strict --site-dir site
+        env:
+          OFFLINE: "true"
+      - name: Zip the site
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: cd site && zip -qr "../policy-rate-monitor-docs-$TAG.zip" .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docs-site
+          path: policy-rate-monitor-docs-*.zip
+
   # Versioned docs with mike on the gh-pages branch, which GitHub Pages serves as it is:
   # `dev` follows develop, `stable` the latest release.
   build-docs:
@@ -512,7 +538,7 @@ jobs:
   # Attaches the built distributions and the SBOM to the published GitHub release, so
   # every release carries the exact files that passed the smoke test.
   release-github:
-    needs: [route, build-package, wheel-smoke, sbom]
+    needs: [route, build-package, wheel-smoke, sbom, docs-site]
     if: >-
       ${{ !cancelled() && needs.route.outputs.kind == 'release'
       && needs.build-package.result == 'success' && needs.wheel-smoke.result == 'success' }}
@@ -532,6 +558,10 @@ jobs:
         continue-on-error: true # the SBOM never blocks a release
         with:
           name: sbom
+      - uses: actions/download-artifact@v8
+        continue-on-error: true # nor does the docs site
+        with:
+          name: docs-site
       - name: Attach the assets to the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -540,6 +570,9 @@ jobs:
           files=(dist/*)
           if [ -f sbom.json ]; then
             files+=(sbom.json)
+          fi
+          if [ -f "policy-rate-monitor-docs-$TAG.zip" ]; then
+            files+=("policy-rate-monitor-docs-$TAG.zip")
           fi
           gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY"
 

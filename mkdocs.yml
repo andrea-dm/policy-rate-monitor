@@ -5,6 +5,10 @@ theme:
   name: material
 plugins:
   - search
+  # OFFLINE=true builds a site that opens from the disk (file://), for the copy attached to
+  # each GitHub release.
+  - offline:
+      enabled: !ENV [OFFLINE, false]
   - mkdocstrings:
       handlers:
         python:

@@ -158,7 +158,8 @@ The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 6. On GitHub, create a **Release** with a new tag `vX.Y.Z` on `main`, named `X.Y.Z`, with the
    changelog section as its description. Publishing the release starts the CI release run, which
    checks that the tag matches the version in `pyproject.toml`, builds the package and tests the
-   wheel.
+   wheel. The release gets the wheel, the sdist, the SBOM (`sbom.json`) and the documentation
+   site as `policy-rate-monitor-docs-vX.Y.Z.zip`.
 
 ---
 

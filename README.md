@@ -357,7 +357,13 @@ uv run mkdocs build --strict
 | `pytest` | tests and docstring examples |
 | `mkdocs build --strict` | the docs site, with every link and anchor |
 
-Preview the docs with `uv run mkdocs serve`.
+Preview the docs with `uv run mkdocs serve`. Each GitHub release also carries the built site,
+`policy-rate-monitor-docs-<tag>.zip`: unzip it and open `index.html`. The diagrams need an
+internet connection; the rest works offline.
+
+```bash
+OFFLINE=true uv run mkdocs build --strict   # the same site, into site/
+```
 
 ---
 

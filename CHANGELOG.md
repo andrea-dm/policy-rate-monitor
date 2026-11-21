@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `BIS_PRATES_CONFIG` and `BIS_PRATES_DATA_DIR`, read when `--config` or `--data-dir` is not
   given; a configuration that cannot be loaded is reported with where its path came from (#7).
 - `bis-prates --version` (#7).
+- Each GitHub release carries the documentation site as a ZIP that opens from the disk,
+  `policy-rate-monitor-docs-<tag>.zip`.
 
 ### Changed
 
