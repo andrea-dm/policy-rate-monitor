@@ -215,7 +215,7 @@ def timeseries(
         series=series,
         observations=tuple(
             Observation(date=day, value=value)
-            for day, value in zip(rows["date"], rows["value"], strict=True)
+            for day, value in zip(rows.date, rows.value, strict=True)
         ),
     )
 

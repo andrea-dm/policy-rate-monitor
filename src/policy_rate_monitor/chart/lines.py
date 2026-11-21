@@ -57,9 +57,7 @@ def valid_rows(
     Returns:
         The rows, in the order of *observations* (by date for staged data).
     """
-    rows = observations[
-        (observations["series_key"] == series_key) & observations["is_valid"]
-    ]
+    rows = observations[(observations.series_key == series_key) & observations.is_valid]
     if start is not None:
-        rows = rows[rows["date"] >= start]
+        rows = rows[rows.date >= start]
     return rows

@@ -63,9 +63,9 @@ def rate_figure(
     for index, series in enumerate(charted):
         rows = valid_rows(observations, series.series_key, start)
         style = line_style(index)
-        dates = rows["date"].tolist()
+        dates = rows.date.tolist()
         # Floats only for drawing; every number in the API's JSON stays exact.
-        values = [float(value) for value in rows["value"]]
+        values = [float(value) for value in rows.value]
         figure.add_trace(
             Scatter(
                 x=dates,

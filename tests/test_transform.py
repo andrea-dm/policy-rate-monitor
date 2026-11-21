@@ -128,10 +128,10 @@ def test_missing_values_are_kept_and_marked_invalid(tmp_path: Path) -> None:
     transform(make_config(), tmp_path)
 
     observations = load_observations(tmp_path)
-    assert observations["value"].tolist()[0] == Decimal("5.25")
-    assert observations["value"].isna().tolist() == [False, True, True]
-    assert observations["is_valid"].tolist() == [True, False, False]
-    assert observations["obs_status"].tolist() == ["A", "M", "A"]
+    assert observations.value.tolist()[0] == Decimal("5.25")
+    assert observations.value.isna().tolist() == [False, True, True]
+    assert observations.is_valid.tolist() == [True, False, False]
+    assert observations.obs_status.tolist() == ["A", "M", "A"]
 
 
 def test_duplicates_are_dropped_and_reported(tmp_path: Path) -> None:
@@ -145,7 +145,7 @@ def test_duplicates_are_dropped_and_reported(tmp_path: Path) -> None:
     summary = transform(make_config(), tmp_path)
 
     observations = load_observations(tmp_path)
-    assert observations["value"].tolist() == [Decimal("5.25"), Decimal("5.50")]
+    assert observations.value.tolist() == [Decimal("5.25"), Decimal("5.50")]
     issues = {issue.rule: issue for issue in load_data_quality(tmp_path)}
     assert issues["exact_duplicate"].count == 1
     assert issues["conflicting_duplicate"].count == 1
@@ -162,7 +162,7 @@ def test_only_the_selected_frequency_is_kept(tmp_path: Path) -> None:
     transform(make_config(), tmp_path)
 
     observations = load_observations(tmp_path)
-    assert observations["series_key"].tolist() == ["D.US"]
+    assert observations.series_key.tolist() == ["D.US"]
     assert [series.series_key for series in load_series(tmp_path)] == ["D.US"]
 
 
@@ -190,9 +190,9 @@ def test_a_value_with_more_decimals_than_the_type_is_never_rounded(
     transform(make_config(rules=rules), tmp_path)
 
     observations = load_observations(tmp_path)
-    assert observations["value"].isna().tolist() == [True, False]
-    assert observations["value"].tolist()[1] == Decimal("3.123456")
-    assert observations["is_valid"].tolist() == [False, True]
+    assert observations.value.isna().tolist() == [True, False]
+    assert observations.value.tolist()[1] == Decimal("3.123456")
+    assert observations.is_valid.tolist() == [False, True]
     [issue] = load_data_quality(tmp_path)
     assert (issue.rule, issue.count) == ("non_numeric_value", 1)
 
