@@ -317,9 +317,9 @@ contrast is high ([decision 0015](adr/0015-report-templates-and-html.md)).
     `test_report_html_hides_its_emoji_from_screen_readers`,
     `test_the_png_draws_the_n_th_line_with_the_n_th_line_style`,
     `test_the_png_names_each_line_at_its_end`, `test_an_empty_png_says_so`,
-    `test_the_chart_carries_its_text_alternative`; `tests/test_charts.py`:
+    `test_the_chart_carries_its_text_alternative`; `tests/chart/test_interactive.py`:
     `test_the_n_th_line_has_the_n_th_line_style`, `test_each_line_is_named_at_its_end`,
-    `test_a_chart_with_no_line_says_so`; `tests/test_chart_style.py`:
+    `test_a_chart_with_no_line_says_so`; `tests/chart/test_style.py`:
     `test_every_line_colour_has_3_to_1_on_white`,
     `test_the_colours_stay_apart_with_a_colour_vision_deficiency`,
     `test_the_first_24_lines_all_differ_then_the_styles_repeat`.

@@ -16,8 +16,8 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-from policy_rate_monitor import report
-from policy_rate_monitor.chart_style import NO_DATA, alt_text, line_style
+from policy_rate_monitor.chart import static
+from policy_rate_monitor.chart.style import NO_DATA, alt_text, line_style
 from policy_rate_monitor.config import DatasetConfig, parse_config
 from policy_rate_monitor.core.models import (
     DataQualityIssue,
@@ -296,7 +296,9 @@ def test_without_plotly_report_html_embeds_the_png(
     config: DatasetConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # As if the interactive extra were not installed: charts must be imported afresh.
-    monkeypatch.delitem(sys.modules, "policy_rate_monitor.charts", raising=False)
+    monkeypatch.delitem(
+        sys.modules, "policy_rate_monitor.chart.interactive", raising=False
+    )
     monkeypatch.setitem(sys.modules, "plotly", None)
     monkeypatch.setitem(sys.modules, "plotly.graph_objects", None)
 
@@ -369,7 +371,7 @@ def test_the_png_draws_the_n_th_line_with_the_n_th_line_style(
         out_dir=tmp_path,
     )
 
-    figure = report._chart_figure(args, "Rates")
+    figure = static.rate_chart("Rates", args.snapshots, args.observations)
 
     (axes,) = figure.axes
     lines = axes.get_lines()
@@ -390,13 +392,14 @@ def test_the_png_draws_the_n_th_line_with_the_n_th_line_style(
 
 @pytest.mark.contract
 def test_the_png_dash_pattern_is_the_style_in_pixels() -> None:
-    assert report._matplotlib_dash(()) == "solid"
-    assert report._matplotlib_dash((8, 4)) == (0, (4.0, 2.0))
+    assert static._matplotlib_dash(()) == "solid"
+    assert static._matplotlib_dash((8, 4)) == (0, (4.0, 2.0))
 
 
 @pytest.mark.contract
 def test_the_png_names_each_line_at_its_end(tmp_path: Path) -> None:
-    figure = report._chart_figure(_full_args(tmp_path), "Rates")
+    args = _full_args(tmp_path)
+    figure = static.rate_chart("Rates", args.snapshots, args.observations)
 
     (axes,) = figure.axes
     (label,) = axes.texts
@@ -406,7 +409,8 @@ def test_the_png_names_each_line_at_its_end(tmp_path: Path) -> None:
 
 @pytest.mark.contract
 def test_an_empty_png_says_so(tmp_path: Path) -> None:
-    figure = report._chart_figure(_empty_args(tmp_path), "Rates")
+    args = _empty_args(tmp_path)
+    figure = static.rate_chart("Rates", args.snapshots, args.observations)
 
     (axes,) = figure.axes
     assert [text.get_text() for text in axes.texts] == [NO_DATA]

@@ -42,8 +42,7 @@ flowchart BT
     snapshot["snapshot"]
     report["report"]
     service["service<br/>the steps both adapters share"]
-    charts["charts<br/>Plotly figure (interactive extra)"]
-    chart_style["chart_style<br/>colours, dashes, labels, alt text"]
+    chart["chart<br/>PNG, Plotly figure (interactive extra), shared style"]
     web["web<br/>HTTP API (web extra)"]
     settings["settings<br/>where the options come from"]
     cli["cli"]
@@ -57,25 +56,25 @@ flowchart BT
     providers --> bulk
     analytics --> snapshot
     config --> report
-    chart_style --> report
-    chart_style --> charts
+    core --> chart
     providers --> service
     snapshot --> service
     report --> service
-    report --> charts
-    charts --> web
+    chart --> report
+    chart --> service
+    chart --> web
     service --> web
     providers --> web
     service --> cli
     bulk --> cli
     web -.-> cli
-    charts -.-> report
     config --> settings
     settings --> cli
 ```
 
-The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, and `report` imports
-`charts` only when Plotly is installed, so the base install never loads FastAPI or Plotly. The diagram shows the main arrows; the full list of allowed imports of each
+The dotted arrow is a lazy import: `cli` imports `web` only inside `serve`. In the same way,
+`report` imports `chart.interactive` only when Plotly is installed, so the base install never
+loads FastAPI or Plotly. The diagram shows the main arrows; the full list of allowed imports of each
 module is in `tach.toml`.
 
 | Module | What it does | Reads or writes |
@@ -88,11 +87,10 @@ module is in `tach.toml`.
 | `bulk` | `BulkFileProvider`: the provider over the bulk-download file, built on `fetch` and `transform` | through `fetch` and `transform` |
 | `analytics` | The staged observations as fixed-point NumPy arrays, and the searches on them: the snapshot at any date, the change history, the rate moves | nothing |
 | `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested country or area | nothing |
-| `report` | Writes the summary files, the chart and the two report pages, `report.md` and `report.html`, from the snapshots it is given, through the templates in `templates/`. Imports `charts` only inside the function that draws the HTML chart, when Plotly is installed | `out/` |
-| `chart_style` | The look both charts share: the colour-blind palette, the dash patterns, the colours of the line labels and where they go, the text alternative and the "No data to plot" message. Imports no plotting library, so the base install and the `interactive` extra use it alike | nothing |
-| `service` | The steps the CLI and the HTTP API share: `load_staged`, `ref_areas`, `summary`, `timeseries` and `write_report`. Imports `report`, `snapshot`, `providers`, `config` and `core` | `out/`, through `report` |
-| `charts` | `rate_figure`: the Plotly figure of the policy rates, drawn from the same series and rows as the report's PNG, in the same style. Imports `report`, `chart_style` and `core`; needs the `interactive` extra | nothing |
-| `web` | The HTTP API (FastAPI): routes, background jobs, error bodies. An adapter beside `cli`. Imports `service`, `charts`, `report`, `providers`, `config` and `core`; needs the `web` extra | `data/raw/` and `data/staged/` through the provider (the `fetch` and `transform` jobs); `out/` for `report` jobs |
+| `chart` | The two charts and what they share: `lines` (which series get a line, and their valid rows), `style` (the colour-blind palette, the dash patterns, the line labels, the text alternative and the "No data to plot" message, with no plotting library), `static` (the PNG, matplotlib) and `interactive` (`rate_figure`, the Plotly figure; needs the `interactive` extra). Imports `core` | nothing |
+| `report` | Writes the five output files: `export` (`Report`, `ReportArgs`), `summary` (`summary.csv`, `summary.json`) and `pages` (`report.md` and `report.html`, from the templates in `report/templates/`). Imports `chart`, `config` and `core`; imports `chart.interactive` only inside the function that draws the HTML chart, when Plotly is installed | `out/` |
+| `service` | The steps the CLI and the HTTP API share: `load_staged`, `ref_areas`, `summary`, `timeseries` and `write_report`. Imports `report`, `chart`, `snapshot`, `providers`, `config` and `core` | `out/`, through `report` |
+| `web` | The HTTP API (FastAPI): routes, background jobs, error bodies. An adapter beside `cli`. Imports `service`, `chart`, `report`, `providers`, `config` and `core`; needs the `web` extra | `data/raw/` and `data/staged/` through the provider (the `fetch` and `transform` jobs); `out/` for `report` jobs |
 | `settings` | Where the configuration file and the data directory come from: the command line, an environment variable, the configuration or a default; shared by the CLI and the HTTP API | nothing |
 | `cli` | The `bis-prates` command: parses the arguments, calls `service` and the provider, prints, returns an exit code; `serve` imports `web` only when it runs | nothing directly |
 
@@ -236,6 +234,6 @@ class ServiceConfigSource(ConfigSource):
 ### Optional extras
 
 The parts that need more than the base install come as optional extras: `fast` (Numba),
-`interactive` (Plotly, for `charts`) and `web` (FastAPI, Starlette, uvicorn, and `interactive`, for `web`).
+`interactive` (Plotly, for `chart.interactive`) and `web` (FastAPI, Starlette, uvicorn, and `interactive`, for `web`).
 Nothing in the base layers imports them; `bis-prates serve` imports `web` only when it runs, and
 prints a message naming the extra when it is missing.

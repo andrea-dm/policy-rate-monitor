@@ -1,9 +1,8 @@
 """The interactive chart of the policy rates, as a Plotly figure.
 
 It draws the same series and the same rows as the report's ``policy_rates.png``
-(``charted_series`` and ``valid_rows`` in ``report``), in the same style
-(``chart_style``). The HTTP API returns it as JSON for the web front end, and
-``report.html`` embeds it; it needs the ``interactive`` extra (Plotly).
+(``lines``), in the same style (``style``). The HTTP API returns it as JSON for the web
+front end, and ``report.html`` embeds it; it needs the ``interactive`` extra (Plotly).
 
 See also: [HTTP API](api.md) and decisions
 [0002](adr/0002-charting-and-report-format.md) and
@@ -16,7 +15,8 @@ from typing import TYPE_CHECKING
 
 from plotly.graph_objects import Figure, Scatter
 
-from policy_rate_monitor.chart_style import (
+from policy_rate_monitor.chart.lines import charted_series, valid_rows
+from policy_rate_monitor.chart.style import (
     LABEL_GAP,
     LINE_WIDTH,
     NO_DATA,
@@ -24,7 +24,6 @@ from policy_rate_monitor.chart_style import (
     label_positions,
     line_style,
 )
-from policy_rate_monitor.report import charted_series, valid_rows
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -16,7 +16,7 @@ it (1.4.11), for a cue other than colour (1.4.1), and for a text alternative (1.
 
 ## Decision
 
-- **One style module, `chart_style`, with no plotting library in it,** used by both charts, so the
+- **One style module, `chart.style`, with no plotting library in it,** used by both charts, so the
   base install and the `interactive` extra draw the n-th line the same way:
   - `PALETTE`, the line colours, `LABEL_COLOURS`, the colours of their labels, and `DASHES`,
     the dash patterns;
@@ -105,8 +105,8 @@ muted is not made for colour vision deficiencies.
 
 ## Evidence
 
-- `src/policy_rate_monitor/chart_style.py`.
-- `tests/test_chart_style.py`: every colour at 3:1 or more on white; the worst ΔE00 under the
+- `src/policy_rate_monitor/chart/style.py`.
+- `tests/chart/test_style.py`: every colour at 3:1 or more on white; the worst ΔE00 under the
   three simulations; 24 distinct lines; the label positions; the text alternative.
-- `tests/test_charts.py` and `tests/test_report.py`: both charts draw the n-th line with
+- `tests/chart/test_interactive.py` and `tests/test_report.py`: both charts draw the n-th line with
   `line_style(n)`, label the line ends, say `NO_DATA` when empty, and carry the text alternative.

@@ -8,7 +8,7 @@ from datetime import date
 
 import pytest
 
-from policy_rate_monitor.chart_style import (
+from policy_rate_monitor.chart.style import (
     DASHES,
     LABEL_COLOURS,
     PALETTE,

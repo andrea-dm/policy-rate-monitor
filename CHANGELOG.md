@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The charts are one subpackage, `chart`: `lines` (`charted_series`, `valid_rows`), `style`,
+  `static` (the PNG) and `interactive` (`rate_figure`). The report is another, `report`:
+  `export` (`Report`, `ReportArgs`), `summary` and `pages`, with the templates in
+  `report/templates/`. **Breaking** for code that imports them: `policy_rate_monitor.charts` is now
+  `policy_rate_monitor.chart.interactive`, and `charted_series` and `valid_rows` moved from
+  `policy_rate_monitor.report` to `policy_rate_monitor.chart.lines`. `Report`, `ReportArgs` and
+  `summary_document` are still imported from `policy_rate_monitor.report` (#29).
 - `report.md` is rendered from a Jinja template, like `report.html`, from the same values; its
   text is the same as before, apart from the emoji. `jinja2` is a new dependency of the base
   install (#12).

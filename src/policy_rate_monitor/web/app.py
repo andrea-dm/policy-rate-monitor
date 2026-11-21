@@ -23,7 +23,7 @@ from fastapi import APIRouter, FastAPI, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from policy_rate_monitor import __version__
-from policy_rate_monitor.charts import rate_figure
+from policy_rate_monitor.chart.interactive import rate_figure
 from policy_rate_monitor.core.errors import MissingInputError
 from policy_rate_monitor.report import summary_document
 from policy_rate_monitor.service import (

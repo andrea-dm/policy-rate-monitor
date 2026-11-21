@@ -1,4 +1,4 @@
-"""The look of the policy-rate charts, shared by the PNG and the Plotly chart.
+"""The look of the policy-rate charts, shared by the PNG and the Plotly figure.
 
 Nothing here imports a plotting library, so the report's PNG (matplotlib, base install)
 and the interactive chart (Plotly, the ``interactive`` extra) draw the n-th line with

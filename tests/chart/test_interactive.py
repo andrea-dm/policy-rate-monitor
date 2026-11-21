@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from policy_rate_monitor.chart_style import NO_DATA, alt_text, line_style
-from policy_rate_monitor.charts import rate_figure
+from policy_rate_monitor.chart.interactive import rate_figure
+from policy_rate_monitor.chart.style import NO_DATA, alt_text, line_style
 from policy_rate_monitor.config import DatasetConfig, FileConfigSource
 from policy_rate_monitor.providers import InMemoryProvider
 from policy_rate_monitor.service import load_staged, summary
