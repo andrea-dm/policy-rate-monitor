@@ -1,3 +1,10 @@
+{# A status, a flag or a severity gets an emoji beside its name, never instead of it. #}
+{% macro with_icon(value) %}
+{% if value in icons %}{{ icons[value] }} {% endif %}{{ value }}
+{%- endmacro %}
+{% macro with_icons(values) %}
+{% for value in values.split(", ") %}{{ with_icon(value) }}{% if not loop.last %}, {% endif %}{% endfor %}
+{%- endmacro %}
 # {{ title }}
 
 Generated on {{ generated_date }} at {{ generated_time }} UTC.
@@ -6,8 +13,8 @@ Generated on {{ generated_date }} at {{ generated_time }} UTC.
 
 | Country or area | Code | Latest date | Latest (%) | Prior date | Prior (%) | Change (bp) | Status | Flags |
 |---|---|---|--:|---|--:|--:|---|---|
-{% for row in summary_rows %}
-| {{ row | map("md_cell") | join(" | ") }} |
+{% for name, code, latest_date, latest, prior_date, prior, change, status, flags in summary_rows %}
+| {{ [name, code, latest_date, latest, prior_date, prior, change, with_icon(status), with_icons(flags)] | map("md_cell") | join(" | ") }} |
 {% endfor %}
 
 ![{{ title }}]({{ chart_file }})
@@ -42,7 +49,7 @@ The staged data holds {{ series_count }} series.
 Statuses:
 
 {% for status, text in statuses %}
-- {{ status }}: {{ text }}
+- {{ with_icon(status) }}: {{ text }}
 {% endfor %}
 
 ## Data quality
@@ -50,11 +57,11 @@ Statuses:
 {% if issue_rows %}
 | Rule | Severity | Series | Count | Detail |
 |---|---|---|--:|---|
-{% for row in issue_rows %}
-| {{ row | map("md_cell") | join(" | ") }} |
+{% for rule, severity, series, count, detail in issue_rows %}
+| {{ [rule, with_icon(severity), series, count, detail] | map("md_cell") | join(" | ") }} |
 {% endfor %}
 {% else %}
-No findings.
+{{ icons["ok"] }} No findings.
 {% endif %}
 
 ## Limitations

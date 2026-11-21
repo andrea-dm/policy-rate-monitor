@@ -6,7 +6,7 @@ Generated on 2026-11-21 at 12:00 UTC.
 
 | Country or area | Code | Latest date | Latest (%) | Prior date | Prior (%) | Change (bp) | Status | Flags |
 |---|---|---|--:|---|--:|--:|---|---|
-| - | ZZ | - | - | - | - | - | unknown_ref_area | - |
+| - | ZZ | - | - | - | - | - | ❓ unknown_ref_area | - |
 
 ![Central bank policy rates](policy_rates.png)
 
@@ -33,14 +33,14 @@ The staged data holds 0 series.
 
 Statuses:
 
-- ok: the latest rate, the prior rate and the change are known.
-- unknown_ref_area: the dataset has no series for the requested code.
-- no_valid_data: the series exists but has no valid observation.
-- insufficient_history: a latest rate exists, but the series has no valid observation on or before the target date, so there is no change.
+- ✅ ok: the latest rate, the prior rate and the change are known.
+- ❓ unknown_ref_area: the dataset has no series for the requested code.
+- 🚫 no_valid_data: the series exists but has no valid observation.
+- ⚠️ insufficient_history: a latest rate exists, but the series has no valid observation on or before the target date, so there is no change.
 
 ## Data quality
 
-No findings.
+✅ No findings.
 
 ## Limitations
 

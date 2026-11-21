@@ -28,8 +28,8 @@ from policy_rate_monitor.report import ICONS, Report, ReportArgs
 
 CONFIG_PATH = Path(__file__).parents[1] / "configs" / "bis_cbpol.json"
 
-# report.md as the code wrote it before the page moved to a template. A change to the
-# texts in the configuration changes these pages too.
+# report.md as the code wrote it before the page moved to a template, with the emoji
+# added since. A change to the texts in the configuration changes these pages too.
 GOLDEN = Path(__file__).parent / "data" / "report"
 
 # The staged value type (precision and scale from the config's measure).
@@ -193,7 +193,7 @@ def test_report_writes_the_five_files(config: DatasetConfig, tmp_path: Path) -> 
     ("make_args", "golden"),
     [(_full_args, "full.md"), (_empty_args, "empty.md")],
 )
-def test_report_md_is_the_page_written_before_the_templates(
+def test_report_md_matches_the_expected_page(
     config: DatasetConfig,
     tmp_path: Path,
     make_args: Callable[[Path], ReportArgs],

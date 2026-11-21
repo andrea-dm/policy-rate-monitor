@@ -6,8 +6,8 @@ Generated on 2026-11-21 at 12:00 UTC.
 
 | Country or area | Code | Latest date | Latest (%) | Prior date | Prior (%) | Change (bp) | Status | Flags |
 |---|---|---|--:|---|--:|--:|---|---|
-| United States | US | 2026-11-10 | 4.00 | 2025-11-10 | 3.75 | 25 | ok | stale_prior |
-| - | ZZ | - | - | - | - | - | unknown_ref_area | - |
+| United States | US | 2026-11-10 | 4.00 | 2025-11-10 | 3.75 | 25 | ✅ ok | ⏳ stale_prior |
+| - | ZZ | - | - | - | - | - | ❓ unknown_ref_area | - |
 
 ![Central bank policy rates](policy_rates.png)
 
@@ -37,17 +37,17 @@ The staged data holds 1 series.
 
 Statuses:
 
-- ok: the latest rate, the prior rate and the change are known.
-- unknown_ref_area: the dataset has no series for the requested code.
-- no_valid_data: the series exists but has no valid observation.
-- insufficient_history: a latest rate exists, but the series has no valid observation on or before the target date, so there is no change.
+- ✅ ok: the latest rate, the prior rate and the change are known.
+- ❓ unknown_ref_area: the dataset has no series for the requested code.
+- 🚫 no_valid_data: the series exists but has no valid observation.
+- ⚠️ insufficient_history: a latest rate exists, but the series has no valid observation on or before the target date, so there is no change.
 
 ## Data quality
 
 | Rule | Severity | Series | Count | Detail |
 |---|---|---|--:|---|
-| exact_duplicate | info | D.US | 2 | 2 exact duplicate rows dropped |
-| unexpected_value | warning | all | 1 | UNIT_MEASURE is 368 \| 369 |
+| exact_duplicate | ℹ️ info | D.US | 2 | 2 exact duplicate rows dropped |
+| unexpected_value | ⚠️ warning | all | 1 | UNIT_MEASURE is 368 \| 369 |
 
 ## Limitations
 
