@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Both charts, the PNG and the Plotly one (`/chart` and `report.html`), can be read with a colour
+  vision deficiency: the colours of matplotlib's `tableau-colorblind10` that reach 3:1 on white,
+  a dash pattern from the fifth line on (the first 24 lines all differ), each line named at its
+  end, and a text alternative in `report.md`, `report.html`, the PNG's metadata and the figure's
+  `layout.meta.description`. Both charts draw the n-th line the same way, and say "No data to
+  plot" when empty. The Plotly hover shows the rate with the series' decimals. See decision 0016
+  (#29).
+
 - `bis-prates report` and the API's report job also write `out/report.html`: the same report as
   `report.md`, with the interactive chart when the `interactive` extra is installed and the PNG
   when it is not. The page is one file that works offline (Plotly's JavaScript is inside it, about

@@ -43,6 +43,7 @@ flowchart BT
     report["report"]
     service["service<br/>the steps both adapters share"]
     charts["charts<br/>Plotly figure (interactive extra)"]
+    chart_style["chart_style<br/>colours, dashes, labels, alt text"]
     web["web<br/>HTTP API (web extra)"]
     settings["settings<br/>where the options come from"]
     cli["cli"]
@@ -56,6 +57,8 @@ flowchart BT
     providers --> bulk
     analytics --> snapshot
     config --> report
+    chart_style --> report
+    chart_style --> charts
     providers --> service
     snapshot --> service
     report --> service
@@ -86,8 +89,9 @@ module is in `tach.toml`.
 | `analytics` | The staged observations as fixed-point NumPy arrays, and the searches on them: the snapshot at any date, the change history, the rate moves | nothing |
 | `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested country or area | nothing |
 | `report` | Writes the summary files, the chart and the two report pages, `report.md` and `report.html`, from the snapshots it is given, through the templates in `templates/`. Imports `charts` only inside the function that draws the HTML chart, when Plotly is installed | `out/` |
+| `chart_style` | The look both charts share: the colour-blind palette, the dash patterns, the colours of the line labels and where they go, the text alternative and the "No data to plot" message. Imports no plotting library, so the base install and the `interactive` extra use it alike | nothing |
 | `service` | The steps the CLI and the HTTP API share: `load_staged`, `ref_areas`, `summary`, `timeseries` and `write_report`. Imports `report`, `snapshot`, `providers`, `config` and `core` | `out/`, through `report` |
-| `charts` | `rate_figure`: the Plotly figure of the policy rates, drawn from the same series and rows as the report's PNG. Imports `report` and `core`; needs the `interactive` extra | nothing |
+| `charts` | `rate_figure`: the Plotly figure of the policy rates, drawn from the same series and rows as the report's PNG, in the same style. Imports `report`, `chart_style` and `core`; needs the `interactive` extra | nothing |
 | `web` | The HTTP API (FastAPI): routes, background jobs, error bodies. An adapter beside `cli`. Imports `service`, `charts`, `report`, `providers`, `config` and `core`; needs the `web` extra | `data/raw/` and `data/staged/` through the provider (the `fetch` and `transform` jobs); `out/` for `report` jobs |
 | `settings` | Where the configuration file and the data directory come from: the command line, an environment variable, the configuration or a default; shared by the CLI and the HTTP API | nothing |
 | `cli` | The `bis-prates` command: parses the arguments, calls `service` and the provider, prints, returns an exit code; `serve` imports `web` only when it runs | nothing directly |

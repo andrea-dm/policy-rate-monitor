@@ -270,6 +270,20 @@ come from, without reading code.
   ❓ unknown code, 🚫 no valid data, ⚠️ insufficient history or a warning, ⏳ a stale rate), so
   the rows that need a look stand out.
 
+Both charts, the PNG and the interactive one, can be read by someone with a colour vision
+deficiency, which about one man in twelve has. They draw each line the same way:
+
+- in a colour from matplotlib's colour-blind palette (`tableau-colorblind10`): blue, dark orange,
+  mid grey and dark grey, the four of its colours that stand out against the white background and
+  stay apart for the common deficiencies;
+- from the fifth line on, also with a dash pattern (dashed, dotted, dash-dot, …), so a line never
+  depends on its colour alone; the first 24 lines all look different;
+- with its name written at its right end, next to its latest rate, as well as in the legend;
+- with a text that says what the chart shows, for a screen reader or when the image does not load.
+
+With nothing to draw, both charts say "No data to plot"
+([decision 0016](adr/0016-accessible-charts.md)).
+
 The two pages are filled from the same values, so they cannot disagree: the code works out the
 figures and the texts once, and a template for each page lays them out.
 
@@ -287,6 +301,8 @@ contrast is high ([decision 0015](adr/0015-report-templates-and-html.md)).
 | The `interactive` extra is not installed | `report.html` shows the PNG chart, embedded in the page |
 | The page is opened without a network | It works: Plotly's code is inside the page, which loads nothing else |
 | A name or a finding in the data holds text that looks like HTML | It is shown as text in `report.html`, never run as code |
+| No requested country or area has a rate to draw | Both charts say "No data to plot"; the table still lists every request |
+| More than 24 lines on one chart | From the 25th line, colour and dash pairs repeat; the names at the line ends and the table still tell them apart |
 | The emoji do not show (an old system, or a screen reader) | The name is always written beside them, and the HTML page hides them from screen readers |
 
 ??? info "Checked by"
@@ -298,7 +314,15 @@ contrast is high ([decision 0015](adr/0015-report-templates-and-html.md)).
     `test_report_html_shows_the_interactive_chart_and_loads_nothing`,
     `test_without_plotly_report_html_embeds_the_png`,
     `test_text_from_the_data_is_escaped_in_report_html`,
-    `test_report_html_hides_its_emoji_from_screen_readers`.
+    `test_report_html_hides_its_emoji_from_screen_readers`,
+    `test_the_png_draws_the_n_th_line_with_the_n_th_line_style`,
+    `test_the_png_names_each_line_at_its_end`, `test_an_empty_png_says_so`,
+    `test_the_chart_carries_its_text_alternative`; `tests/test_charts.py`:
+    `test_the_n_th_line_has_the_n_th_line_style`, `test_each_line_is_named_at_its_end`,
+    `test_a_chart_with_no_line_says_so`; `tests/test_chart_style.py`:
+    `test_every_line_colour_has_3_to_1_on_white`,
+    `test_the_colours_stay_apart_with_a_colour_vision_deficiency`,
+    `test_the_first_24_lines_all_differ_then_the_styles_repeat`.
 
 ## 11. Run it from a script or a scheduler (§2)
 
