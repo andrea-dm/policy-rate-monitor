@@ -9,4 +9,4 @@ import policy_rate_monitor
 
 @pytest.mark.unit
 def test_version_is_exposed() -> None:
-    assert policy_rate_monitor.__version__ == "0.1.0"
+    assert policy_rate_monitor.__version__ == "0.2.0"

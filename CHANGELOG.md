@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-21
+
+Fast analytics, the `config` commands and options from environment variables, and the full
+documentation site.
+
 ### Added
 
 - `analytics`: the staged observations as fixed-point NumPy arrays, with `snapshot_at` (latest
@@ -42,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `0006-exact-decimal-rates.md` is `0005-…`, and `0007-twelve-month-look-back.md` is `0006-…`.
 - The report's snapshot uses the `analytics` search: about 0.2 s for all 49 areas instead of
   2.3 s, with identical results (#13).
+- Installing the package now also installs NumPy (2.5.5 or later), which `analytics` needs (#13).
 - `transform` casts plain numbers in one go and parses any other value exactly as before; the
   staged files are unchanged (#13).
 - `SnapshotArgs` no longer takes `ref_area_column`: the snapshot finds an area's rows by its series
@@ -98,5 +104,6 @@ The first release: the `bis-prates` command line, from the BIS bulk download to 
 - CI: ruff, pyright (strict), deptry, tach, the docs build, dependency audits and the package
   build on Python 3.12, and pytest with the docstring examples on Python 3.12, 3.13 and 3.14.
 
-[Unreleased]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/andrea-dm/policy-rate-monitor/releases/tag/v0.1.0

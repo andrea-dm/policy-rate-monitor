@@ -6,7 +6,7 @@
             <img src="https://github.com/andrea-dm/policy-rate-monitor/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI">
         </a>
         <a href="https://github.com/andrea-dm/policy-rate-monitor/releases" target="_blank">
-            <img src="https://img.shields.io/badge/release-v0.1.0-blue" alt="Release">
+            <img src="https://img.shields.io/badge/release-v0.2.0-blue" alt="Release">
         </a>
         <a href="pyproject.toml" target="_blank">
             <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue" alt="Python version">
