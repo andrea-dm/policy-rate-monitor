@@ -37,11 +37,13 @@ it (1.4.11), for a cue other than colour (1.4.1), and for a text alternative (1.
   and the summary table carries the figures.
 - **Lines 2 px wide.**
 - **Each line is named at its right end,** next to its latest rate, in its colour, besides the
-  legend, so a reader does not have to match colours. Labels closer than a minimum gap (5 % of
-  the y range) are pushed apart, in the order of the rates. A label is text, so it needs 4.5:1
+  legend, so a reader does not have to match colours. Labels closer than a minimum gap are
+  pushed apart, in the order of the rates. The gap is 5 % of the y axis in the PNG, and 5 % of
+  the spread of the latest rates in the Plotly figure, whose axis is only known once the browser
+  draws it. A label is text, so it needs 4.5:1
   (WCAG 1.4.3), not the 3:1 of a line: the mid grey (`#898989`, 3.5:1) writes its label in
   `#767676` (4.54:1), the lightest grey that passes; the three other colours already pass
-  (dark orange 4.50:1, blue 5.77:1, dark grey 7.01:1).
+  (dark orange 4.50:1, blue 5.77:1, dark grey 7.00:1).
 - **A text alternative** that names the chart type, the countries or economic areas and the
   period: the `alt` of the PNG in `report.md`, the PNG's `Description` metadata, the caption of
   the chart's `<figure>` in `report.html`, and `layout.meta.description` of the figure `/chart`
@@ -90,7 +92,7 @@ muted is not made for colour vision deficiencies.
 - seaborn colorblind and muted: see above.
 - The pale colours darkened to 3:1: they become hard to tell apart.
 - Markers instead of dashes: with daily data, markers merge into a thick band.
-- Ten dash patterns, so that all 49 series could differ: the later patterns cannot be told apart.
+- Ten dash patterns (40 lines): the later patterns cannot be told apart.
 - Four dash patterns (16 lines): two fewer distinct patterns for no gain in readability.
 - A fixed colour per country or economic area: 49 series cannot each get a distinct, colour-blind-safe
   colour; the colour follows the position in the request.

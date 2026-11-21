@@ -16,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `layout.meta.description`. Both charts draw the n-th line the same way, and say "No data to
   plot" when empty. The Plotly hover shows the rate with the series' decimals. See decision 0016
   (#29).
-
 - `bis-prates report` and the API's report job also write `out/report.html`: the same report as
   `report.md`, with the interactive chart when the `interactive` extra is installed and the PNG
   when it is not. The page is one file that works offline (Plotly's JavaScript is inside it, about
@@ -40,16 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The charts are one subpackage, `chart`: `lines` (`charted_series`, `valid_rows`), `style`,
   `static` (the PNG) and `interactive` (`rate_figure`). The report is another, `report`:
   `export` (`Report`, `ReportArgs`), `summary` and `pages`, with the templates in
-  `report/templates/`. **Breaking** for code that imports them: `policy_rate_monitor.charts` is now
-  `policy_rate_monitor.chart.interactive`, and `charted_series` and `valid_rows` moved from
-  `policy_rate_monitor.report` to `policy_rate_monitor.chart.lines`. `Report`, `ReportArgs` and
-  `summary_document` are still imported from `policy_rate_monitor.report` (#29).
+  `report/templates/`. `Report` and `ReportArgs` are still imported from
+  `policy_rate_monitor.report` (#29).
 - `report.md` is rendered from a Jinja template, like `report.html`, from the same values; its
   text is the same as before, apart from the emoji. `jinja2` is a new dependency of the base
   install (#12).
 - The steps the command line and the API share are in the new `service` module, and the
   report's choice of charted series and valid rows is shared with the interactive chart
-  (`charts`), so both draw the same lines. The commands behave as before.
+  (`chart.interactive`), so both draw the same lines. The commands behave as before.
 - One name for a country or economic area, `ref_area`, everywhere. **Breaking:** the
   configuration key `area_aliases` is now `ref_area_aliases`, and the snapshot status
   `unknown_area` is now `unknown_ref_area` in `summary.csv`, `summary.json` and `report.md`. The

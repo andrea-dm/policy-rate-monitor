@@ -55,7 +55,8 @@ NO_DATA: Final = "No data to plot"
 """What a chart with no line says."""
 
 LABEL_GAP: Final = 0.05
-"""The smallest gap between two labels of the line ends, as a share of the y range."""
+"""The smallest gap between two line-end labels: a share of the y axis (PNG) or of
+the spread of the latest rates (Plotly, whose axis is set in the browser)."""
 
 
 @dataclass(frozen=True)
