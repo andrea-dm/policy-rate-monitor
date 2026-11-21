@@ -50,8 +50,8 @@ Four principles shaped the split:
    contract, so a stage can also be built against a fake of the stage before it (M3 is tested on
    small hand-made observation tables).
 4. **Every milestone is verifiable on its own.** Each one ends with a working CLI command or
-   function, tests that run without the network, and every repository check passing (ruff,
-   pyright, deptry, tach, pytest).
+   function, tests that run without the network, and every repository check passing (tach,
+   ruff, deptry, pyright, pytest, the docs build).
 
 ```mermaid
 flowchart LR

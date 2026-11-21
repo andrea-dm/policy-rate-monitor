@@ -34,10 +34,8 @@ Closes #<!-- issue number -->
 - [ ] Title is the Angular `<summary>` only (imperative, lowercase, no period; no `<type>(<scope>):` prefix)
 - [ ] Self-reviewed the diff
 - [ ] Added/updated tests for changed behavior
-- [ ] `ruff check` and `ruff format --check` pass
-- [ ] `pyright` strict passes
-- [ ] `pytest` passes (relevant tests green)
+- [ ] `tach check`, `ruff check`, `ruff format --check`, `deptry`, `pyright` (strict), `pytest` and
+      `mkdocs build --strict` pass, in that order
 - [ ] SonarQube shows no new issues
 - [ ] `uv lock --check` consistent (if dependencies changed)
 - [ ] Documentation updated (if applicable)
-- [ ] Docs build passes (if docs changed)

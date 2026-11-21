@@ -327,14 +327,7 @@ updates the file regularly, so a later run gives later dates.
 
 ### Development Workflow
 
-Fix what can be fixed automatically:
-
-```bash
-uv run ruff check --fix
-uv run ruff format
-```
-
-Then run the checks in order. Each one stops the chain when it fails: the module layering first,
+Run the checks in order. Each one stops the chain when it fails: the module layering first,
 since a wrong import changes the code anyway, and the two slowest checks, pyright and pytest, last.
 
 ```bash

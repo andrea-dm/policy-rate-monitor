@@ -17,8 +17,6 @@ rejects machine-scoped keys there).
 ## Checks
 
 ```bash
-uv run ruff check --fix   # fixes first, always before the formatter
-uv run ruff format
 uv run tach check && \
 uv run ruff check && \
 uv run ruff format --check && \
