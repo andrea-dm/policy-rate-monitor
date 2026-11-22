@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-11-22
+
+### Fixed
+
+- `out/` is regenerated with 0.4.0: `summary.json` has the `ref_area_name` and `suggestions`
+  fields of each snapshot. The figures do not change.
+
 ## [0.4.0] — 2026-11-22
 
 The data checked against the BIS structural metadata, and suggestions for a country or area
@@ -263,7 +270,8 @@ The first release: the `bis-prates` command line, from the BIS bulk download to 
 - CI: ruff, pyright (strict), deptry, tach, the docs build, dependency audits and the package
   build on Python 3.12, and pytest with the docstring examples on Python 3.12, 3.13 and 3.14.
 
-[Unreleased]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.1.0...v0.2.0
