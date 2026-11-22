@@ -63,3 +63,8 @@ The owner knows Python well and can handle a little JavaScript, but is not a Rea
   importing it lazily. The details (routes, jobs, errors, what is cached, why no CORS) are in
   [0014](0014-http-api.md). The chart is returned as a Plotly figure in JSON, as decided here;
   the front end (M8) is not started.
+- 2026-11-22: the front end will live in `frontend/` at the repository root, not in `web/`. The
+  HTTP API is the sub-package `src/policy_rate_monitor/web`, installed with the `web` extra, and
+  the docs name its modules `web/app.py` and `web/jobs.py`, so a top-level `web/` would give one
+  name two meanings. Not taken: renaming the API sub-package, which would change the import paths
+  and the extra that 0.4.1 ships.
