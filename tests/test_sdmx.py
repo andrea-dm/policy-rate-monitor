@@ -1,8 +1,9 @@
 """The ``pysdmx``-backed reference source, with the client's queries replaced.
 
 ``tests/data/sdmx/`` holds BIS's answers to the three queries, recorded on 2026-11-22
-and cut down to a few codes per code list. They are decoded by ``pysdmx`` itself, so
-a change in how it reads them (such as reading BIS's time dimension) shows here.
+and cut down to a few codes per code list, with some descriptive texts shortened. They
+are decoded by ``pysdmx`` itself, so a change in how it reads them (such as reading
+BIS's time dimension) shows here.
 """
 
 from __future__ import annotations
