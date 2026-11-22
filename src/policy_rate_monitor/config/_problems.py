@@ -259,6 +259,13 @@ OUTPUT_FIELD_UNBOUND: Final = Template(
     "output_field_unbound",
     "'{field}' would always be empty: structure.series_metadata.{field} is null",
 )
+RULE_PARAM_INVALID: Final = Template(
+    "rule_param_invalid",
+    "rule '{name}' needs params.{param} to be {expected}, not {value}",
+)
+RULE_EXPECTED_UNKNOWN: Final = Template(
+    "rule_expected_unknown", "'{id}' is not a column of the configuration{hint}"
+)
 
 TEMPLATES: Final = (
     ALIAS_NOT_UPPER_CASE,
@@ -291,6 +298,8 @@ TEMPLATES: Final = (
     OPTIONAL_UNDECLARED,
     OPTIONAL_IS_NEEDED,
     OUTPUT_FIELD_UNBOUND,
+    RULE_PARAM_INVALID,
+    RULE_EXPECTED_UNKNOWN,
 )
 """Every template, so the parser can tell this package's errors from pydantic's."""
 

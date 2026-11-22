@@ -21,7 +21,7 @@ import logging
 import zipfile
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pandas import ArrowDtype, DataFrame, Series, read_csv, read_parquet, to_datetime
 from pyarrow import decimal128
@@ -363,7 +363,9 @@ def _stage_observations(
         "rows repeated exactly; the copies were dropped",
     )
     staged = staged[~no_date & ~exact_copy]
-    staged = _drop_conflicting(staged, rules.get("conflicting_duplicate"), issues)
+    staged = _drop_conflicting(
+        staged, config.conflict_keep(), rules.get("conflicting_duplicate"), issues
+    )
     return staged.sort_values(["series_key", "date"], kind="stable").reset_index(
         drop=True
     )
@@ -419,12 +421,15 @@ def _invalid_status(data: DataFrame, config: DatasetConfig) -> Series[bool]:
 
 
 def _drop_conflicting(
-    staged: DataFrame, rule: RuleSpec | None, issues: list[DataQualityIssue]
+    staged: DataFrame,
+    keep: Literal["first", "last"],
+    rule: RuleSpec | None,
+    issues: list[DataQualityIssue],
 ) -> DataFrame:
-    """Keeps one row per series and date: the last one in the file, or the first."""
-    keep = "last"
-    if rule is not None and rule.params.get("keep") == "first":
-        keep = "first"
+    """Keeps one row per series and date: the last one in the file, or the first.
+
+    *rule* is the enabled rule, for the finding; *keep* applies even without it.
+    """
     conflicting = staged.duplicated(["series_key", "date"], keep=keep)
     _add_issues(
         issues,
@@ -474,8 +479,7 @@ def _check_expected_values(
     if rule is None:
         return
     expected = rule.params.get("expected")
-    if not isinstance(expected, dict):
-        logger.warning("rule unexpected_value needs params.expected; skipped")
+    if not isinstance(expected, dict):  # checked when the configuration is loaded
         return
     uncoded = {
         concept.id

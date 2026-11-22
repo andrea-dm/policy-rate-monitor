@@ -426,3 +426,24 @@ def test_the_chart_carries_its_text_alternative(
     assert _png_text(paths[2])["Description"] == expected
     assert f"![{expected}](policy_rates.png)" in paths[3].read_text(encoding="utf-8")
     assert f"<figcaption>{expected} " in paths[4].read_text(encoding="utf-8")
+
+
+@pytest.mark.contract
+def test_the_report_says_which_conflicting_row_is_kept_even_with_the_rule_off(
+    tmp_path: Path,
+) -> None:
+    document = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    document["rules"] = [
+        {
+            "name": "conflicting_duplicate",
+            "severity": "warning",
+            "enabled": False,
+            "params": {"keep": "first"},
+        }
+    ]
+    config = parse_config(json.dumps(document), origin="test")
+
+    Report(config).export(_empty_args(tmp_path))
+
+    page = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "on the same date, the first one in the file is kept." in page

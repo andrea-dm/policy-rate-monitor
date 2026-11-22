@@ -196,17 +196,11 @@ class Pages:
         return lines
 
     def _duplicates_text(self) -> str:
-        keep = None
-        for rule in self._config.rules:
-            if rule.name == "conflicting_duplicate" and rule.enabled:
-                keep = rule.params.get("keep")
-        text = "Exact duplicate rows are dropped."
-        if keep is not None:
-            text += (
-                " When a series has two different values on the same date, the "
-                f"{keep} one in the file is kept."
-            )
-        return text
+        return (
+            "Exact duplicate rows are dropped. When a series has two different values "
+            f"on the same date, the {self._config.conflict_keep()} one in the file is "
+            "kept."
+        )
 
 
 def _md_cell(text: str) -> str:

@@ -140,3 +140,75 @@ def test_models_are_frozen() -> None:
         setattr(config.snapshot, "lookback_months", 6)  # noqa: B010
     with pytest.raises(TypeError, match="does not support item assignment"):
         selection["FRQ"] = "M"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("rule", "expected"),
+    [
+        (
+            {
+                "name": "conflicting_duplicate",
+                "severity": "warning",
+                "params": {"keep": "First"},
+            },
+            (
+                'rules[0] ("conflicting_duplicate").params.keep: rule'
+                " 'conflicting_duplicate' needs params.keep to be 'first' or 'last',"
+                ' not "First"'
+            ),
+        ),
+        (
+            {"name": "unexpected_value", "severity": "warning", "params": {}},
+            (
+                'rules[0] ("unexpected_value").params.expected: rule'
+                " 'unexpected_value' needs params.expected to be an object of column"
+                " ids and their codes, not null"
+            ),
+        ),
+        (
+            {
+                "name": "unexpected_value",
+                "severity": "warning",
+                "params": {"expected": {"TTLX": "A"}},
+            },
+            (
+                "rules[0] (\"unexpected_value\").params.expected.TTLX: 'TTLX' is not"
+                " a column of the configuration; did you mean 'TTL'?"
+            ),
+        ),
+    ],
+    ids=["keep", "expected_missing", "expected_unknown_id"],
+)
+def test_rule_parameters_are_checked_even_when_the_rule_is_off(
+    rule: dict[str, Any], expected: str
+) -> None:
+    document = changed(minimal_document(), "rules", [{**rule, "enabled": False}])
+
+    assert error_lines(document) == [expected]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("rules", "keep"),
+    [
+        ([], "last"),
+        ([{"name": "conflicting_duplicate", "severity": "info"}], "last"),
+        (
+            [
+                {
+                    "name": "conflicting_duplicate",
+                    "severity": "info",
+                    "enabled": False,
+                    "params": {"keep": "first"},
+                }
+            ],
+            "first",
+        ),
+    ],
+    ids=["no_rule", "no_keep", "rule_off"],
+)
+def test_conflict_keep_applies_whether_the_rule_is_on_or_not(
+    rules: list[dict[str, Any]], keep: str
+) -> None:
+    assert load(changed(minimal_document(), "rules", rules)).conflict_keep() == keep

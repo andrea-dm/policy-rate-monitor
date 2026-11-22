@@ -55,8 +55,11 @@ rule, its severity and the series ([decision 0011](adr/0011-data-quality-rules.m
 | `series_attribute_not_constant` | not yet | `resolve` | (planned) a series attribute that changes within a series |
 | `plausible_range` | not yet | `min`, `max` | (planned) values outside a plausible range |
 
-A rule that is listed but not built is logged and skipped by `transform`. Rule parameters are
-checked by the rule when it runs, not when the configuration is loaded.
+A rule that is listed but not built is logged and skipped by `transform`. The parameters of the
+built rules are checked when the configuration is loaded, whether the rule is on or off, so
+`bis-prates config validate` reports them: `keep` is `first` or `last`, and every column in
+`expected` is one the configuration declares. Switching `conflicting_duplicate` off stops its
+findings; its `keep` still decides which row is kept (`last` when absent).
 
 ### A second dataset
 

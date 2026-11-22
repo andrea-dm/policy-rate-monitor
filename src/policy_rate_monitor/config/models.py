@@ -27,6 +27,7 @@ Examples:
 
 from __future__ import annotations
 
+import json
 import re
 import warnings
 from collections.abc import Iterator, Mapping
@@ -70,6 +71,8 @@ from policy_rate_monitor.config._problems import (
     PATH_EMPTY,
     PATH_TILDE,
     REF_AREA_NOT_CODED,
+    RULE_EXPECTED_UNKNOWN,
+    RULE_PARAM_INVALID,
     RULE_TWICE,
     SCALE_ABOVE_PRECISION,
     SELECTION_MISSING,
@@ -612,7 +615,8 @@ class RuleSpec(_ConfigModel):
     severity: DataQualitySeverity
     """Severity of the rule's findings."""
     params: Mapping[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
-    """The rule's parameters, checked by the rule itself."""
+    """The rule's parameters. Those of the built rules are checked on loading:
+    ``keep`` is ``first`` or ``last``, and the columns in ``expected`` are declared."""
 
 
 def _unique_rule_names(rules: tuple[RuleSpec, ...]) -> tuple[RuleSpec, ...]:
@@ -699,15 +703,45 @@ class DatasetConfig(_ConfigModel):
         declared = {concept_id for _loc, concept_id, _role in self.structure.concepts()}
         return frozenset(declared | set(self.columns.unmapped))
 
+    def conflict_keep(self) -> Literal["first", "last"]:
+        """Returns which of two rows with the same series and date is kept.
+
+        The ``keep`` of the ``conflicting_duplicate`` rule, whether the rule is
+        enabled or not: switching a rule off stops its findings, not what staging
+        does. ``"last"`` when the rule or its ``keep`` is absent.
+
+        Returns:
+            ``"first"`` or ``"last"``, the row's place in the source file.
+        """
+        for rule in self.rules:
+            if (
+                rule.name == "conflicting_duplicate"
+                and rule.params.get("keep") == "first"
+            ):
+                return "first"
+        return "last"
+
     @model_validator(mode="after")
     def _check_sections(self) -> Self:
         problems = [
             *self._unmapped_problems(),
             *self._optional_problems(),
             *self._output_problems(),
+            *self._rule_problems(),
         ]
         raise_problems(type(self).__name__, problems)
         return self
+
+    def _rule_problems(self) -> list[Problem]:
+        """Checks the parameters the implemented rules read."""
+        problems: list[Problem] = []
+        for index, rule in enumerate(self.rules):
+            loc: Loc = ("rules", index, "params")
+            if rule.name == "conflicting_duplicate":
+                problems += _keep_problems(rule, loc)
+            if rule.name == "unexpected_value":
+                problems += _expected_problems(rule, loc, self.known_columns())
+        return problems
 
     def _unmapped_problems(self) -> list[Problem]:
         declared = {concept_id for _loc, concept_id, _role in self.structure.concepts()}
@@ -782,3 +816,46 @@ class DatasetConfig(_ConfigModel):
             for index, name in enumerate(self.output.metadata_fields)
             if name in bound and bound[name] is None
         ]
+
+
+def _keep_problems(rule: RuleSpec, loc: Loc) -> list[Problem]:
+    keep = rule.params.get("keep", "last")
+    if keep in ("first", "last"):
+        return []
+    context = {
+        "name": rule.name,
+        "param": "keep",
+        "expected": "'first' or 'last'",
+        "value": json.dumps(keep),
+    }
+    return [Problem(RULE_PARAM_INVALID, (*loc, "keep"), keep, context)]
+
+
+def _expected_problems(
+    rule: RuleSpec, loc: Loc, known: frozenset[str]
+) -> list[Problem]:
+    expected = rule.params.get("expected")
+    if not isinstance(expected, dict):
+        context = {
+            "name": rule.name,
+            "param": "expected",
+            "expected": "an object of column ids and their codes",
+            "value": json.dumps(expected),
+        }
+        return [Problem(RULE_PARAM_INVALID, (*loc, "expected"), expected, context)]
+    problems: list[Problem] = []
+    for concept_id in expected:
+        if concept_id not in known:
+            context = {
+                "id": concept_id,
+                "hint": did_you_mean(concept_id, sorted(known)),
+            }
+            problems.append(
+                Problem(
+                    RULE_EXPECTED_UNKNOWN,
+                    (*loc, "expected", concept_id),
+                    concept_id,
+                    context,
+                )
+            )
+    return problems

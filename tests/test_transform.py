@@ -274,3 +274,26 @@ def test_missing_inputs_say_which_step_to_run(tmp_path: Path) -> None:
         transform(make_config(), tmp_path)
     with pytest.raises(MissingInputError, match="bis-prates transform"):
         load_observations(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("enabled", "findings"), [(True, 1), (False, 0)], ids=["rule_on", "rule_off"]
+)
+def test_the_configured_keep_applies_whether_the_rule_is_on_or_not(
+    tmp_path: Path, *, enabled: bool, findings: int
+) -> None:
+    write_zip(
+        tmp_path,
+        f"{US},2024-01-02,5.25,{US_SERIES},A: Normal",
+        f"{US},2024-01-02,5.50,{US_SERIES},A: Normal",
+    )
+    rule = {
+        "name": "conflicting_duplicate",
+        "severity": "warning",
+        "enabled": enabled,
+        "params": {"keep": "first"},
+    }
+    transform(make_config(rules=[rule]), tmp_path)
+
+    assert load_observations(tmp_path).value.tolist() == [Decimal("5.25")]
+    assert len(load_data_quality(tmp_path)) == findings
