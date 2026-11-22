@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from plotly.graph_objects import Figure, Scatter
 
-from policy_rate_monitor.chart.lines import charted_series, valid_rows
+from policy_rate_monitor.chart.lines import chart_lines
 from policy_rate_monitor.chart.style import (
     LABEL_GAP,
     LINE_WIDTH,
@@ -50,18 +50,18 @@ def rate_figure(
     Args:
         title: The chart title, the dataset's title.
         snapshots: One snapshot per requested country or area; those with a latest
-            rate get a line.
+            rate and a valid row from *start* on get a line (``chart_lines``).
         observations: The staged observations.
         start: First date on the chart; ``None`` for the whole history.
 
     Returns:
-        The figure, one trace per charted series, in request order.
+        The figure, one trace per line, in request order; with no line, no trace and
+        one annotation, ``NO_DATA``.
     """
     figure = Figure()
-    charted = charted_series(snapshots)
+    lines = chart_lines(snapshots, observations, start)
     ends: list[tuple[str, date, float, str]] = []
-    for index, series in enumerate(charted):
-        rows = valid_rows(observations, series.series_key, start)
+    for index, (series, rows) in enumerate(lines):
         style = line_style(index)
         dates = rows.date.tolist()
         # Floats only for drawing; every number in the API's JSON stays exact.
@@ -81,8 +81,7 @@ def rate_figure(
                 hovertemplate=_hover(series.decimals),
             )
         )
-        if values:
-            ends += [(series.ref_area_name, dates[-1], values[-1], style.label_colour)]
+        ends += [(series.ref_area_name, dates[-1], values[-1], style.label_colour)]
     figure.update_layout(
         title=title,
         yaxis_title="Per cent",
@@ -91,7 +90,7 @@ def rate_figure(
         margin={"r": 140},
         meta={
             "description": alt_text(
-                title, [series.ref_area_name for series in charted], start
+                title, [series.ref_area_name for series, _ in lines], start
             )
         },
     )

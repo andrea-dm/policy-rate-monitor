@@ -1,7 +1,11 @@
 """Which series get a line on a chart, and the rows each line draws.
 
 Both charts, the report's PNG and the Plotly figure, and the HTTP API's time series
-use these, so they show the same series and the same rows.
+use these, so they show the same series and the same rows. A chart names in its
+legend and its text alternative only the lines it draws (``chart_lines``).
+
+See also: [How it works](how-it-works.md), section 10, and [decision
+0016](adr/0016-accessible-charts.md).
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ if TYPE_CHECKING:
 
     from policy_rate_monitor.core.models import DataSnapshot, SeriesMetadata
 
-__all__ = ["charted_series", "valid_rows"]
+__all__ = ["chart_lines", "charted_series", "valid_rows"]
 
 # A country or economic area with a latest rate gets a line on the chart.
 _CHARTED = (SnapshotStatus.OK, SnapshotStatus.INSUFFICIENT_HISTORY)
@@ -61,3 +65,29 @@ def valid_rows(
     if start is not None:
         rows = rows[rows.date >= start]
     return rows
+
+
+def chart_lines(
+    snapshots: Sequence[DataSnapshot],
+    observations: DataFrame,
+    start: date | None = None,
+) -> list[tuple[SeriesMetadata, DataFrame]]:
+    """Returns the lines a chart draws: the charted series with data from *start* on.
+
+    A charted series with no valid row from *start* on (*start* is after its data) gets
+    no line, so the legend and the text alternative do not name it.
+
+    Args:
+        snapshots: One snapshot per requested country or area.
+        observations: The staged observations.
+        start: First date on the chart; ``None`` for the whole history.
+
+    Returns:
+        The series and its rows, one pair per line, in request order.
+    """
+    lines: list[tuple[SeriesMetadata, DataFrame]] = []
+    for series in charted_series(snapshots):
+        rows = valid_rows(observations, series.series_key, start)
+        if not rows.empty:
+            lines += [(series, rows)]
+    return lines

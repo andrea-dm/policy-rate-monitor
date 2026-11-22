@@ -122,3 +122,36 @@ def test_the_hover_shows_the_rate_with_the_series_decimals(tmp_path: Path) -> No
 
     (trace,) = figure.to_plotly_json()["data"]
     assert trace["hovertemplate"] == "%{x|%Y-%m-%d}: %{y:.2f}%"
+
+
+def test_a_start_after_all_the_data_draws_no_line_and_names_none(
+    config: DatasetConfig,
+) -> None:
+    data = load_staged(InMemoryProvider(config.structure, ROWS, SERIES))
+    snapshots = summary(config, data, ["US", "EA"])
+    start = date(2027, 1, 1)
+
+    figure = rate_figure("Policy rates", snapshots, data.observations, start)
+
+    layout = figure.to_plotly_json()["layout"]
+    assert figure.to_plotly_json()["data"] == []
+    assert [label["text"] for label in layout["annotations"]] == [NO_DATA]
+    assert layout["meta"]["description"] == alt_text("Policy rates", [], start)
+
+
+def test_only_the_lines_drawn_are_named(config: DatasetConfig) -> None:
+    # Switzerland's last rate is before the start, so it gets no line.
+    data = load_staged(InMemoryProvider(config.structure, ROWS, SERIES))
+    snapshots = summary(config, data, ["CH", "US"])
+    start = date(2026, 1, 1)
+
+    figure = rate_figure("Policy rates", snapshots, data.observations, start)
+
+    (trace,) = figure.to_plotly_json()["data"]
+    layout = figure.to_plotly_json()["layout"]
+    assert trace["name"] == "United States"
+    assert trace["line"]["color"] == line_style(0).colour
+    assert [label["text"] for label in layout["annotations"]] == ["United States"]
+    assert layout["meta"]["description"] == alt_text(
+        "Policy rates", ["United States"], start
+    )

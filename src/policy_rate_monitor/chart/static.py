@@ -2,6 +2,9 @@
 
 It draws the same series and rows as the Plotly figure (``lines``), in the same style
 (``style``).
+
+See also: [How it works](how-it-works.md), section 10, and [decision
+0016](adr/0016-accessible-charts.md).
 """
 
 # pyright: reportUnknownMemberType=false
@@ -12,7 +15,7 @@ from typing import TYPE_CHECKING, Final
 
 from matplotlib.figure import Figure
 
-from policy_rate_monitor.chart.lines import charted_series, valid_rows
+from policy_rate_monitor.chart.lines import chart_lines
 from policy_rate_monitor.chart.style import (
     LABEL_GAP,
     LINE_WIDTH,
@@ -50,20 +53,18 @@ def rate_chart(
     Args:
         title: The chart title, the dataset's title.
         snapshots: One snapshot per requested country or area; those with a latest
-            rate get a line.
+            rate and a valid row from *start* on get a line (``chart_lines``).
         observations: The staged observations.
         start: First date on the chart; ``None`` for the whole history.
 
     Returns:
-        The matplotlib figure.
+        The matplotlib figure; with no line, it has no legend and says ``NO_DATA``.
     """
     # A bare Figure draws with the Agg canvas and leaves pyplot's global state alone.
     figure = Figure(figsize=(10, 5.5), layout="constrained")
     axes = figure.add_subplot()
-    charted = charted_series(snapshots)
     ends: list[tuple[str, date, float, str]] = []
-    for index, series in enumerate(charted):
-        rows = valid_rows(observations, series.series_key, start)
+    for index, (series, rows) in enumerate(chart_lines(snapshots, observations, start)):
         style = line_style(index)
         dates = rows.date.tolist()
         # Floats only for drawing; every number in the files stays an exact decimal.
@@ -77,14 +78,12 @@ def rate_chart(
             linewidth=LINE_WIDTH * 72 / DPI,
             linestyle=_matplotlib_dash(style.dash),
         )
-        if values:
-            ends += [(series.ref_area_name, dates[-1], values[-1], style.label_colour)]
+        ends += [(series.ref_area_name, dates[-1], values[-1], style.label_colour)]
     axes.set_title(title)
     axes.set_ylabel("Per cent")
     axes.grid(visible=True, alpha=0.3)
-    if charted:
-        axes.legend()
     if ends:
+        axes.legend()
         _label_line_ends(axes, ends)
     else:
         axes.text(0.5, 0.5, NO_DATA, ha="center", transform=axes.transAxes)

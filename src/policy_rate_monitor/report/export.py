@@ -1,8 +1,14 @@
 """``Report(config).export(args)``: the five output files of one report.
 
-It writes ``summary.csv`` and ``summary.json`` (``summary``), the PNG chart
+It makes ``summary.csv`` and ``summary.json`` (``summary``), the PNG chart
 (``chart.static``) and the two pages (``pages``), with the interactive chart in
-``report.html`` when Plotly is installed.
+``report.html`` when Plotly is installed. All five are made in memory first, then
+written together with ``core.files.write_files``, so a failure never leaves new files
+beside old ones.
+
+See also: [How it works](how-it-works.md), section 10, and decisions
+[0012](adr/0012-elt-raw-and-staged-layers.md) and
+[0015](adr/0015-report-templates-and-html.md).
 """
 
 # pyright: reportUnknownMemberType=false
@@ -10,17 +16,19 @@ It writes ``summary.csv`` and ``summary.json`` (``summary``), the PNG chart
 from __future__ import annotations
 
 import base64
+import io
 import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from policy_rate_monitor.chart.lines import charted_series
+from policy_rate_monitor.chart.lines import chart_lines
 from policy_rate_monitor.chart.static import DPI, rate_chart
 from policy_rate_monitor.chart.style import alt_text
+from policy_rate_monitor.core.files import write_files
 from policy_rate_monitor.report.pages import CHART_FILE, Pages
-from policy_rate_monitor.report.summary import summary_document, write_csv
+from policy_rate_monitor.report.summary import summary_csv, summary_document
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -82,7 +90,7 @@ class Report:
         self._pages = Pages(config)
 
     def export(self, args: ReportArgs) -> list[Path]:
-        """Writes the five files to ``args.out_dir``.
+        """Writes the five files to ``args.out_dir``, all of them or none.
 
         Args:
             args: The snapshots, the staged data and where to write.
@@ -90,44 +98,51 @@ class Report:
         Returns:
             The paths of ``summary.csv``, ``summary.json``, the chart,
             ``report.md`` and ``report.html``.
+
+        Raises:
+            OSError: A file cannot be written; the files already there are left as
+                they were. Or a file cannot be renamed into place; the files of the
+                set are removed.
         """
         config = self._config
         out_dir = args.out_dir
-        out_dir.mkdir(parents=True, exist_ok=True)
         generated_at = datetime.now(UTC).replace(microsecond=0)
 
-        csv_path = out_dir / "summary.csv"
-        write_csv(args.snapshots, config.output.metadata_fields, csv_path)
-
-        json_path = out_dir / "summary.json"
+        csv_text = summary_csv(args.snapshots, config.output.metadata_fields)
         summary = summary_document(config, args.snapshots, args.release, generated_at)
-        json_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        json_text = json.dumps(summary, indent=2) + "\n"
 
         title = config.dataset.title
-        names = [series.ref_area_name for series in charted_series(args.snapshots)]
+        lines = chart_lines(args.snapshots, args.observations, args.start)
+        names = [series.ref_area_name for series, _ in lines]
         chart_alt = alt_text(title, names, args.start)
-        chart_path = out_dir / CHART_FILE
-        figure = rate_chart(title, args.snapshots, args.observations, args.start)
-        figure.savefig(
-            chart_path, dpi=DPI, metadata={"Title": title, "Description": chart_alt}
-        )
+        png = _png_chart(args, title, chart_alt)
 
         context = self._pages.context(args, generated_at)
         context["chart_alt"] = chart_alt
         context["chart_html"] = _interactive_chart(args, title)
-        context["chart_png"] = base64.b64encode(chart_path.read_bytes()).decode("ascii")
+        context["chart_png"] = base64.b64encode(png).decode("ascii")
 
-        md_path = out_dir / "report.md"
-        md_path.write_text(
-            self._pages.render("report.md.j2", context), encoding="utf-8"
-        )
+        markdown = self._pages.render("report.md.j2", context)
+        html = self._pages.render("report.html.j2", context)
+        files = {
+            out_dir / "summary.csv": csv_text.encode("utf-8"),
+            out_dir / "summary.json": json_text.encode("utf-8"),
+            out_dir / CHART_FILE: png,
+            out_dir / "report.md": markdown.encode("utf-8"),
+            out_dir / "report.html": html.encode("utf-8"),
+        }
+        write_files(files)
+        return list(files)
 
-        html_path = out_dir / "report.html"
-        html_path.write_text(
-            self._pages.render("report.html.j2", context), encoding="utf-8"
-        )
 
-        return [csv_path, json_path, chart_path, md_path, html_path]
+def _png_chart(args: ReportArgs, title: str, chart_alt: str) -> bytes:
+    figure = rate_chart(title, args.snapshots, args.observations, args.start)
+    png = io.BytesIO()
+    figure.savefig(
+        png, format="png", dpi=DPI, metadata={"Title": title, "Description": chart_alt}
+    )
+    return png.getvalue()
 
 
 def _interactive_chart(args: ReportArgs, title: str) -> str | None:

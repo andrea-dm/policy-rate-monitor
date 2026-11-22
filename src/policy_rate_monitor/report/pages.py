@@ -9,7 +9,8 @@ See also: [decision 0015](adr/0015-report-templates-and-html.md).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Final
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
@@ -21,7 +22,7 @@ from policy_rate_monitor.core.models import (
 from policy_rate_monitor.report.summary import plain
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
     from decimal import Decimal
 
@@ -70,18 +71,22 @@ _STATUS_TEXT = {
     ),
 }
 
-ICONS: dict[str, str] = {
-    SnapshotStatus.OK: "✅",
-    SnapshotStatus.UNKNOWN_REF_AREA: "❓",
-    SnapshotStatus.NO_VALID_DATA: "🚫",
-    SnapshotStatus.INSUFFICIENT_HISTORY: "⚠️",
-    SnapshotFlag.STALE_LATEST: "⏳",
-    SnapshotFlag.STALE_PRIOR: "⏳",
-    DataQualitySeverity.INFO: "ℹ️",  # the emoji, not the letter i # noqa: RUF001
-    DataQualitySeverity.WARNING: "⚠️",
-    DataQualitySeverity.ERROR: "❌",
-}
-"""The emoji beside each status, flag and severity name, never instead of it."""
+ICONS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        SnapshotStatus.OK: "✅",
+        SnapshotStatus.UNKNOWN_REF_AREA: "❓",
+        SnapshotStatus.NO_VALID_DATA: "🚫",
+        SnapshotStatus.INSUFFICIENT_HISTORY: "⚠️",
+        SnapshotFlag.STALE_LATEST: "⏳",
+        SnapshotFlag.STALE_PRIOR: "⏳",
+        DataQualitySeverity.INFO: "ℹ️",  # the emoji, not the letter i # noqa: RUF001
+        DataQualitySeverity.WARNING: "⚠️",
+        DataQualitySeverity.ERROR: "❌",
+    }
+)
+"""The emoji beside each status, flag and severity name, never instead of it.
+
+Read-only, so no caller can change the emoji of every later report."""
 
 
 class Pages:
@@ -208,11 +213,15 @@ def _md_cell(text: str) -> str:
 
 
 def _rate(value: Decimal | None, decimals: int | None) -> str:
+    # Padded to the series' decimals, never rounded to them: 4.125 with 2 decimals stays
+    # 4.125, so the rates in a row always add up to its exact change.
     if value is None:
         return "-"
+    text = plain(value)
     if decimals is None:
-        return plain(value)
-    return f"{value:.{decimals}f}"
+        return text
+    digits = len(text.partition(".")[2])
+    return f"{value:.{max(decimals, digits)}f}"
 
 
 def _summary_rows(snapshots: Sequence[DataSnapshot]) -> list[list[str]]:
