@@ -6,7 +6,7 @@
             <img src="https://github.com/andrea-dm/policy-rate-monitor/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI">
         </a>
         <a href="https://github.com/andrea-dm/policy-rate-monitor/releases" target="_blank">
-            <img src="https://img.shields.io/badge/release-v0.3.0-blue" alt="Release">
+            <img src="https://img.shields.io/badge/release-v0.4.0-blue" alt="Release">
         </a>
         <a href="pyproject.toml" target="_blank">
             <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue" alt="Python version">
@@ -536,9 +536,12 @@ under a different name.
 
 - The data is as of the retrieval time; the BIS publishes it with a delay.
 - Some data-quality rules named in the configuration (more decimals than declared, plausible
-  ranges, attributes constant within a series) are not implemented yet; `transform` logs them.
-  They were set aside to deliver a working tool by the deadline
-  ([decision 0011](docs/adr/0011-data-quality-rules.md)), and nothing has replaced them.
+  ranges, attributes constant within a series) are not built; `transform` logs and skips them.
+  They were set aside on 2026-11-19 to deliver a working tool by the deadline
+  ([decision 0011](docs/adr/0011-data-quality-rules.md)), and left unbuilt on 2026-11-22: on the
+  release of 19 November 2026 they would change no number
+  ([Data quality](docs/data-quality.md#the-rules-that-are-configured-and-not-built)). The checks
+  below, against the BIS structural metadata, check other things.
 - The checks against the BIS structural metadata (`ref_area_not_in_code_list`,
   `dataflow_mismatch`) need the BIS SDMX API at run time, and the `sdmx` extra. Without them, each
   enabled rule reports "not evaluated" in `data_quality.json` and the report's "Data quality"

@@ -82,3 +82,6 @@ share it.
   which check the data against the BIS structural metadata
   ([0009](0009-sdmx-validation.md), [0018](0018-sdmx-reference-and-not-evaluated.md)). When the
   reference cannot be obtained, each reports "not evaluated" as a finding with a count of 0.
+- 2026-11-22 (#37): the three rules that are configured but not built are left unbuilt: on the
+  release of 19 November 2026 they would change no number, and the SDMX rules check other things
+  ([Data quality](../data-quality.md#the-rules-that-are-configured-and-not-built)).
