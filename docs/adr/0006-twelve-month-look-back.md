@@ -78,3 +78,12 @@ interactive front end, where the calculation runs on every user action (#13).
   still apply.
 - 2026-11-22: the `join_asof` reproduction is part of `diagnostics/bench_pyarrow_types.py`,
   with the pyarrow-type checks of [0001](0001-data-stack-pyarrow.md).
+- 2026-11-22: DuckDB was timed again with standard SQL. `ASOF JOIN` is DuckDB's own extension,
+  and the look-back does not need it: each series has its own target date, so two aggregates do
+  it. On a loaded machine, standard SQL took 0.11 s, 0.46 s and 2.1 s at the three sizes, against
+  0.17 s, 0.86 s and 4.3 s for `ASOF JOIN` and 0.07 s, 0.78 s and 4.5 s for the NumPy search per
+  series. For one run over the whole file, standard SQL is faster from 10× up, as it uses every
+  core. The choice stands for the cost per request ([0013](0013-fast-analytics-numpy-numba.md)):
+  once the arrays are built, a snapshot of every series at one date takes about 55 µs, against
+  about 56 ms for the same query in DuckDB. The path for data larger than memory is standard SQL in
+  the engine where the data lives. Figures in `diagnostics/README.md`.

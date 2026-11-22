@@ -45,6 +45,15 @@ the documented scaling path ([decision 0006](../../adr/0006-twelve-month-look-ba
 revisit triggers are in `diagnostics/README.md`: about 10^5 short series; in-memory data above about
 a quarter of RAM; a high API request rate.
 
+Update of 2026-11-22: `ASOF JOIN` is DuckDB's own extension, not standard SQL, and the look-back
+does not need it. A standard query with two aggregates, timed on a loaded machine with DuckDB 2.0.1,
+took 0.11 s, 0.46 s and 2.1 s at the three sizes, against 0.17 s, 0.86 s and 4.3 s for `ASOF JOIN`
+and 0.07 s, 0.78 s and 4.5 s for the NumPy search in the same session. For one run over the whole
+file, standard SQL is faster from 10× up, as it uses every core. NumPy stays for the cost per
+request: once the arrays are built, a snapshot of all 49 series at one date takes 51 to 56 µs (see
+the analytics kernels below), against about 56 ms on a warm DuckDB connection. The scaling path is
+standard SQL in the engine where the data lives.
+
 The same benchmark found that pyarrow 26.0.1 `join_asof` finds no match for a group whose right
 table holds any date before 1970 and raises no error. Many BIS series start in the 1940s and 1950s,
 so the approach was rejected on correctness before speed.

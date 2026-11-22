@@ -1,6 +1,7 @@
-"""Benchmark: the 12-month 'on or before' snapshot for ALL series, five approaches.
+"""Benchmark: the 12-month 'on or before' snapshot for ALL series, six approaches.
 
-Evidence for the look-back decision (2026-11-17; findings in diagnostics/README.md).
+Evidence for the look-back decision (2026-11-17; the standard SQL approach was added
+on 2026-11-22; findings in diagnostics/README.md).
 Every approach computes, per series: the latest valid observation, the target date
 12 calendar months earlier, and the last valid observation on or before it. Outputs
 are hashed (``digest``): identical digests at the same scale mean identical answers.
@@ -13,7 +14,8 @@ Usage, from the repository root (duckdb is benchmark-only, not a project depende
     $BENCH prep                      # writes to a gitignored scratch folder
     $BENCH run <approach> <scale>    # prints one JSON line
 
-Approaches: bisect_py, searchsorted_np, pandas_merge_asof, arrow_join_asof, duckdb_asof
+Approaches: bisect_py, searchsorted_np, pandas_merge_asof, arrow_join_asof, duckdb_asof,
+duckdb_standard
 """
 
 from __future__ import annotations
@@ -267,6 +269,41 @@ def duckdb_asof(table: pa.Table) -> Results:
     return {r[0]: (r[1], r[2], r[3], r[4], r[5]) for r in rows}
 
 
+# Standard SQL, no ASOF JOIN: each series has its own target date, so two aggregates
+# find the latest and the prior dates, and two joins fetch their values.
+STANDARD_QUERY = """
+    WITH latest AS (
+        SELECT ref_area, MAX(date) AS latest_date
+        FROM obs
+        GROUP BY ref_area
+    ),
+    l AS (
+        SELECT ref_area, latest_date,
+               CAST(latest_date - INTERVAL '12' MONTH AS DATE) AS target
+        FROM latest
+    ),
+    prior AS (
+        SELECT o.ref_area, MAX(o.date) AS prior_date
+        FROM obs o JOIN l ON o.ref_area = l.ref_area
+        WHERE o.date <= l.target
+        GROUP BY o.ref_area
+    )
+    SELECT l.ref_area, l.latest_date, lv.value, l.target, p.prior_date, pv.value
+    FROM l
+    JOIN obs lv ON lv.ref_area = l.ref_area AND lv.date = l.latest_date
+    LEFT JOIN prior p ON p.ref_area = l.ref_area
+    LEFT JOIN obs pv ON pv.ref_area = l.ref_area AND pv.date = p.prior_date
+"""
+
+
+def duckdb_standard(table: pa.Table) -> Results:
+    """Approach F: DuckDB with the standard SQL query above (no ASOF JOIN)."""
+    con = duckdb.connect()
+    con.register("obs", table)
+    rows = con.execute(STANDARD_QUERY).fetchall()
+    return {r[0]: (r[1], r[2], r[3], r[4], r[5]) for r in rows}
+
+
 APPROACHES: dict[str, Callable[[pa.Table], Results]] = {
     f.__name__: f
     for f in (
@@ -275,6 +312,7 @@ APPROACHES: dict[str, Callable[[pa.Table], Results]] = {
         pandas_merge_asof,
         arrow_join_asof,
         duckdb_asof,
+        duckdb_standard,
     )
 }
 

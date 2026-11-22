@@ -37,7 +37,8 @@ uv run python diagnostics/bench_analytics.py
 uv run python diagnostics/check_record_figures.py
 ```
 
-Approaches: `bisect_py`, `searchsorted_np`, `pandas_merge_asof`, `arrow_join_asof`, `duckdb_asof`. The
+Approaches: `bisect_py`, `searchsorted_np`, `pandas_merge_asof`, `arrow_join_asof`, `duckdb_asof`,
+`duckdb_standard` (added on 2026-11-22). The
 scale factor replicates the 49 real daily series under new codes. Run each approach in its own
 process, so the memory figures are not mixed between approaches.
 
@@ -88,6 +89,29 @@ When to revisit the decision:
 | About 10⁵ short series, or the per-series loop dominating the run time | Vectorise fully, with one `searchsorted` over a combined (series, date) key |
 | In-memory data above about ¼ of RAM, or the data stored in a lakehouse | DuckDB, or the computation pushed to the engine where the data lives |
 | High API request rate | Precompute snapshots per source release |
+
+**Update (2026-11-22): DuckDB with standard SQL.** `ASOF JOIN` is DuckDB's own extension, not
+standard SQL. The look-back does not need it: each series has its own target date, so two
+aggregates find the latest and the prior dates (`duckdb_standard`). Median of three runs, each in
+its own process, on a loaded machine (load average about 3.5 on 4 cores; DuckDB 2.0.1). All three
+give identical results.
+
+| Approach | 49 series, 0.64M rows | 490 series, 6.4M rows | 2,450 series, 32M rows |
+|---|---|---|---|
+| NumPy `searchsorted` per series | 0.07 s | 0.78 s | 4.5 s |
+| DuckDB `ASOF JOIN` | 0.17 s | 0.86 s | 4.3 s |
+| DuckDB, standard SQL | 0.11 s | 0.46 s | 2.1 s |
+
+- The standard query is about twice as fast as `ASOF JOIN`, and faster than the NumPy loop from
+  10× up: DuckDB uses every core, the loop uses one. For one run over the whole file, NumPy is the
+  fastest only at today's size.
+- The choice of NumPy stands for the cost per request. Once the arrays are built (`rate_history`),
+  a snapshot of all 49 series at one date takes 51–56 µs (`bench_analytics.py`, below). The same
+  query on a warm DuckDB connection takes about 56 ms (standard SQL) or 81 ms (`ASOF JOIN`).
+- The scaling path is standard SQL in the engine where the data lives. Spark SQL, for example,
+  has no as-of join.
+- Memory is not compared: the script's peak-memory figure does not see a query that stays below
+  the peak reached while loading the table.
 
 ### pyarrow `join_asof` and dates before 1970 (`bench_pyarrow_types.py`)
 
