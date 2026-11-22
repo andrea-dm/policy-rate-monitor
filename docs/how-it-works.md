@@ -4,6 +4,8 @@ This page takes each task of the brief in turn and explains, in plain words, the
 behind it, how the tool solves it, what can go wrong, and which tests check it. Section numbers
 refer to the brief. The technical decisions behind the solutions are in the
 [decision records](adr/index.md); the words used here are defined in the [glossary](glossary.md).
+The contracts, the failure modes and the operation of each step are in the
+[Advanced](advanced/index.md) pages.
 
 The whole run, from the BIS site to the report:
 
@@ -79,6 +81,9 @@ attempts and timeout comes from the `source` section of the configuration.
     `tests/test_transform.py`: `test_missing_required_column_is_named`,
     `test_a_source_file_that_cannot_be_read_is_an_unexpected_format`.
 
+For operators: which setting controls the address, the timeouts and the retries, and how each
+failure ends, is in [Upstreams](advanced/operations/upstreams.md).
+
 ## 2. Do not download the same file again and again (§1.1): the caching process
 
 **The problem.** The file is about 4 MB and changes at most daily. Downloading it on every run
@@ -103,6 +108,9 @@ the copy it has.
     `tests/test_fetch.py`: `test_second_fetch_within_the_cache_lifetime_makes_no_request`,
     `test_the_cache_lifetime_is_measured_on_the_given_clock`,
     `test_an_unreadable_release_record_is_ignored`; and the tests of section 1 for the failures.
+
+How to force a new download, or get out of a damaged cache, is in the
+[runbooks](advanced/operations/runbooks.md#clear-the-cache).
 
 ## 3. Turn the file into a dataset ready for analysis (§1.2)
 
@@ -151,10 +159,9 @@ command line renames them can pair files of two runs. That gap is left open for 
     `test_no_release_is_staged_without_a_record_of_the_zip`,
     `test_a_failed_write_leaves_the_staged_files_of_the_last_run`;
     `tests/providers/test_bulk.py`: `test_the_release_is_the_one_staged_not_the_one_fetched_last`,
-    `test_a_read_that_overlaps_a_transform_is_read_again`;
-    `tests/core/test_files.py`: `test_a_failed_write_replaces_nothing`,
-    `test_a_failed_rename_removes_the_whole_set`;
-    `tests/test_cli.py::test_a_kill_ends_the_command_with_the_shells_code_for_it`.
+    `test_series_json_is_read_once_per_change_of_the_file`;
+    `tests/core/test_files.py`: `test_the_files_replace_the_old_ones_and_no_temporary_file_is_left`,
+    `test_a_failed_write_replaces_nothing`.
 
 ## 4. Missing values, duplicates and inconsistent data (§1.2, §3.3)
 
@@ -185,7 +192,8 @@ says so in its log ([decision 0011](adr/0011-data-quality-rules.md)). The rule p
 checked when the configuration is loaded: a `keep` other than `first` or `last`, or an
 `unexpected_value` with no `expected` object, a column under it that the configuration does not
 have (in `structure` or in `columns.unmapped`), or a code that is not a text, stops every command
-with exit code 4.
+with exit code 4. The full account, with the severities, what happens to each row and what to do
+with a finding, is in [Data quality](data-quality.md).
 
 ??? info "Checked by"
 
@@ -439,6 +447,9 @@ writing files the next one reads. Every kind of failure has its own exit code, a
     `test_serve_on_a_busy_port_exits_2_naming_the_host_and_port`;
     `tests/providers/test_bulk.py::test_staged_data_of_another_configuration_says_to_transform_again`.
 
+A complete nightly refresh, with what each exit code tells the scheduler, is in the
+[runbooks](advanced/operations/runbooks.md#run-a-daily-refresh).
+
 ## 12. Anyone can rebuild the results (§3.1)
 
 **The problem.** A reviewer must be able to get the same outputs on their own machine, with no
@@ -497,7 +508,7 @@ steps as the command line ([HTTP API](api.md), [decision 0014](adr/0014-http-api
 | Many jobs over a long run | Only the last 100 finished jobs are kept; an older id gets `404` |
 | A read during a `transform` job | Gets the previous data, never a mix of old and new |
 | A bug | `500` `internal_error`, naming only the error's type; the traceback goes to the log |
-| Ctrl+C during a job | New jobs get `503` `shutting_down`; the running job finishes its files first |
+| Ctrl+C during a job | New connections are refused while the running job finishes its files; the process then ends with 130 (143 after SIGTERM) ([Runtime behaviour](advanced/implementation_design/runtime_behavior.md#start-and-stop)) |
 | The port is already in use | `serve` prints a message naming the address and the port, and ends with exit code 2 |
 
 ??? info "Checked by"

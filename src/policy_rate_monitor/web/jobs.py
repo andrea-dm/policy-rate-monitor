@@ -4,8 +4,8 @@ The jobs write the same files, so a single worker thread runs them, and a new jo
 refused while one is queued or running. Jobs live in memory: they are lost when the
 service stops, and only the last ``KEEP_FINISHED`` finished jobs are kept.
 
-See also: [HTTP API](api.md#jobs) and [decision
-0014](adr/0014-http-api.md).
+See also: [HTTP API](api.md#jobs), [decision 0014](adr/0014-http-api.md) and [the
+API process](advanced/implementation_design/runtime_behavior.md#the-api-process).
 """
 
 from __future__ import annotations

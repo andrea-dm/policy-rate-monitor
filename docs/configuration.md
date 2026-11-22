@@ -59,7 +59,9 @@ The reasons are in [decision 0017](adr/0017-bad-input-failures-and-writes.md).
 ### The data-quality rules
 
 A rule runs only if it is listed. The order in the file does not matter. Each finding names the
-rule, its severity and the series ([decision 0011](adr/0011-data-quality-rules.md)).
+rule, its severity and the series ([decision 0011](adr/0011-data-quality-rules.md)). What the
+severities mean, what happens to the rows and what to do with a finding are in
+[Data quality](data-quality.md).
 
 | Rule | Built | Parameters | What it reports |
 |---|---|---|---|
@@ -68,7 +70,7 @@ rule, its severity and the series ([decision 0011](adr/0011-data-quality-rules.m
 | `non_numeric_value` | yes | none | values that are not plain numbers within the configured precision and scale, and rows whose unit multiplier is blank or not a whole number; kept as invalid, never rounded |
 | `status_value_mismatch` | yes | none | an invalid status with a value, or a valid status with a missing value (a value that is not a number is `non_numeric_value`'s finding alone); kept as invalid |
 | `exact_duplicate` | yes | none | rows repeated exactly; the copies are dropped |
-| `conflicting_duplicate` | yes | `keep`: `first` or `last` | dates with more than one different observation; the configured one is kept |
+| `conflicting_duplicate` | yes | `keep`: `first` or `last` | rows dropped because another row has the same series and date; the configured one is kept |
 | `unexpected_value` | yes | `expected`: a column name → its expected code | rows whose code differs from the expected one; a column the file does not have is skipped |
 | `excess_decimals` | not yet | none | (planned) values with more decimals than the series' `DECIMALS` |
 | `series_attribute_not_constant` | not yet | `resolve` | (planned) a series attribute that changes within a series |

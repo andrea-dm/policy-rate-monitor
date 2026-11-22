@@ -2,7 +2,8 @@
 
 Each record states one decision: the problem, what was decided and why, the alternatives that were
 rejected, and what the decision costs. A record is not edited once accepted, apart from its links
-and a dated update note that points to a later record; a later record supersedes it.
+and a dated update note that points to a later record; a later record supersedes it. The records
+are part of the [Advanced](../advanced/index.md) pages, which describe the system as it is built.
 
 Records are numbered in the order the decisions were taken, by the date of a record's first
 decision. Decisions taken on the same day keep the order in which they were recorded. The records

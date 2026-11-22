@@ -11,7 +11,7 @@ install does not have it.
 
 ```bash
 uv sync --extra web                      # from a clone
-pip install 'policy-rate-monitor[web]'   # from a package
+pip install './policy_rate_monitor-<version>-py3-none-any.whl[web]'   # the wheel of a GitHub release
 ```
 
 Start it:
@@ -254,9 +254,16 @@ The rules:
   without a restart. A read during the transform gets the previous data. On a new install there is
   none: a read during the first transform gets `409` `missing_input` at once, saying a transform
   is running; poll the job, then read again.
-- **Stopping waits for the running job.** Ctrl+C stops accepting requests, then waits for a
-  running job to finish, so a transform never stops halfway through writing its files. A `POST`
-  while the service is stopping gets `503` `shutting_down`. To stop at once, kill the process.
+- **One process holds the state.** The jobs and the data in memory belong to the `serve` process;
+  how it runs them, and what it does not see (a `transform` run from the command line), is in
+  [Runtime behaviour](advanced/implementation_design/runtime_behavior.md#the-api-process).
+- **Stopping waits for the running job.** Ctrl+C (SIGINT) or `kill <pid>` (SIGTERM) stops accepting
+  requests, then waits for a running job to finish, so a transform never stops halfway through
+  writing its files; uvicorn handles the two signals alike. Once the stop has begun, new
+  connections are refused; the `503` `shutting_down` answer is given only when the application
+  runs under another server or a test client
+  ([Runtime behaviour](advanced/implementation_design/runtime_behavior.md#start-and-stop)). To stop at once, send SIGKILL (`kill -9`), at the risk of
+  interrupting a write.
 - **One process.** Run one uvicorn process: several would each have their own jobs and their own
   copy of the data.
 
@@ -294,7 +301,7 @@ CLI's [exit codes](cli.md#exit-codes):
 | `not_found` | 404 | no series for the code, no job with the id, or an unknown path | - |
 | `invalid_request` | 422 | a missing or malformed parameter or body, a blank or empty code, or a code outside the code pattern | 2 |
 | `job_running` | 409 | a job is queued or running; wait for it | - |
-| `shutting_down` | 503 | the service is stopping and accepts no new job | - |
+| `shutting_down` | 503 | the job runner is shut down and accepts no new job (not reached under `bis-prates serve`, which refuses new connections first) | - |
 | `http_error` | other | any other HTTP error, e.g. `405` with an `Allow` header | - |
 | `source_unavailable` | 503 | the BIS site cannot be reached and nothing is cached: try again later | 6 |
 | `unexpected_format` | 500 | the source file is not what the configuration describes, or the BIS site answers with a status such as 404 | 7 |
@@ -337,13 +344,18 @@ returns the document `report` writes to `summary.json`, apart from `generated_at
 
 The API sends no CORS headers. The web front end ([decision 0003](adr/0003-web-extension-stack.md),
 M8, not built yet) will be served by the Vite development server, which will forward its calls to
-the API, so the browser talks to one origin only. A page served from another origin cannot call
-the API directly.
+the API, so the browser talks to one origin only. A page served from another origin cannot read
+the API's answers; a browser still sends such a page's simple requests, and `POST /jobs/fetch` and
+`POST /jobs/transform` take no body, so it can start those jobs
+([Security](advanced/implementation_design/security.md#the-apis-exposure)).
 
 The API has no authentication: listen on `127.0.0.1` (the default), or put it behind a proxy that
 checks who calls.
 
 ## See also
+
+The call chain of each route is in [Workflows](advanced/operations/workflows.md#http-routes), and
+running the API for others in the [runbooks](advanced/operations/runbooks.md#serve-the-http-api).
 
 [`examples/http_api.ipynb`](https://github.com/andrea-dm/policy-rate-monitor/blob/develop/examples/http_api.ipynb)
 calls every endpoint from Python, without importing the package: start `bis-prates serve`, then

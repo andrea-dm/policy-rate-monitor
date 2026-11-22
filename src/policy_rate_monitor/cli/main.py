@@ -10,7 +10,8 @@ The report steps (``service``, and with it matplotlib and Jinja) are imported
 only by ``report`` and ``serve``, so ``--version``, ``fetch`` and ``transform``
 start without them.
 
-See also: [CLI reference](cli.md).
+See also: [CLI reference](cli.md) and [the command
+line](advanced/operations/workflows.md#the-command-line).
 """
 
 from __future__ import annotations

@@ -16,8 +16,10 @@ A reader in another process can still, for a moment, pair files of two runs
 (decision 0017).
 
 See also: [How it works](how-it-works.md), sections 3 and 4, [Data
-model](data-model.md), [decision 0011](adr/0011-data-quality-rules.md) and [decision
-0012](adr/0012-elt-raw-and-staged-layers.md).
+model](data-model.md), [Data quality](data-quality.md), [decision
+0011](adr/0011-data-quality-rules.md), [decision
+0012](adr/0012-elt-raw-and-staged-layers.md) and [the transform
+workflow](advanced/operations/workflows.md#bis-prates-transform).
 """
 
 from __future__ import annotations
@@ -101,8 +103,9 @@ def transform(config: DatasetConfig, data_dir: Path) -> TransformSummary:
             decoded or has no row of the configured selection, a required column is
             missing, or a series row does not make valid series metadata.
         OSError: A file cannot be written; the staged files of the previous run are
-            left as they were. Or a file cannot be renamed into place; the staged
-            files are removed.
+            left as they were. Or a file cannot be renamed into place; the files
+            renamed before it are new, and the rest stay as they were, each beside
+            its temporary file.
     """
     zip_path = cached_zip(config.source, data_dir)
     if not zip_path.is_file():
@@ -218,7 +221,11 @@ def load_release(data_dir: Path) -> SourceRelease | None:
         data_dir: The data directory holding ``staged/``.
 
     Returns:
-        The release; ``None`` when the file is absent or cannot be read.
+        The release; ``None`` when the file is absent, or is not a valid UTF-8 record
+        (with a warning in the log).
+
+    Raises:
+        OSError: The file exists but cannot be read (permissions, say).
     """
     path = data_dir / "staged" / "release.json"
     if not path.is_file():
@@ -522,7 +529,8 @@ def _drop_conflicting(
         issues,
         rule,
         staged.loc[conflicting, "series_key"],
-        f"dates with more than one different observation; kept the {keep} one",
+        "rows dropped for dates with more than one different observation;"
+        f" kept the {keep} one",
     )
     return staged[~conflicting]
 

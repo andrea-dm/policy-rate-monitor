@@ -1,7 +1,10 @@
 # Architecture
 
 How the package is organised, which part does what, and how one run flows through it. The reasons
-for each choice are in the [decision records](adr/index.md).
+for each choice are in the [decision records](adr/index.md). The contracts, invariants, failure
+modes and security of each part are in [Implementation design](advanced/implementation_design/index.md),
+and the layering rule with the imports each module may make in
+[System overview](advanced/implementation_design/system_overview.md#the-layering-rule).
 
 ## A pipeline of three commands
 
@@ -145,6 +148,9 @@ sequenceDiagram
     Service-->>CLI: the paths
     CLI-->>User: the paths; a warning for an unknown code; exit code
 ```
+
+The call chain of every command and route, down to the lowest-level function, is in
+[Workflows](advanced/operations/workflows.md#bis-prates-report).
 
 ## Where the tool can grow
 

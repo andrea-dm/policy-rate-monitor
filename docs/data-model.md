@@ -2,7 +2,11 @@
 
 What the tool stores, in which file, with which columns; the facts about the BIS file that shaped
 the design; and the assumptions the calculation makes. Figures are from the release recorded in
-`out/summary.json` (SHA-256 `79f614ab…`, retrieved on 19 November 2026).
+`out/summary.json` (SHA-256 `79f614ab…`, first retrieved on 19 November 2026; `out/` was regenerated from the same
+file, retrieved again unchanged, on 22 November 2026). The invariants the code
+enforces on this data, and how a rate stays exact to the outputs, are in the
+[implementation design](advanced/implementation_design/data_model.md); what a consumer of each output
+can rely on is in [Downstreams](advanced/operations/downstreams.md).
 
 ## The layers
 
@@ -78,7 +82,7 @@ attribute as published, for example `COMPILATION` (how the series is compiled) a
 
 `data_quality.json`, one record per finding (`DataQualityIssue`): the `rule`, its `severity`, the
 `series_key` (or none for a finding about the whole file), the number of rows (`count`) and a
-`detail` saying what was done.
+`detail` saying what was done ([Data quality](data-quality.md#2-what-a-finding-is)).
 
 `release.json`, the release the staged data was built from (`SourceRelease`): a copy of the record
 next to the ZIP, made only when its SHA-256 is that of the ZIP `transform` read. The outputs read

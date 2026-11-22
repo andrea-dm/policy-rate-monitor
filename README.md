@@ -84,7 +84,7 @@ series to keep, the data-quality rules, the output fields) is declared in
   a warning.
 - **Data quality reported, not hidden**: missing values are kept and marked invalid, duplicates are
   dropped or resolved as configured, and every finding is written to `data_quality.json` and shown
-  in the report.
+  in the report ([data quality](docs/data-quality.md)).
 - **One exit code per kind of failure**: each failure ends the command with its own number, so a
   script or scheduler running the commands knows what to do from the number alone: try again later
   when the BIS site cannot be reached (6), stop until someone fixes the configuration (4), or run
@@ -278,7 +278,7 @@ Exit codes:
 | 2 | invalid arguments (a code with other characters, a port outside 1 to 65535), a port `serve` cannot listen on, or `serve` without the `web` extra | fix the command line, or install the extra |
 | 3 | an unexpected error, i.e. a bug; the traceback is logged | report it |
 | 4 | invalid configuration | fix the configuration file |
-| 5 | a step's input is missing, the staged data was built with another configuration, or a `transform` kept changing it while it was read | run the step the message names (e.g. `bis-prates transform`), or try again once the transform ends |
+| 5 | a step's input is missing, or the staged data was built with another configuration | run the step the message names (e.g. `bis-prates transform`) |
 | 6 | source unavailable: no connection, a timeout, or a temporary HTTP error (5xx, 408, 429), after the retries | retry later |
 | 7 | unexpected source format: a corrupt ZIP, a CSV that cannot be read, an invalid series, or an HTTP answer such as 404 | check the BIS file and its address; the configuration may need updating |
 | 8 | a file cannot be read or written | check the data and output folders |
@@ -460,7 +460,8 @@ CSV is read, and the data-quality rules listed in the configuration when the dat
 ## Known Issues of the BIS Data
 
 What the BIS file looks like, where it may surprise a reader, and what the tool does about it.
-Figures are from the release recorded in `out/summary.json`.
+Figures are from the release recorded in `out/summary.json`. The checks the tool makes, and what a
+finding means, are in [docs/data-quality.md](docs/data-quality.md).
 
 ### Missing observations published as rows
 

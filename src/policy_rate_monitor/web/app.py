@@ -5,7 +5,8 @@ so tests pass the in-memory provider and ``bis-prates serve`` the bulk-file one.
 routes call ``service``, as the CLI does; they keep only the HTTP side: the query
 parameters, the statuses and the jobs.
 
-See also: [HTTP API](api.md) and [decision 0014](adr/0014-http-api.md).
+See also: [HTTP API](api.md), [decision 0014](adr/0014-http-api.md) and [the HTTP
+routes](advanced/operations/workflows.md#http-routes).
 """
 
 from __future__ import annotations

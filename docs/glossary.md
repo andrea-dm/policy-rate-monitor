@@ -38,7 +38,9 @@ Each term has one meaning throughout the code, the outputs and these pages.
 | **Provider** | An object that prepares the data (`fetch`, `transform`) and serves the canonical data (`DataProvider`). |
 | **Configuration** | Our description of how to process a dataset: source, structure, rules, settings (`configs/bis_cbpol.json`). |
 | **SDMX structural metadata** | The publisher's definition of the data: dimensions, attributes, code lists. Used only to validate the data (planned). |
-| **Data-quality rule** | A named check, selected and set up in the configuration. |
+| **Data quality** | How far the data can be relied on as published: what the tool checks, reports and does about rows it cannot use as rates. Explained on the [data quality](data-quality.md) page. |
+| **Data-quality rule** | A named check, selected and set up in the configuration, which sets its severity and can switch it off (`enabled: false`). See [data quality](data-quality.md#5-configuring-a-rule). |
 | **Finding** | One result of a data-quality rule: the rule, its severity, the series, the count and what was done (`DataQualityIssue`). |
+| **Severity** | How much attention a finding deserves: `info`, `warning` or `error`, set for each rule in the configuration; it changes nothing in how rows are treated or in the exit code. See [data quality](data-quality.md#4-severity). |
 | **Cache lifetime** | How long a downloaded copy is reused without a new request (`cache_ttl_hours`, 24). |
 | **Exit code** | The number a command returns when it ends: 0 for success, another number for each kind of failure ([CLI reference](cli.md#exit-codes)). |

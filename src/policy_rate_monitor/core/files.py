@@ -10,7 +10,8 @@ The renames are not one step: a reader in another process that reads the set whi
 they run can pair files of two runs (decision 0017).
 
 See also: [decisions 0012](adr/0012-elt-raw-and-staged-layers.md) and
-[0017](adr/0017-bad-input-failures-and-writes.md).
+[0017](adr/0017-bad-input-failures-and-writes.md), and [writing a set of
+files](advanced/implementation_design/runtime_behavior.md#writing-a-set-of-files).
 
 Examples:
     >>> import tempfile

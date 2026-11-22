@@ -395,6 +395,8 @@ class DataQualityIssue(_FrozenModel):
         detail: Human-readable explanation, including what was done about it.
         count: Number of affected observations. At least 1 today; 0 is kept for a
             rule that could not be evaluated, which no rule reports yet.
+
+    See also: [Data quality](data-quality.md#2-what-a-finding-is).
     """
 
     rule: NonEmptyStr

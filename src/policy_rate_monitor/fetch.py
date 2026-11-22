@@ -11,8 +11,8 @@ tried again, up to ``max_attempts`` times, then fails with ``SourceUnavailableEr
 Any other answer but 200 means the source has changed (``UnexpectedFormatError``, no
 retry). Up to five redirects are followed.
 
-See also: [How it works](how-it-works.md), sections 1 and 2, and
-[Data model](data-model.md).
+See also: [How it works](how-it-works.md), sections 1 and 2,
+[Data model](data-model.md) and [Upstreams](advanced/operations/upstreams.md).
 """
 
 from __future__ import annotations

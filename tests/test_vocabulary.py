@@ -29,20 +29,25 @@ PYTHON_FILES = sorted(
     for path in (ROOT / folder).rglob("*.py")
     if "__pycache__" not in path.parts and path.name != Path(__file__).name
 )
-TEXT_FILES = sorted(
-    [ROOT / "README.md", ROOT / "CONTRIBUTING.md", *(ROOT / "docs").glob("*.md")]
-)
 RECORDS = sorted((ROOT / "docs" / "adr").glob("*.md"))
+TEXT_FILES = sorted(
+    [
+        ROOT / "README.md",
+        ROOT / "CONTRIBUTING.md",
+        *(path for path in (ROOT / "docs").rglob("*.md") if path not in RECORDS),
+    ]
+)
 CHANGELOG = ROOT / "CHANGELOG.md"
 CONFIG_FILES = sorted((ROOT / "configs").glob("*.json"))
 NOTEBOOKS = sorted((ROOT / "examples").glob("*.ipynb"))
 
 # A name may contain "area" only as part of ref_area, or of euro_area and the like.
 GOOD_NAME = re.compile(r"ref_?area|euro_area|economic_area", re.IGNORECASE)
-# The word "area" in text, unless it is one of the phrases below.
+# The word "area" in text, unless it is one of the phrases below ("or-areas" is the
+# anchor of a heading that says "or areas").
 LONE_AREA = re.compile(
-    r"(?<!euro )(?<!euro-)(?<!economic )(?<!or )(?<!reference )(?<!reference-)(?<!ref-)"
-    r"\bareas?\b",
+    r"(?<!euro )(?<!euro-)(?<!economic )(?<!or )(?<!or-)(?<!reference )(?<!reference-)"
+    r"(?<!ref-)\bareas?\b",
     re.IGNORECASE,
 )
 
@@ -118,7 +123,9 @@ def test_python_text_says_country_or_economic_area(path: Path) -> None:
     assert not wrong, f"{path.relative_to(ROOT)}: {wrong}"
 
 
-@pytest.mark.parametrize("path", TEXT_FILES, ids=lambda path: path.name)
+@pytest.mark.parametrize(
+    "path", TEXT_FILES, ids=lambda path: path.relative_to(ROOT).as_posix()
+)
 def test_docs_say_country_or_economic_area(path: Path) -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
 

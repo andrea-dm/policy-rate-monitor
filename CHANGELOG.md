@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   report and the API read the source release from there (#34).
 - Decision 0017, on how bad input, failures and writes are handled, and a section on the HTTP API
   in the How it works page (#34).
+- A Data quality page (what is checked, what a finding means, what to do about it) and an
+  Advanced section in the documentation: the implementation design, the operations (inputs,
+  outputs, call chains, CI/CD, releases, runbooks) and the decision records (#34).
 
 ### Changed
 

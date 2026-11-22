@@ -6,9 +6,10 @@ It makes ``summary.csv`` and ``summary.json`` (``summary``), the PNG chart
 written together with ``core.files.write_files``, so a failure never leaves new files
 beside old ones.
 
-See also: [How it works](how-it-works.md), section 10, and decisions
+See also: [How it works](how-it-works.md), section 10, decisions
 [0012](adr/0012-elt-raw-and-staged-layers.md) and
-[0015](adr/0015-report-templates-and-html.md).
+[0015](adr/0015-report-templates-and-html.md), and
+[Downstreams](advanced/operations/downstreams.md#the-five-report-files).
 """
 
 # pyright: reportUnknownMemberType=false
@@ -101,8 +102,9 @@ class Report:
 
         Raises:
             OSError: A file cannot be written; the files already there are left as
-                they were. Or a file cannot be renamed into place; the files of the
-                set are removed.
+                they were. Or a file cannot be renamed into place; the files renamed
+                before it are new, and the rest stay as they were, each beside its
+                temporary file.
         """
         config = self._config
         out_dir = args.out_dir

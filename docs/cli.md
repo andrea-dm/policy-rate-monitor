@@ -50,6 +50,9 @@ the release of 19 November 2026:
 709984 observations of 49 series kept, 0 data-quality findings
 ```
 
+The findings themselves are in `data_quality.json` and in the report
+([Data quality](data-quality.md#7-where-the-findings-go)).
+
 ### `bis-prates report`
 
 For each requested country or economic area, finds the latest valid rate, the rate 12 months earlier and the change in
@@ -73,8 +76,9 @@ error: data/staged/observations.parquet does not exist: run `bis-prates transfor
 
 ### `bis-prates serve`
 
-Runs the [HTTP API](api.md) until it is stopped. Ctrl+C stops accepting requests and waits for a
-running job to finish ([Jobs](api.md#jobs)); kill the process to stop at once. It reads the
+Runs the [HTTP API](api.md) until it is stopped. Ctrl+C (SIGINT) or `kill <pid>` (SIGTERM) stops
+accepting requests and waits for a running job to finish ([Jobs](api.md#jobs)); SIGKILL
+(`kill -9`) stops at once, at the risk of interrupting a write. It reads the
 configuration and the data directory as the other commands do; the staged data is read when the
 first request needs it.
 
@@ -172,7 +176,7 @@ number alone ([decision 0010](adr/0010-cli-and-exit-codes.md)).
 | 2 | `USAGE_ERROR` | invalid arguments (a code outside the code pattern, a port outside 1 to 65535), a port `serve` cannot listen on, or `serve` without the `web` extra | fix the command line, or install the extra |
 | 3 | `INTERNAL_ERROR` | an unexpected error, that is a bug; the traceback is logged | report it |
 | 4 | `CONFIG_ERROR` | the configuration is missing or invalid | fix the configuration file |
-| 5 | `MISSING_INPUT` | a step's input is missing, the staged data was built with another configuration, or a `transform` kept changing it while it was read | run the step the message names, e.g. `bis-prates transform`, or try again once the transform ends |
+| 5 | `MISSING_INPUT` | a step's input is missing, or the staged data was built with another configuration | run the step the message names, e.g. `bis-prates transform` |
 | 6 | `SOURCE_UNAVAILABLE` | the source cannot be reached (no connection, a timeout, a 5xx, 408 or 429 after the retries) and nothing is cached | try again later |
 | 7 | `UNEXPECTED_FORMAT` | the source is not what the configuration describes: a corrupt ZIP, a CSV that cannot be read, an invalid series row, or an HTTP answer such as 404 | check the BIS file and its address; the configuration may need updating |
 | 8 | `OUTPUT_ERROR` | a file cannot be read or written | check the data and output folders |
@@ -190,4 +194,7 @@ bis-prates transform && bis-prates report --countries "US,EA,GB,JP,CH"
 ```
 
 The codes are defined in `policy_rate_monitor.cli.exit_codes.ExitCode`
-([API reference](reference.md)).
+([API reference](reference.md)). What each failure leaves on disk is in
+[Failure modes](advanced/implementation_design/failure_modes.md#what-a-failure-leaves-on-disk);
+the action a scheduler takes for each code is in the
+[runbooks](advanced/operations/runbooks.md#run-a-daily-refresh).
