@@ -84,9 +84,10 @@ flowchart BT
 ```
 
 The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, `service` (with
-matplotlib and Jinja) only inside `report`, and `sdmx` (with `pysdmx`) only for `transform` and
-`serve` when an SDMX rule is enabled, so `--version`, `fetch` and `transform` start without the
-first two, and `report` and `config validate` without `pysdmx`. In the same way,
+matplotlib and Jinja) only inside `report`, and `sdmx` (with `pysdmx`) only for `transform` when an
+SDMX rule is enabled, and for `report` and `serve` when the configuration has a `reference`
+section, so `--version`, `fetch` and `transform` start without the first two, and `fetch` and
+`config validate` without `pysdmx`. In the same way,
 `report` imports `chart.interactive` only when Plotly is installed, so the base install never
 loads FastAPI or Plotly. The diagram shows the main arrows; the full list of allowed imports of each
 module is in `tach.toml`.

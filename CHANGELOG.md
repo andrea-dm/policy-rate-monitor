@@ -23,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an SDMX rule is enabled; without it, the SDMX rules report "not evaluated" (#37).
 - A live test against the BIS SDMX API, in `tests/integration/`. A plain `pytest` leaves it out;
   run it with `pytest -m integration` (#37).
+- A requested country or area code with no series is checked against the BIS code list, in
+  `bis-prates report` and the HTTP API. A code the list does not have gets suggestions ("GBR is
+  not in the country or area code list; did you mean GB (United Kingdom)?"), from the new
+  configuration map `ref_area_suggestions` and from the official names; a code the list has but
+  the data does not is named from it, also in the report's table. `summary.json` and the API gain
+  `ref_area_name` and `suggestions` in each snapshot; `summary.csv` does not change. When the code
+  list cannot be obtained, the codes are not checked and the log says why. See decision 0018
+  (#41).
+
+### Changed
+
+- `bis-prates` no longer logs a line for each HTTP request made through `pysdmx` (#41).
 
 ## [0.3.0] — 2026-11-22
 

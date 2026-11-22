@@ -107,3 +107,20 @@ What BIS serves was checked live on 2026-11-22, with `pysdmx` 1.22.0:
   `tests/integration/test_sdmx_api.py`.
 - A run on 2026-11-22 against the live API, on the release of 19 November 2026: three requests,
   no SDMX finding, exit 0.
+
+## Updates
+
+- 2026-11-22 (#41): the requested codes are checked against the code list too. `ref_area_codes()`
+  became `ref_area_names()`, which also gives each code's official name. In `service.summary`, a
+  requested code with no series is looked up: a code of the list gets its official name, and a code
+  not in it gets suggestions, first from a new configuration map, `ref_area_suggestions`, then from
+  an exact, case-insensitive match on the official names; only codes of the list are suggested.
+  Similar-looking codes and parts of names are not used: tried on the 239 codes, they suggested
+  Greece for `GBR`, Ukraine for `UK` and Venezuela for `EZ`. `pycountry` was not chosen: a new,
+  large dependency that still misses `UK`, `GER` and `SUI`. The code list is asked for only when a
+  requested code has no series, once per summary, so a request for known codes sends nothing.
+  `report` and `serve` build the source when the configuration has a `reference` section. An
+  invalid code does not stop the command (exit codes unchanged) nor fail an API request (no 422):
+  the snapshot keeps `unknown_ref_area` and gains two additive fields, `ref_area_name` and
+  `suggestions`, instead of a new status. The names of series with data stay those of the file,
+  which BIS takes from the same code list.

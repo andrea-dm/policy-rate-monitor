@@ -69,8 +69,21 @@ way ([decision 0015](adr/0015-report-templates-and-html.md)). For a code the dat
 warning listing every code the data has, with its name:
 
 ```text
-warning: no series for UK. Available codes: AR (Argentina), AT (Austria), … ; EA stands for XM.
+warning: no series for ZZ.
+Available codes: AR (Argentina), AT (Austria), … ; EA stands for XM.
 ```
+
+With a `reference` section in the configuration, such a code is checked against the BIS code list
+first, and the warning says what it found:
+
+```text
+warning: GBR is not in the country or area code list; did you mean GB (United Kingdom)?
+warning: no series for BG (Bulgaria).
+```
+
+The report is still written, and the exit code does not change. When the code list cannot be
+obtained, the log says the codes were not checked
+([How it works](how-it-works.md#8-countries-or-areas-the-tool-cannot-answer-for-13)).
 
 A code with other characters than letters, digits and `_ @ $ -` (the code pattern of the
 configuration) is refused before anything runs, with code 2. Before a `transform`, or with staged
