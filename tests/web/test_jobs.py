@@ -15,7 +15,7 @@ from policy_rate_monitor.core.models import SourceRelease
 from policy_rate_monitor.providers import InMemoryProvider
 from policy_rate_monitor.web import create_app
 from policy_rate_monitor.web.errors import ApiError
-from policy_rate_monitor.web.jobs import JobRunner, JobStatus
+from policy_rate_monitor.web.jobs import KEEP_FINISHED, JobRunner, JobStatus
 from tests.web.conftest import (
     ROWS,
     SERIES,
@@ -26,6 +26,7 @@ from tests.web.conftest import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from fastapi import FastAPI
@@ -174,8 +175,11 @@ def test_a_report_job_with_nothing_staged_fails_with_missing_input(
 
     done = _finished(app, job["id"])
     assert done["status"] == JobStatus.FAILED
-    assert done["error"]["error"] == "missing_input"
-    assert "transform" in done["error"]["message"]
+    assert done["error"] == {
+        "error": "missing_input",
+        "message": "data/staged/observations.parquet does not exist: "
+        "run POST /jobs/transform first",
+    }
 
 
 def test_a_report_job_writes_the_report_files(
@@ -213,6 +217,20 @@ def test_a_report_job_needs_a_code(client: TestClient, body: dict[str, object]) 
 
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_request"
+
+
+def test_a_report_job_refuses_a_code_outside_the_code_pattern(
+    client: TestClient,
+) -> None:
+    bad = '=HYPERLINK("x")'
+
+    response = client.post("/jobs/report", json={"countries": ["US", bad]})
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": "invalid_request",
+        "message": f"invalid code {bad!r}: use letters, digits and _ @ $ -",
+    }
 
 
 def test_an_unknown_job_is_not_found(client: TestClient) -> None:
@@ -272,4 +290,90 @@ def test_the_runner_refuses_a_job_until_the_running_one_has_finished() -> None:
     assert runner.wait(first.id, WAIT).status is JobStatus.SUCCEEDED
     second = runner.submit("transform", dict)
     assert runner.wait(second.id, WAIT).status is JobStatus.SUCCEEDED
+    runner.shutdown()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("stop", [KeyboardInterrupt, SystemExit])
+def test_a_job_stopped_by_a_base_exception_is_failed_and_the_next_one_runs(
+    stop: type[BaseException],
+) -> None:
+    runner = JobRunner()
+
+    def stopped() -> dict[str, object]:
+        raise stop
+
+    job = runner.submit("fetch", stopped)
+
+    done = runner.wait(job.id, WAIT)
+    assert done.status is JobStatus.FAILED
+    assert done.error is not None
+    assert done.error.message == stop.__name__
+    second = runner.submit("transform", dict)
+    assert runner.wait(second.id, WAIT).status is JobStatus.SUCCEEDED
+    runner.shutdown()
+
+
+class UnprintableError(OSError):
+    @override
+    def __str__(self) -> str:
+        raise RuntimeError
+
+
+class ExitingError(OSError):
+    @override
+    def __str__(self) -> str:
+        raise SystemExit
+
+
+def no_dict() -> Any:  # a bug: the work must return a dict
+    return ["not", "a", "dict"]
+
+
+def unprintable() -> dict[str, object]:
+    raise UnprintableError
+
+
+def exiting() -> dict[str, object]:
+    raise ExitingError
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("work", [no_dict, unprintable, exiting])
+def test_a_job_whose_end_cannot_be_recorded_as_is_is_still_failed(
+    work: Callable[[], dict[str, object]],
+) -> None:
+    runner = JobRunner()
+
+    job = runner.submit("fetch", work)
+
+    assert runner.wait(job.id, WAIT).status is JobStatus.FAILED
+    second = runner.submit("transform", dict)
+    assert runner.wait(second.id, WAIT).status is JobStatus.SUCCEEDED
+    runner.shutdown()
+
+
+@pytest.mark.unit
+def test_the_runner_keeps_the_last_finished_jobs_and_the_running_one() -> None:
+    runner = JobRunner()
+    ids: list[str] = []
+    for _ in range(KEEP_FINISHED + 1):
+        job = runner.submit("fetch", dict)
+        runner.wait(job.id, WAIT)
+        ids += [job.id]
+    gate = threading.Event()
+
+    def slow() -> dict[str, object]:
+        gate.wait(WAIT)
+        return {}
+
+    running = runner.submit("transform", slow)
+
+    assert runner.get(ids[0]) is None
+    assert all(runner.get(job_id) is not None for job_id in ids[1:])
+    assert runner.get(running.id) is not None
+    gate.set()
+    assert runner.wait(running.id, WAIT).status is JobStatus.SUCCEEDED
+    assert runner.get(ids[1]) is None
+    assert runner.get(running.id) is not None
     runner.shutdown()

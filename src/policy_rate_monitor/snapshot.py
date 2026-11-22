@@ -45,8 +45,8 @@ class SnapshotArgs:
 
     Attributes:
         observations: Staged observations with the canonical columns, values as
-            Arrow decimals (``to_pandas(types_mapper=ArrowDtype)``, as the CLI
-            does).
+            Arrow decimals (``to_pandas(types_mapper=ArrowDtype)``, as
+            ``service.load_staged`` does for the CLI and the HTTP API).
         series: Metadata of every series in *observations*.
         requested: The codes as the user typed them. They are matched after
             stripping and upper-casing, empty ones and repeats are dropped, and

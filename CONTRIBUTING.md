@@ -20,13 +20,14 @@ local development workflow.
    uv run ruff check && \
    uv run ruff format --check && \
    uv run deptry src/ tests/ && \
-   uv run pyright src/ tests/ && \
+   uv run pyright src/ tests/ diagnostics/ && \
    uv run pytest && \
    uv run mkdocs build --strict
    ```
    The hooks in `.pre-commit-config.yaml` follow the same order and stop at the first failure:
    tach and ruff at every commit, deptry and pyright at every push. pytest and the docs build run
-   in CI. Install the hooks once with `uvx pre-commit install`.
+   in CI. Install the hooks once with `uvx prek install`: the `builtin` repo in the file is a prek
+   feature, which pre-commit itself refuses.
 6. **Update the changelog**: add an entry under `## [Unreleased]` in `CHANGELOG.md`.
 7. **Open a pull request** against `develop`, saying what changed and why, and linking the issue
    (`Closes #<number>`).
@@ -64,7 +65,7 @@ commands are the local equivalents.
 | Lint | `uv run ruff check` | `src/`, `tests/`, `diagnostics/` (`include` in `pyproject.toml`) |
 | Format | `uv run ruff format --check` | Same as lint |
 | Dependencies | `uv run deptry src/ tests/` | Declared dependencies match the imports |
-| Type check | `uv run pyright src/ tests/` | Strict mode |
+| Type check | `uv run pyright src/ tests/ diagnostics/` | Strict mode |
 | Tests | `uv run pytest` | Python 3.12, 3.13 and 3.14, with the docstring examples (the other checks run on 3.12) |
 | Docs build | `uv run mkdocs build --strict` | Broken links and anchors |
 | Commit format | (CI job `commit-format`) | Every non-merge commit of a pull request |

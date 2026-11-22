@@ -1,9 +1,13 @@
-"""Validated configuration contracts. Depends only on ``core``."""
+"""Validated configuration contracts. Depends only on ``core``.
+
+See also: [Configuration](configuration.md).
+"""
 
 from __future__ import annotations
 
 from policy_rate_monitor.config.models import (
     CANONICAL_COLUMNS,
+    CODE_PATTERN,
     ColumnsSection,
     Concept,
     DatasetConfig,
@@ -21,12 +25,14 @@ from policy_rate_monitor.config.models import (
     SourceSection,
     StructureSection,
     TimeDimension,
+    requested_codes,
 )
 from policy_rate_monitor.config.parsing import parse_config
 from policy_rate_monitor.config.source import ConfigSource, FileConfigSource
 
 __all__ = [
     "CANONICAL_COLUMNS",
+    "CODE_PATTERN",
     "ColumnsSection",
     "Concept",
     "ConfigSource",
@@ -47,4 +53,5 @@ __all__ = [
     "StructureSection",
     "TimeDimension",
     "parse_config",
+    "requested_codes",
 ]

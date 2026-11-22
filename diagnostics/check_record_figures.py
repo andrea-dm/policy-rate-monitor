@@ -1,9 +1,9 @@
 """Reproduces the figures about the BIS data quoted in the decision records.
 
-- Decision 0005: for how many areas the 12-month change in basis points, computed in
-  floating point, differs from the exact decimal result.
-- Decision 0011: the highest valid rate of each area, which shows the implausible
-  values of a few series (Brazil, Argentina).
+- Decision 0005: for how many countries or areas the 12-month change in basis points,
+  computed in floating point, differs from the exact decimal result.
+- Decision 0011: the highest valid rate of each country or area, which shows the
+  implausible values of a few series (Brazil, Argentina).
 
 The 12-month change follows the report's rule: the latest valid observation, and the
 last valid one on or before the same date 12 months earlier.
@@ -49,7 +49,7 @@ def main() -> None:
         if Decimal(repr(in_floats)) != exact:
             not_exact += [f"{area}: {exact:f} bp, in floats {in_floats}"]
 
-    count = f"{len(not_exact)} of {areas.ngroups} areas"
+    count = f"{len(not_exact)} of {areas.ngroups} countries or areas"
     print(f"12-month change not exact in floats: {count}")
     for line in not_exact:
         print(f"  {line}")

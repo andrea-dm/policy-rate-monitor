@@ -55,6 +55,8 @@ __all__ = [
 class StagedData:
     """Everything a summary, a time series or a report is computed from.
 
+    The API's threads share one, so the series and the findings are tuples.
+
     Attributes:
         observations: The staged observations, values as Arrow decimals.
         series: Metadata of every staged series.
@@ -63,8 +65,8 @@ class StagedData:
     """
 
     observations: DataFrame
-    series: list[SeriesMetadata]
-    issues: list[DataQualityIssue]
+    series: tuple[SeriesMetadata, ...]
+    issues: tuple[DataQualityIssue, ...]
     release: SourceRelease | None
 
 
@@ -132,8 +134,8 @@ def load_staged(provider: DataProvider) -> StagedData:
     observations = table.to_pandas(types_mapper=ArrowDtype)  # pyright: ignore[reportUnknownMemberType]
     return StagedData(
         observations=observations,
-        series=[provider.series_metadata(key) for key in provider.list_series()],
-        issues=provider.data_quality_issues(),
+        series=tuple(provider.series_metadata(key) for key in provider.list_series()),
+        issues=tuple(provider.data_quality_issues()),
         release=provider.source_release(),
     )
 

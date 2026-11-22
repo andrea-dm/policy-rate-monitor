@@ -19,7 +19,7 @@
   "reportImplicitStringConcatenation": "none",
   "reportCallInDefaultInitializer": "none",
 
-  "include": ["src", "tests", "housekeeping", ".github/utils"],
+  "include": ["src", "tests", "diagnostics", "housekeeping", ".github/utils"],
   "exclude": ["**/.*", "**/__pycache__", "**/node_modules", "notebooks", "tmp"],
   "executionEnvironments": [
     {

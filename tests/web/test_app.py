@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import json
+import socket
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 
 from policy_rate_monitor.cli.main import main
 from policy_rate_monitor.core.models import SnapshotStatus
 from policy_rate_monitor.service import Observation, TimeSeries
-from policy_rate_monitor.web import create_app
+from policy_rate_monitor.web import ListenError, create_app, serve
 from tests.web.conftest import CONFIG, REQUESTED, StagedLater
 
 if TYPE_CHECKING:
@@ -179,9 +181,80 @@ def test_with_nothing_staged_the_read_endpoints_say_to_run_transform(
     response = client.get(path)
 
     assert response.status_code == 409
-    body = response.json()
-    assert body["error"] == "missing_input"
-    assert "transform" in body["message"]
+    assert response.json() == {
+        "error": "missing_input",
+        "message": "data/staged/observations.parquet does not exist: "
+        "run POST /jobs/transform first",
+    }
+
+
+@pytest.mark.parametrize("bad", ['=HYPERLINK("x")', "<img src=x>", "U S"])
+@pytest.mark.parametrize(
+    "path",
+    ["/summary?countries=US,{}", "/timeseries?country={}", "/chart?countries={}"],
+)
+def test_a_code_outside_the_code_pattern_gets_422(
+    client: TestClient, path: str, bad: str
+) -> None:
+    response = client.get(path.format(bad))
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": "invalid_request",
+        "message": f"invalid code {bad!r}: use letters, digits and _ @ $ -",
+    }
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/summary?countries=<img>", "/timeseries?country=<img>", "/chart?countries=<img>"],
+)
+def test_a_bad_code_gets_422_before_the_staged_data_is_read(
+    config: DatasetConfig, tmp_path: Path, path: str
+) -> None:
+    client = TestClient(create_app(config, StagedLater(config), tmp_path))
+
+    response = client.get(path)
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "invalid_request"
+
+
+def test_codes_with_spaces_around_are_read(client: TestClient) -> None:
+    response = client.get("/summary", params={"countries": " US , ea"})
+
+    assert response.status_code == 200
+    requested = [item["requested_ref_area"] for item in response.json()["snapshots"]]
+    assert requested == ["US", "ea"]
+
+
+def test_serve_hands_uvicorn_the_socket_it_bound(
+    config: DatasetConfig,
+    provider: InMemoryProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    bound: list[tuple[str, int]] = []
+
+    def fake_run(_server: uvicorn.Server, sockets: list[socket.socket]) -> None:
+        bound.extend(sock.getsockname() for sock in sockets)
+
+    monkeypatch.setattr(uvicorn.Server, "run", fake_run)
+
+    serve(config, provider, host="127.0.0.1", port=0, out_dir=tmp_path)
+
+    ((host, port),) = bound
+    assert host == "127.0.0.1"
+    assert port > 0
+
+
+def test_serve_on_a_busy_port_raises_a_listen_error(
+    config: DatasetConfig, provider: InMemoryProvider, tmp_path: Path
+) -> None:
+    with socket.create_server(("127.0.0.1", 0)) as busy:
+        port = busy.getsockname()[1]
+        with pytest.raises(ListenError, match=f"127.0.0.1, port {port}"):
+            serve(config, provider, host="127.0.0.1", port=port, out_dir=tmp_path)
 
 
 def test_a_bug_gets_500_without_its_traceback(

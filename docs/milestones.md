@@ -81,7 +81,7 @@ API metadata) are the two optional extensions in its §5.
 | M1 Acquisition | The `bis-prates` entry point; `bis-prates fetch`: discovery, cache and failure handling | §1.1 | Core |
 | M2 Canonical data & quality | `bis-prates transform`: canonical daily observations, series metadata, configurable data-quality rules | §1.2, §3.3 (missing values, duplicates) | Core |
 | M3 Snapshot calculation | Latest rate, rate 12 months earlier, change in basis points | §1.3, §3.3 (12-month change) | Core |
-| M4 Reporting | `bis-prates report`: the four output files | §1.4, §3.2 | Core |
+| M4 Reporting | `bis-prates report`: the four output files (`report.html`, the fifth, came with M6) | §1.4, §3.2 | Core |
 | M5 Core release | README (with the AI-usage note), documentation, verified outputs, `DataProvider` interface, tag `v0.1.0` | §3.1, §3.4 | Core |
 | M6 HTTP API | FastAPI endpoints over the same service layer | §2 Option B, Ext. 1 | Extension |
 | M7 SDMX validation | Data-quality rules and country-code checks against BIS structural metadata | Ext. 2 | Extension |
@@ -282,7 +282,7 @@ on small hand-made observation tables, in parallel with M1 and M2.
 **Done when.**
 
 - `bis-prates report --countries "US,EA,GB,JP,CH" --start 2015-01-01` produces `summary.csv`,
-  `summary.json`, `policy_rates.png` and `report.md`.
+  `summary.json`, `policy_rates.png` and `report.md`. (`report.html` was added in M6, #12.)
 - An end-to-end test, from a fixture ZIP to the output files, passes.
 
 **Why it is its own milestone.** The report is what users actually read. Its concerns are wording,
@@ -442,6 +442,6 @@ Each milestone is a GitHub milestone. Its work is tracked in issues and done on 
 | M3 Snapshot calculation | Done |
 | M4 Reporting | Done, together with M3 |
 | M5 Core release | Done, released as `v0.1.0`; three data-quality rules left for a later release |
-| M6 HTTP API | In progress: the fast analytics (#13), the `config` commands and options from the environment (#7), and the HTTP API (#27) are done; the HTML report (#12) and the configuration follow-ups (#8) remain |
+| M6 HTTP API | Done, apart from the configuration follow-ups (#8): the fast analytics (#13), the `config` commands and options from the environment (#7), the HTTP API (#27), the HTML report (#12), the accessible charts (#29), the notebook over HTTP (#30) and the fixes found in the review before 0.3.0 (#34) |
 | M7 SDMX validation | Not started |
 | M8 Web front end | Not started |

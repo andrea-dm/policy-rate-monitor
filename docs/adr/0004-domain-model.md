@@ -75,3 +75,7 @@ object at a time.
   that contains "area" outside `ref_area`, and on the bare word in docstrings, comments, messages
   and the docs. Not taken: keeping "area" as a defined short form in prose, which reads more
   lightly but leaves two names for one concept and let the old ones slip back.
+- 2026-11-22 (#34): `tests/test_vocabulary.py` also checks the decision records and the
+  CHANGELOG. A record keeps its text as accepted, so in the records decided before 2026-11-21
+  only the update notes from that day on are checked; text in double quotes is a quotation (a
+  message as an older version printed it, or the word itself) and is not checked.

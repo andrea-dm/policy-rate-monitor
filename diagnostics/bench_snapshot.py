@@ -10,7 +10,7 @@ Scaling: the real daily series are replicated ``scale`` times under new codes
 
 Usage, from the repository root (duckdb is benchmark-only, not a project dependency):
     BENCH="uv run --with pyarrow --with duckdb python diagnostics/bench_snapshot.py"
-    $BENCH prep                      # writes tmp/bench_base.parquet
+    $BENCH prep                      # writes to a gitignored scratch folder
     $BENCH run <approach> <scale>    # prints one JSON line
 
 Approaches: bisect_py, searchsorted_np, pandas_merge_asof, arrow_join_asof, duckdb_asof
@@ -26,7 +26,7 @@ import sys
 import time
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, cast
 
 import duckdb
 import numpy as np
@@ -39,6 +39,8 @@ import pyarrow.parquet as pq
 if TYPE_CHECKING:
     import datetime as dt
     from collections.abc import Callable
+
+    from numpy.typing import NDArray
 
 ROOT = next(
     p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").exists()
@@ -54,8 +56,9 @@ SOURCE_COLUMNS = [
     "OBS_STATUS:Observation Status",
 ]
 
-# (latest_date, latest_value, target_date, prior_date, prior_value) per series
-type Snapshot = tuple[Any, Any, Any, Any, Any]
+# (latest_date, latest_value, target_date, prior_date, prior_value) per series; each
+# approach returns its own date and decimal types, which `normalise` makes comparable.
+type Snapshot = tuple[object, object, object, object, object]
 type Results = dict[str, Snapshot]
 
 
@@ -72,30 +75,30 @@ def prep(csv_path: str | Path = CSV) -> None:
     valid = pc.invert(pc.starts_with(table["status"], "M:"))
     table = table.filter(pc.and_(daily, valid))
     dates = pc.strptime(table["period"], format="%Y-%m-%d", unit="s")
-    base = pa.table(
-        {
-            "ref_area": pc.utf8_slice_codeunits(table["ref_area"], 0, 2),
-            "date": pc.cast(dates, pa.date32()),
-            "value": pc.cast(table["value"], RATE),
-        }
+    base = pa.Table.from_arrays(
+        [
+            pc.utf8_slice_codeunits(table["ref_area"], 0, 2),
+            dates.cast(pa.date32()),
+            table["value"].cast(RATE),
+        ],
+        names=["ref_area", "date", "value"],
     )
     BASE.parent.mkdir(exist_ok=True)
-    pq.write_table(base, BASE)
+    pq.write_table(base, BASE)  # pyright: ignore[reportUnknownMemberType]
     series = len(pc.unique(base["ref_area"]))
     print(f"base rows={base.num_rows:,} series={series}")
 
 
 def load(scale: int) -> pa.Table:
     """Return the base table replicated ``scale`` times, sorted by (series, date)."""
-    base = pq.read_table(BASE)
+    base = pq.read_table(BASE)  # pyright: ignore[reportUnknownMemberType]
+    areas = base["ref_area"].to_pylist()
     parts = [
-        base.set_column(
-            0, "ref_area", pc.binary_join_element_wise(base["ref_area"], f"_{k}", "")
-        )
+        base.set_column(0, "ref_area", pa.array([f"{area}_{k}" for area in areas]))
         for k in range(scale)
     ]
     table = pa.concat_tables(parts).combine_chunks()
-    return table.sort_by([("ref_area", "ascending"), ("date", "ascending")])
+    return table.sort_by([("ref_area", "ascending"), ("date", "ascending")])  # pyright: ignore[reportUnknownMemberType]
 
 
 def minus_12_months(dates: list[dt.date]) -> list[dt.date]:
@@ -103,7 +106,7 @@ def minus_12_months(dates: list[dt.date]) -> list[dt.date]:
     return [(pd.Timestamp(d) - pd.DateOffset(months=12)).date() for d in dates]
 
 
-def group_bounds(table: pa.Table) -> tuple[list[str], np.ndarray]:
+def group_bounds(table: pa.Table) -> tuple[list[str], NDArray[np.intp]]:
     """Return series names and the start offsets of each series (plus the end)."""
     areas = table["ref_area"].to_numpy(zero_copy_only=False)
     starts = np.flatnonzero(np.r_[True, areas[1:] != areas[:-1]])
@@ -121,11 +124,12 @@ def bisect_py(table: pa.Table) -> Results:
     out: Results = {}
     for i, name in enumerate(names):
         series = table.slice(bounds[i], bounds[i + 1] - bounds[i])
-        dates, values = series["date"].to_pylist(), series["value"].to_pylist()
+        dates = cast("list[dt.date]", series["date"].to_pylist())
+        values = series["value"].to_pylist()
         target = minus_12_months([dates[-1]])[0]
         j = bisect.bisect_right(dates, target) - 1
-        prior = (dates[j], values[j]) if j >= 0 else (None, None)
-        out[name] = (dates[-1], values[-1], target, *prior)
+        prior_date, prior_value = (dates[j], values[j]) if j >= 0 else (None, None)
+        out[name] = (dates[-1], values[-1], target, prior_date, prior_value)
     return out
 
 
@@ -140,35 +144,34 @@ def searchsorted_np(table: pa.Table) -> Results:
     epoch = np.datetime64("1970-01-01")
     out: Results = {}
     for i, name in enumerate(names):
-        target_day = (np.datetime64(targets[i]) - epoch).astype(int)
-        start, end = bounds[i], bounds[i + 1]
-        j = start + np.searchsorted(days[start:end], target_day, side="right") - 1
+        target_day = int((np.datetime64(targets[i]) - epoch).astype(int))
+        start, end = int(bounds[i]), int(bounds[i + 1])
+        j = start + int(np.searchsorted(days[start:end], target_day, side="right")) - 1
         prior = (
-            (to_date(int(days[j])), values[int(j)].as_py())
-            if j >= start
-            else (None, None)
+            (to_date(int(days[j])), values[j].as_py()) if j >= start else (None, None)
         )
-        out[name] = (latest[i], values[int(last[i])].as_py(), targets[i], *prior)
+        latest_value = values[int(last[i])].as_py()
+        out[name] = (latest[i], latest_value, targets[i], prior[0], prior[1])
     return out
 
 
 def pandas_merge_asof(table: pa.Table) -> Results:
     """Approach C: one ``pd.merge_asof`` over all series (keys as datetime64)."""
-    df = table.to_pandas(types_mapper=pd.ArrowDtype)
+    df = table.to_pandas(types_mapper=pd.ArrowDtype)  # pyright: ignore[reportUnknownMemberType]
     latest = df.groupby("ref_area", sort=False).tail(1)
     left = pd.DataFrame(
         {
-            "ref_area": latest["ref_area"].to_numpy(),
-            "latest_date": latest["date"].astype("datetime64[ns]").to_numpy(),
-            "latest_value": latest["value"].to_numpy(),
+            "ref_area": latest.ref_area.to_numpy(),
+            "latest_date": latest.date.astype("datetime64[ns]").to_numpy(),
+            "latest_value": latest.value.to_numpy(),
         }
     )
-    left["target"] = left["latest_date"] - pd.DateOffset(months=12)
+    left["target"] = left.latest_date - pd.DateOffset(months=12)
     right = pd.DataFrame(
         {
-            "ref_area": df["ref_area"].to_numpy(),
-            "prior_date": df["date"].astype("datetime64[ns]").to_numpy(),
-            "prior_value": df["value"],
+            "ref_area": df.ref_area.to_numpy(),
+            "prior_date": df.date.astype("datetime64[ns]").to_numpy(),
+            "prior_value": df.value,
         }
     )
     merged = pd.merge_asof(
@@ -180,14 +183,14 @@ def pandas_merge_asof(table: pa.Table) -> Results:
         direction="backward",
     )
     return {
-        r.ref_area: (
-            r.latest_date.date(),
-            r.latest_value,
-            r.target.date(),
-            None if pd.isna(r.prior_date) else r.prior_date.date(),
-            None if pd.isna(r.prior_value) else r.prior_value,
+        row["ref_area"]: (
+            row["latest_date"].date(),
+            row["latest_value"],
+            row["target"].date(),
+            None if pd.isna(row["prior_date"]) else row["prior_date"].date(),
+            None if pd.isna(row["prior_value"]) else row["prior_value"],
         )
-        for r in merged.itertuples()
+        for row in merged.to_dict("records")
     }
 
 
@@ -200,27 +203,29 @@ def arrow_join_asof(table: pa.Table) -> Results:
     the whole history.
     """
     _, bounds = group_bounds(table)
-    latest = table.take(pa.array(bounds[1:] - 1))
-    targets = minus_12_months(latest["date"].to_pylist())
+    latest = table.take(pa.array(bounds[1:] - 1, pa.int64()))
+    targets = minus_12_months(cast("list[dt.date]", latest["date"].to_pylist()))
     days = table["date"].combine_chunks().cast(pa.int32())
     offset = min(pc.min(days).as_py(), 0)
     target_days = pa.array(targets, pa.date32()).cast(pa.int32())
-    left = pa.table(
-        {
-            "ref_area": latest["ref_area"],
-            "target": pc.subtract(target_days, offset),
-        }
+    left = pa.Table.from_arrays(
+        [latest["ref_area"], pc.subtract(target_days, offset)],
+        names=["ref_area", "target"],
     )
-    right = pa.table(
-        {
-            "ref_area": table["ref_area"],
-            "target": pc.subtract(days, offset),
-            "row": pa.array(np.arange(table.num_rows)),
-        }
+    right = pa.Table.from_arrays(
+        [
+            table["ref_area"],
+            pc.subtract(days, offset),
+            pa.array(np.arange(table.num_rows), pa.int64()),
+        ],
+        names=["ref_area", "target", "row"],
     )
     history = pc.max(table["date"]).as_py() - pc.min(table["date"]).as_py()
-    joined = left.sort_by("target").join_asof(
-        right.sort_by("target"), on="target", by="ref_area", tolerance=-history.days - 1
+    joined: pa.Table = left.sort_by("target").join_asof(  # pyright: ignore[reportUnknownMemberType]
+        right.sort_by("target"),  # pyright: ignore[reportUnknownMemberType]
+        on="target",
+        by="ref_area",
+        tolerance=-history.days - 1,
     )
     prior_dates = pc.take(table["date"], joined["row"]).to_pylist()
     prior_values = pc.take(table["value"], joined["row"]).to_pylist()
@@ -229,7 +234,7 @@ def arrow_join_asof(table: pa.Table) -> Results:
     return {
         area: (by_area[area]["date"], by_area[area]["value"], target, p_date, p_value)
         for area, target, p_date, p_value in zip(
-            joined["ref_area"].to_pylist(),
+            cast("list[str]", joined["ref_area"].to_pylist()),
             joined_targets.to_pylist(),
             prior_dates,
             prior_values,

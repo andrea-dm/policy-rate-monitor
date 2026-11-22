@@ -67,3 +67,13 @@ share it.
   `test_duplicates_are_dropped_and_reported`, `test_unparseable_dates_are_dropped_and_reported`,
   `test_a_value_with_more_decimals_than_the_type_is_never_rounded`.
 - `diagnostics/check_record_figures.py`: the highest rate of each area (Brazil, Argentina).
+
+## Updates
+
+- 2026-11-22 (#34): `conflicting_duplicate`'s `keep` applies whether the rule is on or off, and
+  loading the configuration rejects a `keep` other than `first` or `last`, and an
+  `unexpected_value` whose `params.expected` is missing, not an object of codes, or names a column
+  the configuration does not have (in `structure` or in `columns.unmapped`). A blank or non-whole `UNIT_MULT` makes its rows
+  invalid, with a `non_numeric_value` finding, instead of stopping the transform; a bad `DECIMALS`
+  leaves the series' decimals unknown, with a warning; and `status_value_mismatch` no longer
+  reports a value that is not a number ([0017](0017-bad-input-failures-and-writes.md)).

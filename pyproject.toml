@@ -332,6 +332,14 @@ docs = [
     "griffe>=1.0",
 ]
 
+# Only the scripts in diagnostics/ import these; the package never does. setuptools is
+# what pyximport (from Cython) builds the trial kernel with.
+diagnostics = [
+    "cython>=3.3.1",
+    "duckdb>=2.0.0",
+    "setuptools>=80.9.0",
+]
+
 # ════════════════════════════════════════════════════════════════════════ Testing ═══ #
 
 [tool.pytest.ini_options]

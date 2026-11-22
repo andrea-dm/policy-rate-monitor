@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from policy_rate_monitor.core.models import DataQualityIssue, SourceRelease
+from policy_rate_monitor.core.models import (
+    DataQualityIssue,
+    SourceRelease,
+    TransformSummary,
+)
 
 if TYPE_CHECKING:
     from datetime import date
@@ -91,6 +95,17 @@ class ProviderContract:
     ) -> None:
         assert isinstance(provider.fetch(), SourceRelease)
         assert isinstance(provider.source_release(), SourceRelease)
+
+    def test_transform_returns_the_counts_it_staged(
+        self, provider: DataProvider
+    ) -> None:
+        summary = provider.transform()
+
+        assert isinstance(summary, TransformSummary)
+        assert summary.observations == provider.observations().num_rows
+        assert summary.series == len(provider.list_series())
+        assert summary.issues == len(provider.data_quality_issues())
+        assert summary.rows_read >= summary.observations
 
     def test_data_quality_issues_are_core_models(self, provider: DataProvider) -> None:
         issues = provider.data_quality_issues()

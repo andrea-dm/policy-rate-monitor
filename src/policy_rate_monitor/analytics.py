@@ -86,7 +86,9 @@ ONE_MONTH = np.timedelta64(1, "M")
 """One month, to step NumPy month dates."""
 
 
-@dataclass(frozen=True)
+# eq=False on the dataclasses over arrays: a generated __eq__ would compare the arrays,
+# whose == gives an array, not a bool, and fails. They compare by identity instead.
+@dataclass(frozen=True, eq=False)
 class RateHistory:
     """The valid observations of every series as fixed-point NumPy arrays.
 
@@ -151,7 +153,7 @@ class RateHistory:
         return Decimal(int(self.values[index])).scaleb(-self.scale)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class ChangeHistory:
     """The change of every observation against the one *months* earlier.
 
@@ -166,7 +168,7 @@ class ChangeHistory:
     change: NDArray[np.int64]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class SnapshotArrays:
     """Latest and prior observation of every series at one as-of date.
 
@@ -189,7 +191,7 @@ class SnapshotArrays:
     change: NDArray[np.int64]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RateMoves:
     """The observations at which a series' rate differs from the one before.
 
@@ -379,6 +381,8 @@ def rate_moves(history: RateHistory) -> RateMoves:
 
 # --- The searches -------------------------------------------------
 # Each one has a NumPy version and a loop that numba can compile.
+# TODO(andrea-dm): port the two loops to Cython if a clean benchmark shows the gain.
+# https://github.com/andrea-dm/policy-rate-monitor/issues/36
 
 
 def _prior_index_numpy(

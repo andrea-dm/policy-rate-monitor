@@ -22,8 +22,9 @@ runs:
         # chains that hold the compromised intermediate keys.
         version: ">=0.13.5"
         python-version: ${{ inputs.python-version }}
-        # `auto` (the default) caches on every event except `release` and tag pushes, so the
-        # jobs that publish never restore a cache another run could have written.
+        # `auto` (the default) caches on every event except `release` and tag pushes, so a
+        # release never restores a cache another run could have written. build-docs on a push
+        # to develop does restore one.
         enable-cache: auto
         save-cache: ${{ inputs.save-cache }}
     - name: Show the uv version

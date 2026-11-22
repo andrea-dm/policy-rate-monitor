@@ -6,7 +6,12 @@ format. Errors raised on purpose end the command with a one-line message and the
 exit code of ``exit_codes``; ``--debug`` adds the traceback. Any other error is a
 bug: it is logged with its traceback and ends the command with ``INTERNAL_ERROR``.
 
-See also: [CLI reference](cli.md).
+The report steps (``service``, and with it matplotlib and Jinja) are imported
+only by ``report`` and ``serve``, so ``--version``, ``fetch`` and ``transform``
+start without them.
+
+See also: [CLI reference](cli.md) and [the command
+line](advanced/operations/workflows.md#the-command-line).
 """
 
 from __future__ import annotations
@@ -14,7 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -22,11 +27,14 @@ from typing import TYPE_CHECKING
 from policy_rate_monitor import __version__
 from policy_rate_monitor.bulk import BulkFileProvider
 from policy_rate_monitor.cli.exit_codes import ExitCode, exit_code_for
-from policy_rate_monitor.config import FileConfigSource
+from policy_rate_monitor.config import FileConfigSource, requested_codes
 from policy_rate_monitor.config.schema import render_json_schema
-from policy_rate_monitor.core.errors import ConfigError, PolicyRateMonitorError
+from policy_rate_monitor.core.errors import (
+    ConfigError,
+    MissingInputError,
+    PolicyRateMonitorError,
+)
 from policy_rate_monitor.core.models import SnapshotStatus
-from policy_rate_monitor.service import load_staged, summary, write_report
 from policy_rate_monitor.settings import (
     CONFIG_VARIABLE,
     DATA_DIR_VARIABLE,
@@ -38,7 +46,7 @@ from policy_rate_monitor.settings import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from policy_rate_monitor.config import DatasetConfig
     from policy_rate_monitor.core.models import DataSnapshot, SeriesMetadata
@@ -47,6 +55,7 @@ __all__ = ["main"]
 
 # The packages of the web extra: an ImportError naming one means the extra is missing.
 _WEB_PACKAGES = frozenset({"fastapi", "plotly", "starlette", "uvicorn"})
+_LAST_PORT = 65535
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +90,7 @@ def main(
     except PolicyRateMonitorError as error:
         if args.debug:
             logger.exception("the command failed")
-        sys.stderr.write(f"error: {error}\n")
+        sys.stderr.write(f"error: {_message(error)}\n")
         return exit_code_for(error)
     # The errors raised on purpose are typed; a plain OSError is the file system
     # refusing a read or a write (permissions, a full disk), not a bug.
@@ -94,6 +103,32 @@ def main(
         logger.exception("unexpected error, please report it")
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
         return ExitCode.INTERNAL_ERROR
+
+
+def _message(error: PolicyRateMonitorError) -> str:
+    """The error's message, with the command to run first when an input is missing."""
+    if isinstance(error, MissingInputError) and error.step is not None:
+        return f"{error}: run `bis-prates {error.step}` first"
+    return str(error)
+
+
+def _codes(text: str) -> list[str]:
+    """Splits ``--countries`` at the commas and checks the codes."""
+    try:
+        return requested_codes(text.split(","))
+    except ValueError as error:
+        raise ArgumentTypeError(str(error)) from None
+
+
+def _port(text: str) -> int:
+    msg = f"invalid port {text!r}: use a whole number from 1 to {_LAST_PORT}"
+    try:
+        port = int(text)
+    except ValueError:
+        raise ArgumentTypeError(msg) from None
+    if not 1 <= port <= _LAST_PORT:
+        raise ArgumentTypeError(msg)
+    return port
 
 
 def _parser() -> ArgumentParser:
@@ -140,6 +175,7 @@ def _parser() -> ArgumentParser:
     report_cmd.add_argument(
         "--countries",
         required=True,
+        type=_codes,
         help='comma-separated codes of countries or areas, e.g. "US,EA,GB"',
     )
     report_cmd.add_argument(
@@ -165,7 +201,7 @@ def _parser() -> ArgumentParser:
     )
     serve_cmd.add_argument(
         "--port",
-        type=int,
+        type=_port,
         default=8000,
         help="the port to listen on (default: %(default)s)",
     )
@@ -230,22 +266,26 @@ def _fetch(args: Namespace, environ: Mapping[str, str]) -> int:
 
 def _transform(args: Namespace, environ: Mapping[str, str]) -> int:
     _config, provider = _open(args, environ)
-    provider.transform()
-    observations = provider.observations().num_rows
-    series = len(provider.list_series())
-    issues = len(provider.data_quality_issues())
+    counts = provider.transform()
     sys.stdout.write(
-        f"{observations} observations of {series} series kept, "
-        f"{issues} data-quality findings\n"
+        f"{counts.observations} observations of {counts.series} series kept, "
+        f"{counts.issues} data-quality findings\n"
     )
     return ExitCode.OK
 
 
 def _report(args: Namespace, environ: Mapping[str, str]) -> int:
+    # Imported here: the report steps load matplotlib and Jinja.
+    from policy_rate_monitor.service import (  # noqa: PLC0415
+        load_staged,
+        summary,
+        write_report,
+    )
+
     config, provider = _open(args, environ)
     data = load_staged(provider)
-    # The summary strips, upper-cases and drops the empty codes.
-    snapshots = summary(config, data, args.countries.split(","))
+    # The summary upper-cases the codes and drops the repeats.
+    snapshots = summary(config, data, args.countries)
     for path in write_report(config, data, snapshots, args.out, args.start):
         sys.stdout.write(f"{path}\n")
     warning = _unknown_ref_area_warning(snapshots, data.series, config.ref_area_aliases)
@@ -261,7 +301,10 @@ def _report(args: Namespace, environ: Mapping[str, str]) -> int:
 
 def _serve(args: Namespace, environ: Mapping[str, str]) -> int:
     try:
-        from policy_rate_monitor.web import serve  # noqa: PLC0415 - an optional extra
+        from policy_rate_monitor.web import (  # noqa: PLC0415 - an optional extra
+            ListenError,
+            serve,
+        )
     except ImportError as error:
         if (error.name or "").partition(".")[0] not in _WEB_PACKAGES:
             raise
@@ -271,7 +314,11 @@ def _serve(args: Namespace, environ: Mapping[str, str]) -> int:
         )
         return ExitCode.USAGE_ERROR
     config, provider = _open(args, environ)
-    serve(config, provider, host=args.host, port=args.port, out_dir=args.out)
+    try:
+        serve(config, provider, host=args.host, port=args.port, out_dir=args.out)
+    except ListenError as error:
+        sys.stderr.write(f"error: {error}\n")
+        return ExitCode.USAGE_ERROR
     return ExitCode.OK
 
 
@@ -291,8 +338,8 @@ def _schema(_args: Namespace, _environ: Mapping[str, str]) -> int:
 
 
 def _unknown_ref_area_warning(
-    snapshots: list[DataSnapshot],
-    series: list[SeriesMetadata],
+    snapshots: Sequence[DataSnapshot],
+    series: Sequence[SeriesMetadata],
     ref_area_aliases: Mapping[str, str],
 ) -> str:
     """Names the requested codes the data does not have, and lists the ones it has.

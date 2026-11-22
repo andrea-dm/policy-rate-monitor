@@ -51,11 +51,13 @@ for snapshot in snapshots:
     print(snapshot.ref_area, snapshot.latest_value, snapshot.change_bps, snapshot.status)
 ```
 
-## Domain models and errors
+## Domain models, errors and file writes
 
 ::: policy_rate_monitor.core.models
 
 ::: policy_rate_monitor.core.errors
+
+::: policy_rate_monitor.core.files
 
 ## Configuration
 

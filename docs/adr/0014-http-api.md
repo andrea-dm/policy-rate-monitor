@@ -124,3 +124,16 @@ not take the service down.
   `web/errors.py`; `cli/main.py` (`serve`); `tach.toml`; `pyproject.toml` (the extras).
 - `tests/web/test_app.py`, `tests/web/test_jobs.py`, `tests/test_charts.py`,
   `tests/test_service.py`.
+
+## Updates
+
+- 2026-11-22: the modules named above have moved. `charted_series` and `valid_rows` are in
+  `chart.lines`, and `rate_figure` in `chart.interactive`; `charts.py` is now the `chart`
+  package (`src/policy_rate_monitor/chart/`), which tach lets depend on `core` only, with
+  `report` depending on `chart` ([0016](0016-accessible-charts.md)).
+  `tests/test_charts.py` is now `tests/chart/test_interactive.py`.
+- 2026-11-22 (#34): the job runner keeps the last 100 finished jobs (`KEEP_FINISHED`) and marks a
+  job failed whatever ends it. Requested codes that do not match the configuration's code pattern
+  get `422` `invalid_request`, and a `missing_input` message ends with the job to run,
+  `POST /jobs/<step>`. `serve` binds its socket before uvicorn starts, so a busy port ends with
+  exit code 2 ([0017](0017-bad-input-failures-and-writes.md)).

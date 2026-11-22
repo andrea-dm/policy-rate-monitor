@@ -6,6 +6,8 @@ Rewrite the committed file with::
 
     uv run bis-prates config schema > configs/config.schema.json
 
+See also: [Configuration](configuration.md).
+
 Examples:
     >>> render_json_schema().splitlines()[1].strip()
     '"$schema": "https://json-schema.org/draft/2020-12/schema",'

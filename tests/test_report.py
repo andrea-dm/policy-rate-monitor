@@ -11,6 +11,7 @@ from collections.abc import Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import pyarrow as pa
@@ -260,6 +261,87 @@ def test_every_status_flag_and_severity_has_an_emoji() -> None:
     assert sorted(ICONS) == sorted(names)
 
 
+@pytest.mark.unit
+def test_the_emoji_map_is_read_only() -> None:
+    icons = cast("dict[str, str]", ICONS)
+
+    with pytest.raises(TypeError):
+        icons[SnapshotStatus.OK] = "x"
+    assert ICONS[SnapshotStatus.OK] == "✅"
+
+
+@pytest.mark.contract
+def test_the_summary_table_pads_a_rate_but_never_rounds_it(
+    config: DatasetConfig, tmp_path: Path
+) -> None:
+    args = _full_args(tmp_path)
+    snapshot = args.snapshots[0].model_copy(
+        update={
+            "latest_value": Decimal("4.125"),
+            "prior_value": Decimal("3.000"),
+            "change_bps": Decimal("112.5"),
+        }
+    )
+    args = ReportArgs(
+        snapshots=[snapshot],
+        observations=args.observations,
+        series=args.series,
+        issues=args.issues,
+        release=args.release,
+        out_dir=tmp_path,
+    )
+
+    paths = Report(config).export(args)
+
+    markdown = paths[3].read_text(encoding="utf-8")
+    assert "| 2026-11-10 | 4.125 | 2025-11-10 | 3.00 | 112.5 |" in markdown
+    page = paths[4].read_text(encoding="utf-8")
+    assert (
+        '<td class="num">4.125</td>\n<td>2025-11-10</td>\n<td class="num">3.00</td>\n'
+        in page
+    )
+    # The summary files keep the values as they are.
+    with paths[0].open(encoding="utf-8", newline="") as file:
+        (row,) = csv.DictReader(file)
+    assert (row["latest_value"], row["prior_value"], row["change_bps"]) == (
+        "4.125",
+        "3",
+        "112.5",
+    )
+    summary = json.loads(paths[1].read_text(encoding="utf-8"), parse_float=Decimal)
+    assert summary["snapshots"][0]["latest_value"] == Decimal("4.125")
+
+
+@pytest.mark.contract
+def test_a_failed_report_leaves_the_previous_files_as_they_were(
+    config: DatasetConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = Report(config).export(_full_args(tmp_path))
+    before = {path: path.read_bytes() for path in paths}
+
+    def broken(*_: object) -> None:
+        raise RuntimeError
+
+    # The interactive chart is made after the summary files and the PNG.
+    monkeypatch.setattr("policy_rate_monitor.chart.interactive.rate_figure", broken)
+    args = _full_args(tmp_path)
+    args = ReportArgs(
+        snapshots=args.snapshots[1:],
+        observations=args.observations,
+        series=args.series,
+        issues=[],
+        release=None,
+        out_dir=tmp_path,
+    )
+    with pytest.raises(RuntimeError):
+        Report(config).export(args)
+
+    assert {path: path.read_bytes() for path in paths} == before
+    assert sorted(path.name for path in tmp_path.iterdir()) == sorted(
+        path.name for path in paths
+    )
+
+
 @pytest.mark.contract
 def test_report_html_hides_its_emoji_from_screen_readers(
     config: DatasetConfig, tmp_path: Path
@@ -390,7 +472,8 @@ def test_the_png_draws_the_n_th_line_with_the_n_th_line_style(
     ]
 
 
-@pytest.mark.contract
+@pytest.mark.unit
+@pytest.mark.whitebox
 def test_the_png_dash_pattern_is_the_style_in_pixels() -> None:
     assert static._matplotlib_dash(()) == "solid"
     assert static._matplotlib_dash((8, 4)) == (0, (4.0, 2.0))
@@ -416,6 +499,54 @@ def test_an_empty_png_says_so(tmp_path: Path) -> None:
     assert [text.get_text() for text in axes.texts] == [NO_DATA]
 
 
+def _start_args(tmp_path: Path, requested: list[str], start: date) -> ReportArgs:
+    config = parse_config(CONFIG_PATH.read_text(encoding="utf-8"), origin="test")
+    data = load_staged(InMemoryProvider(config.structure, ROWS, SERIES))
+    return ReportArgs(
+        snapshots=summary(config, data, requested),
+        observations=data.observations,
+        series=data.series,
+        issues=[],
+        release=None,
+        out_dir=tmp_path,
+        start=start,
+    )
+
+
+@pytest.mark.contract
+def test_the_png_names_only_the_lines_it_draws(tmp_path: Path) -> None:
+    # Switzerland's last rate is before the start, so it gets no line.
+    args = _start_args(tmp_path, ["CH", "US"], date(2026, 1, 1))
+
+    figure = static.rate_chart("Rates", args.snapshots, args.observations, args.start)
+
+    (axes,) = figure.axes
+    (line,) = axes.get_lines()
+    assert line.get_color() == line_style(0).colour
+    legend = axes.get_legend()
+    assert legend is not None
+    assert [text.get_text() for text in legend.get_texts()] == ["United States"]
+    assert [text.get_text() for text in axes.texts] == ["United States"]
+
+
+@pytest.mark.contract
+def test_a_start_after_all_the_data_draws_no_line_and_names_none(
+    config: DatasetConfig, tmp_path: Path
+) -> None:
+    args = _start_args(tmp_path, ["US", "EA"], date(2027, 1, 1))
+
+    paths = Report(config).export(args)
+
+    figure = static.rate_chart("Rates", args.snapshots, args.observations, args.start)
+    (axes,) = figure.axes
+    assert axes.get_lines() == []
+    assert axes.get_legend() is None
+    assert [text.get_text() for text in axes.texts] == [NO_DATA]
+    expected = alt_text(config.dataset.title, [], args.start)
+    assert _png_text(paths[2])["Description"] == expected
+    assert f"![{expected}](policy_rates.png)" in paths[3].read_text(encoding="utf-8")
+
+
 @pytest.mark.contract
 def test_the_chart_carries_its_text_alternative(
     config: DatasetConfig, tmp_path: Path
@@ -426,3 +557,24 @@ def test_the_chart_carries_its_text_alternative(
     assert _png_text(paths[2])["Description"] == expected
     assert f"![{expected}](policy_rates.png)" in paths[3].read_text(encoding="utf-8")
     assert f"<figcaption>{expected} " in paths[4].read_text(encoding="utf-8")
+
+
+@pytest.mark.contract
+def test_the_report_says_which_conflicting_row_is_kept_even_with_the_rule_off(
+    tmp_path: Path,
+) -> None:
+    document = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    document["rules"] = [
+        {
+            "name": "conflicting_duplicate",
+            "severity": "warning",
+            "enabled": False,
+            "params": {"keep": "first"},
+        }
+    ]
+    config = parse_config(json.dumps(document), origin="test")
+
+    Report(config).export(_empty_args(tmp_path))
+
+    page = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "on the same date, the first one in the file is kept." in page

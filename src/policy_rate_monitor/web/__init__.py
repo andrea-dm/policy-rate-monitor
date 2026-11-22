@@ -8,6 +8,6 @@ See also: [HTTP API](api.md).
 
 from __future__ import annotations
 
-from policy_rate_monitor.web.app import create_app, serve
+from policy_rate_monitor.web.app import ListenError, create_app, serve
 
-__all__ = ["create_app", "serve"]
+__all__ = ["ListenError", "create_app", "serve"]

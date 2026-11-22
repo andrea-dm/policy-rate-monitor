@@ -37,26 +37,52 @@ error: configs/bis_cbpol.json: invalid configuration (1 error)
 Every field, with its type, limits and description, is listed in `config.schema.json`, and in the
 [API reference](reference.md) under `DatasetConfig`.
 
+### How the numbers are read
+
+The measure in `structure` gives the column of the values, their precision and scale (the stored
+type, `decimal128(15, 6)` for the BIS file) and the column of the unit multiplier; the
+series-metadata fields name the column of the decimals:
+
+- **A value** is read only as a plain ASCII number: an optional sign, digits, an optional decimal
+  point and exponent, with ASCII spaces around it ignored. It must convert exactly and fit the precision
+  and scale; it is never rounded. Anything else is kept as not valid, with no value, and reported
+  as `non_numeric_value`.
+- **The unit multiplier** (`UNIT_MULT`) must be a whole number: the value is multiplied by
+  10^`UNIT_MULT`, exactly. A row whose multiplier is blank or not a whole number is kept as not
+  valid, with a `non_numeric_value` finding; the other rows are staged as usual.
+- **The decimals** (`DECIMALS`) only format the rates for display. A blank, non-whole or negative
+  value leaves the series' decimals unknown, with a warning in the log; its rates are then shown
+  with only the digits they need (no trailing zeros).
+
+The reasons are in [decision 0017](adr/0017-bad-input-failures-and-writes.md).
+
 ### The data-quality rules
 
 A rule runs only if it is listed. The order in the file does not matter. Each finding names the
-rule, its severity and the series ([decision 0011](adr/0011-data-quality-rules.md)).
+rule, its severity and the series ([decision 0011](adr/0011-data-quality-rules.md)). What the
+severities mean, what happens to the rows and what to do with a finding are in
+[Data quality](data-quality.md).
 
 | Rule | Built | Parameters | What it reports |
 |---|---|---|---|
 | `unexpected_column` | yes | none | columns in the file that the configuration does not name; they are ignored |
 | `unparseable_date` | yes | none | observations whose date is not in the configured format; dropped |
-| `non_numeric_value` | yes | none | values that are not numbers within the configured precision and scale; kept as invalid, never rounded |
-| `status_value_mismatch` | yes | none | an invalid status with a value, or a valid status with no value; kept as invalid |
+| `non_numeric_value` | yes | none | values that are not plain numbers within the configured precision and scale, and rows whose unit multiplier is blank or not a whole number; kept as invalid, never rounded |
+| `status_value_mismatch` | yes | none | an invalid status with a value, or a valid status with a missing value (a value that is not a number is `non_numeric_value`'s finding alone); kept as invalid |
 | `exact_duplicate` | yes | none | rows repeated exactly; the copies are dropped |
-| `conflicting_duplicate` | yes | `keep`: `first` or `last` | dates with more than one different observation; the configured one is kept |
+| `conflicting_duplicate` | yes | `keep`: `first` or `last` | rows dropped because another row has the same series and date; the configured one is kept |
 | `unexpected_value` | yes | `expected`: a column name → its expected code | rows whose code differs from the expected one; a column the file does not have is skipped |
 | `excess_decimals` | not yet | none | (planned) values with more decimals than the series' `DECIMALS` |
 | `series_attribute_not_constant` | not yet | `resolve` | (planned) a series attribute that changes within a series |
 | `plausible_range` | not yet | `min`, `max` | (planned) values outside a plausible range |
 
-A rule that is listed but not built is logged and skipped by `transform`. Rule parameters are
-checked by the rule when it runs, not when the configuration is loaded.
+A rule that is listed but not built is logged and skipped by `transform`. The parameters of the
+built rules are checked when the configuration is loaded, whether the rule is on or off, so
+`bis-prates config validate` reports them: `keep` is `first` or `last`, and `expected` is an
+object whose every column is a column of the configuration (in `structure` or in
+`columns.unmapped`) and whose every code is a text.
+Switching `conflicting_duplicate` off stops its findings; its `keep` still decides which row is
+kept (`last` when absent).
 
 ### A second dataset
 
@@ -127,7 +153,10 @@ loads the configuration, for example:
 
 - `source.fallback_url` must end with `source.file_name`;
 - a column listed in `columns.unmapped` must not also be declared in `structure`;
-- rule names and listed values must not repeat.
+- rule names and listed values must not repeat;
+- `conflicting_duplicate`'s `keep` must be `first` or `last`, and `unexpected_value` must have
+  an `expected` object, whose every column is a column of the configuration (in `structure` or
+  in `columns.unmapped`) and every code a text.
 
 So a file the editor shows as clean can still fail to load. The full check is loading it:
 

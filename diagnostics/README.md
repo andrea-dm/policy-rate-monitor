@@ -4,16 +4,17 @@ Exploratory analysis, spikes and benchmarks behind the design decisions. This is
 package: nothing in `src/` imports from here.
 
 The scripts follow the repository's ruff rules, with `print()` allowed because printing is how they
-report findings. pyright, tach and deptry do not cover this folder. The scripts depend on pyarrow and
-DuckDB, which are not installed by `uv sync`; that is why the commands below use `uv run --with`.
+report findings, and pyright's strict mode; Sonar covers them too. tach and deptry do not cover this
+folder. What only these scripts import (Cython, DuckDB, and setuptools for building the Cython
+kernel) is in the `diagnostics` dependency group, which `uv sync --all-groups` installs; Numba
+comes with the `fast` extra.
 
 | File | Purpose |
 |---|---|
-| `spike_pyarrow_dtypes.py` | How pandas 3 behaves with pyarrow-backed `decimal128` and `date32` columns. Evidence for the pyarrow backend. |
+| `bench_pyarrow_types.py` | Checks the library behaviour decisions 0001 and 0006 rely on: exact `decimal128` arithmetic, the parquet round trip of `decimal128` and a `date32` before 1970, a cast that would drop decimals refused, `merge_asof` refusing Arrow date keys, and pyarrow's `join_asof` finding no match when a key is before 1970. |
 | `bench_snapshot.py` | Benchmark of five ways to compute the 12-month look-back for every series, at 1×, 10× and 50× the real data. Evidence for the look-back engine. |
-| `repro_pyarrow_join_asof_pre1970.py` | Minimal reproduction of a pyarrow `join_asof` bug: no match when any key is before 1970. |
 | `bench_kernels.py` | Trial of pure Python, Numba and Cython on one kernel: the 12-month change in basis points for every valid observation of every series, in exact integer arithmetic. Reads `data/staged/observations.parquet` (written by `bis-prates transform`). |
-| `check_record_figures.py` | Reproduces the figures about the data quoted in the decision records: the areas whose 12-month change is not exact in floating point (decision 0005), and the highest rate of each area (decision 0011). Reads `data/staged/observations.parquet`. |
+| `check_record_figures.py` | Reproduces the figures about the data quoted in the decision records: the countries or areas whose 12-month change is not exact in floating point (decision 0005), and the highest rate of each country or area (decision 0011). Reads `data/staged/observations.parquet`. |
 | `bench_analytics.py` | Times the `analytics` functions on the real staged data: the snapshot at any date and the 12-month change history with NumPy and, when installed, Numba, and the rate moves (NumPy only), each checked against the v0.1.0 `bisect` method or a `Decimal` loop. |
 
 `bench_snapshot.py` reads the unzipped bulk file at `resources/WS_CBPOL_csv_flat.csv` (gitignored).
@@ -26,16 +27,13 @@ transform` first. Run them from the repository root.
 ```bash
 uv sync --all-groups --all-extras
 
-uv run --with pyarrow python diagnostics/spike_pyarrow_dtypes.py
-uv run --with pyarrow python diagnostics/repro_pyarrow_join_asof_pre1970.py
+uv run python diagnostics/bench_pyarrow_types.py
 
-# duckdb is used only by this benchmark and is not a project dependency
-uv run --with pyarrow --with duckdb python diagnostics/bench_snapshot.py prep    # writes tmp/bench_base.parquet
-uv run --with pyarrow --with duckdb python diagnostics/bench_snapshot.py run searchsorted_np 1
+uv run python diagnostics/bench_snapshot.py prep    # writes bench_base.parquet to a gitignored scratch folder
+uv run python diagnostics/bench_snapshot.py run searchsorted_np 1
 
-# numba and cython are used only by this trial; a version that is not installed is skipped
-uv run --with numba --with cython python diagnostics/bench_kernels.py
-uv run python diagnostics/bench_analytics.py   # with the fast extra installed, Numba is timed too
+uv run python diagnostics/bench_kernels.py     # Cython needs a C compiler
+uv run python diagnostics/bench_analytics.py
 uv run python diagnostics/check_record_figures.py
 ```
 
@@ -47,16 +45,13 @@ process, so the memory figures are not mixed between approaches.
 
 Environment: 4 cores, 16 GB RAM, Python 3.12, pandas 3.1.1, pyarrow 26.0.1, DuckDB 2.0.0.
 
-### pyarrow-backed dtypes (`spike_pyarrow_dtypes.py`)
+### pyarrow-backed dtypes (`bench_pyarrow_types.py`)
 
 | Check | Result |
 |---|---|
-| `decimal128(12, 4)`: groupby, subtraction, ×100 | Exact (`3.60 − 3.75 = −15.0000`) |
-| Values returned as Python objects | `Decimal`, so there is no float step |
-| Parquet round trip | Keeps `decimal128(12, 4)` and `date32` |
-| `DateOffset(months=12)` on `date32[pyarrow]` | Works on pandas 3.1.1. It failed on pandas 2.3.3. |
+| `decimal128(12, 4)`: (4.10 − 3.85) × 100 | Exact (`25.0000`), returned as `Decimal`; in float it is `24.999999999999957` |
+| Parquet round trip | Keeps `decimal128(12, 4)` and `date32`, a date in 1946 included |
 | `merge_asof` with `date32[pyarrow]` join keys | `TypeError`. It works after converting the keys to `datetime64[ns]`. |
-| Cast `"abc"` to decimal | Raises for the whole column, so values are validated before casting |
 | Cast `"3.12345"` to scale 4 | Raises "would cause data loss" on pandas 3.1.1. **pandas 2.3.3 silently rounded it to `3.1235`.** |
 
 The last row shows that library defaults are not a validation strategy. `transform` does not rely
@@ -79,7 +74,7 @@ results at every scale (same `digest`), after the pyarrow workaround below.
 | pyarrow `join_asof` (with workarounds) | 0.25 s | 2.6 s | 14.2 s | 1.8 GB |
 | DuckDB `ASOF JOIN` | 0.18 s | 0.9 s | 6.4 s | 2.1 GB |
 
-v0.1.0 shipped the Python `bisect` version, run only for the requested areas. Since #13 the report
+v0.1.0 shipped the Python `bisect` version, run only for the requested countries or areas. Since #13 the report
 and the `analytics` module use NumPy `searchsorted` on fixed-point arrays (see
 `docs/adr/0006-twelve-month-look-back.md` and `docs/adr/0013-fast-analytics-numpy-numba.md`).
 
@@ -94,7 +89,7 @@ When to revisit the decision:
 | In-memory data above about ¼ of RAM, or the data stored in a lakehouse | DuckDB, or the computation pushed to the engine where the data lives |
 | High API request rate | Precompute snapshots per source release |
 
-### pyarrow `join_asof` and dates before 1970 (`repro_pyarrow_join_asof_pre1970.py`)
+### pyarrow `join_asof` and dates before 1970 (`bench_pyarrow_types.py`)
 
 `date32` counts days since 1970-01-01, so earlier dates are negative. With pyarrow 26.0.1, if the
 right table holds **any** negative key, `join_asof` finds **no match** for the group and raises no
@@ -130,6 +125,22 @@ them is within run-to-run noise. They differ in what they cost the project:
 - Cython needs a compiler and a build step, so the package would ship compiled wheels per platform
   and Python version, with a different build backend than hatchling and matching CI jobs.
 
+**Update (2026-11-22).** The Cython kernel was rewritten at C level, and both versions changed
+how they allocate the result:
+
+- **Cython:** contiguous typed memoryviews (`[::1]`, so each access is a pointer offset with no
+  stride), bounds, wraparound and initialisation checks off, the loop in a `nogil` function, and
+  `-O3 -march=native`, the target Numba compiles for. Cython's annotation shows no Python call in
+  the loop. `cimport numpy` and its buffer syntax would add nothing: the loop never calls NumPy.
+- **Both versions:** the result is allocated with `np.empty`, and the loop writes each element
+  once. Filling it first with `np.full` cost about a quarter of the Numba run (4.5 ms against 3.3
+  ms).
+
+Four runs on a loaded machine (load average 8 on 4 cores; Cython 3.3.1): Numba 5.0–6.0 ms, and
+Cython 2.4–5.9 ms after a 13.5–17.7 s build. Cython was faster in three of the four runs. The
+range is too wide to settle the comparison: it needs runs on an idle machine. The choice of Numba
+does not rest on speed alone (above), so it stands.
+
 ## Findings (2026-11-20): the analytics kernels (`bench_analytics.py`)
 
 Same environment, numpy 2.5.5, Numba 0.68.1. Input: the real staged data (49 series, 639,926 valid
@@ -139,11 +150,11 @@ Three runs; the ranges are run-to-run noise.
 
 | Task | v0.1.0 method | NumPy | Numba |
 |---|---|---|---|
-| Snapshot of all 49 areas at one date (a date-slider step) | 0.7–1.0 s (`bisect` on Python lists, rebuilt every call) | 51–56 µs | 41 µs |
+| Snapshot of all 49 countries or areas at one date (a date-slider step) | 0.7–1.0 s (`bisect` on Python lists, rebuilt every call) | 51–56 µs | 41 µs |
 | One search for all 49 series (half of a slider step) | | 10–13 µs | 1.9 µs |
 | 12-month change for every observation | 2.9 s (`Decimal` loop) | 89–96 ms | 68–76 ms |
 | Every rate move with its size (33,110 moves) | | 1.0 ms | NumPy only |
-| The report's snapshot, all 49 areas (`compute_snapshots`) | 2.3 s | 0.21–0.23 s | |
+| The report's snapshot, all 49 countries or areas (`compute_snapshots`) | 2.3 s | 0.21–0.23 s | |
 | First call of the two compiled searches | | | 0.68 s compiling; 0.17 s from the disk cache |
 
 All results are exactly those of the slower code they replace: 0 mismatches over 25 dates × 49

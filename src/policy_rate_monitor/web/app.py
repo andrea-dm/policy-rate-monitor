@@ -5,12 +5,15 @@ so tests pass the in-memory provider and ``bis-prates serve`` the bulk-file one.
 routes call ``service``, as the CLI does; they keep only the HTTP side: the query
 parameters, the statuses and the jobs.
 
-See also: [HTTP API](api.md) and [decision 0014](adr/0014-http-api.md).
+See also: [HTTP API](api.md), [decision 0014](adr/0014-http-api.md) and [the HTTP
+routes](advanced/operations/workflows.md#http-routes).
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import socket
 import threading
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
@@ -24,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from policy_rate_monitor import __version__
 from policy_rate_monitor.chart.interactive import rate_figure
+from policy_rate_monitor.config import requested_codes
 from policy_rate_monitor.core.errors import MissingInputError
 from policy_rate_monitor.report import summary_document
 from policy_rate_monitor.service import (
@@ -45,7 +49,9 @@ if TYPE_CHECKING:
     from policy_rate_monitor.config import DatasetConfig
     from policy_rate_monitor.providers import DataProvider
 
-__all__ = ["DEFAULT_OUT_DIR", "ReportRequest", "create_app", "serve"]
+__all__ = ["DEFAULT_OUT_DIR", "ListenError", "ReportRequest", "create_app", "serve"]
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_OUT_DIR = Path("out")
 """Where a ``report`` job writes its files, unless told otherwise."""
@@ -66,6 +72,10 @@ _JOB_ERRORS: dict[int | str, dict[str, Any]] = {
     **_READ_ERRORS,
     HTTPStatus.SERVICE_UNAVAILABLE: {"model": ErrorBody},
 }
+
+
+class ListenError(Exception):
+    """The HTTP API cannot listen on the address and port it was given."""
 
 
 class ReportRequest(BaseModel):
@@ -122,11 +132,12 @@ class _Staged:
 
 
 def _codes(given: list[str]) -> list[str]:
-    codes = [code for code in given if code.strip()]
-    if not codes:
-        msg = "name at least one country or area code, e.g. US or EA"
-        raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "invalid_request", msg)
-    return codes
+    """Strips the codes, drops the empty ones and checks the rest."""
+    try:
+        return requested_codes(given)
+    except ValueError as error:
+        status = HTTPStatus.UNPROCESSABLE_ENTITY
+        raise ApiError(status, "invalid_request", str(error)) from None
 
 
 def _read_routes(config: DatasetConfig, staged: _Staged) -> APIRouter:
@@ -140,8 +151,9 @@ def _read_routes(config: DatasetConfig, staged: _Staged) -> APIRouter:
     @router.get("/summary")
     def get_summary(countries: Annotated[str, _CODES]) -> dict[str, Any]:
         """The latest rate, the rate 12 months earlier and the change, per code."""
+        codes = _codes(countries.split(","))
         data = staged.get()
-        snapshots = summary(config, data, _codes(countries.split(",")))
+        snapshots = summary(config, data, codes)
         generated_at = datetime.now(UTC).replace(microsecond=0)
         return summary_document(config, snapshots, data.release, generated_at)
 
@@ -151,10 +163,10 @@ def _read_routes(config: DatasetConfig, staged: _Staged) -> APIRouter:
         start: date | None = None,
     ) -> TimeSeries:
         """The valid observations of one country or economic area."""
-        _codes([country])
-        found = timeseries(config, staged.get(), country, start)
+        [code] = _codes([country])
+        found = timeseries(config, staged.get(), code, start)
         if found is None:
-            msg = f"no series for {country.strip()}; GET /ref-areas lists the codes"
+            msg = f"no series for {code}; GET /ref-areas lists the codes"
             raise ApiError(HTTPStatus.NOT_FOUND, "not_found", msg)
         return found
 
@@ -163,8 +175,9 @@ def _read_routes(config: DatasetConfig, staged: _Staged) -> APIRouter:
         countries: Annotated[str, _CODES], start: date | None = None
     ) -> Response:
         """The policy-rate chart as a Plotly figure, in JSON."""
+        codes = _codes(countries.split(","))
         data = staged.get()
-        snapshots = summary(config, data, _codes(countries.split(",")))
+        snapshots = summary(config, data, codes)
         figure = rate_figure(config.dataset.title, snapshots, data.observations, start)
         return Response(content=figure.to_json(), media_type="application/json")
 
@@ -278,11 +291,28 @@ def serve(
 ) -> None:
     """Runs the HTTP API with uvicorn until it is stopped.
 
+    The socket is bound here, before uvicorn starts, so that a port in use is a
+    plain error instead of uvicorn ending the process with its own exit code.
+
     Args:
         config: The dataset configuration.
         provider: Where the data comes from.
-        host: The address to listen on, e.g. ``127.0.0.1``.
+        host: The address to listen on, e.g. ``127.0.0.1``; one with a colon is
+            taken as an IPv6 address.
         port: The port to listen on, e.g. 8000.
         out_dir: Where a ``report`` job writes its files.
+
+    Raises:
+        ListenError: The address and port cannot be bound, e.g. the port is in use.
     """
-    uvicorn.run(create_app(config, provider, out_dir), host=host, port=port)
+    app = create_app(config, provider, out_dir)
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    try:
+        sock = socket.create_server((host, port), family=family)
+    except OSError as error:
+        msg = f"cannot listen on {host}, port {port}: {error.strerror or error}"
+        raise ListenError(msg) from error
+    with sock:
+        # uvicorn logs its address only for the sockets it binds itself.
+        logger.info("listening on %s, port %d", host, sock.getsockname()[1])
+        uvicorn.Server(uvicorn.Config(app, host=host, port=port)).run(sockets=[sock])

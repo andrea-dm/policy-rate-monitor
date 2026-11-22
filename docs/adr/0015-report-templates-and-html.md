@@ -117,3 +117,12 @@ without a network. This record settles the open point of
 - The [W3C Nu HTML Checker](https://validator.github.io/validator/) finds no errors in the page,
   with the interactive chart, with the PNG, and with no release record and no findings. Before
   the escapes, it reported the two control characters in Plotly's code.
+
+## Updates
+
+- 2026-11-22: the code named above has moved. The templates are in
+  `src/policy_rate_monitor/report/templates/`; `Report` and `_interactive_chart` are in
+  `report/export.py`, and `ICONS` in `report/pages.py`, now a read-only mapping (#34); the
+  interactive figure is `chart.interactive.rate_figure`, which `report` imports only when
+  Plotly is installed. The full text alternative and the colour-blind-safe palette left to #29
+  are built ([0016](0016-accessible-charts.md)).
