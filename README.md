@@ -655,13 +655,16 @@ See [CREDITS.md](CREDITS.md) for the author and the key dependencies.
 
 ### AI Usage
 
-This project was developed with Claude Code as a coding assistant. I set the design and took every
-technical decision: the configuration-driven design, the extract-load-transform approach, exact
-decimal arithmetic, the data-quality rules and the test strategy. On my prompts and suggestions,
-the assistant laid out options and their trade-offs, and I chose among them. The assistant then
-wrote most of the code, the critical tests and the documentation, following the design principles
-and code style I set. I reviewed every change, asked for changes where needed, and committed every
-change myself.
+This project was developed with Claude Code as a coding assistant. Much of its groundwork is not
+new: the module layering checked with tach, the dependency checks with deptry, the CI pipeline, the
+extract-load-transform approach and several other design choices come from other projects I
+maintain. They gave this one its scaffold, and much of the early code was a matter of porting them.
+I set the design and took every technical decision: the configuration-driven design, exact decimal
+arithmetic, the data-quality rules and the test strategy. On my prompts and suggestions, the
+assistant laid out options and their trade-offs, and I chose among them. The assistant then drafted
+the code specific to this project, the critical tests and the documentation, following the design
+principles and code style I set. I reviewed every change, asked for changes where needed, and
+committed every change myself.
 
 Validation went beyond reading the code: ruff and pyright in strict mode, a test suite that runs
 without the network, a real end-to-end run on the BIS file, and an independent recomputation of
@@ -675,12 +678,14 @@ matches `out/summary.csv` exactly. Review caught real issues, for example:
   exactly, and one with more decimals than the data type holds is marked invalid and reported,
   never rounded; a regression test pins this (see [diagnostics/README.md](diagnostics/README.md)).
 
-**Lessons.** AI coding assistants are great tools for turning one's ideas into working code. They
-speed up the drafting, but the generated code comes at a cost that largely cancels out that gain:
-it needs stricter type checking, well-designed test suites, extra diagnostic checks and a cold
-human review. To take real advantage of it, the developer has to give precise, detailed
-instructions and challenge the assistant's proposals with counter-arguments, which takes solid
-skills and deep knowledge of the subject.
+**Lessons learned.** AI coding assistants are great tools for turning one's ideas into working code.
+With an assistant, development is quicker, because ideas from a brainstorm become working code
+almost at once. But not every idea is a good one, and not every one comes out as intended. The
+generated code therefore comes at a cost: it needs stricter type checking, well-designed test
+suites, extra diagnostic checks and a human review that is not only cold but also more thorough and
+more focused. To take real advantage of it, the developer has to give precise, detailed instructions
+and challenge the assistant's proposals with counter-arguments, which takes solid skills and deep
+knowledge of the subject.
 
 ---
 
