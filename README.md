@@ -105,6 +105,7 @@ on its own.
 ```mermaid
 flowchart LR
     bis[("BIS bulk download")]
+    api[("BIS SDMX API")]
     fetch["fetch"]
     transform["transform"]
     report["report"]
@@ -113,6 +114,7 @@ flowchart LR
     out[("out/<br/>summary.csv, summary.json,<br/>policy_rates.png, report.md, report.html")]
 
     bis --> fetch --> raw --> transform --> staged --> report --> out
+    api -. structural metadata, SDMX rules .-> transform
 ```
 
 The modules are layered. Here an arrow means "is imported by", not "runs before": the `report`
@@ -127,6 +129,8 @@ flowchart BT
     config["config<br/>configuration models, ConfigSource"]
     fetch["fetch"]
     transform["transform"]
+    reference["reference<br/>ReferenceSource"]
+    sdmx["sdmx<br/>pysdmx source (sdmx extra)"]
     providers["providers<br/>DataProvider, schema, in-memory provider"]
     bulk["bulk<br/>BulkFileProvider"]
     analytics["analytics<br/>fixed-point arrays, searches"]
@@ -143,6 +147,9 @@ flowchart BT
     config --> providers
     config --> analytics
     fetch --> transform
+    config --> reference
+    reference --> transform
+    reference --> sdmx
     transform --> bulk
     providers --> bulk
     analytics --> snapshot
@@ -159,12 +166,14 @@ flowchart BT
     service -.-> cli
     bulk --> cli
     web -.-> cli
+    sdmx -.-> cli
     config --> settings
     settings --> cli
 ```
 
-The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, and `service` only
-inside `report`, so `--version`, `fetch` and `transform` load neither matplotlib nor Jinja. The
+The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, `service` only inside
+`report`, and `sdmx` only for `transform` and `serve` when an SDMX rule is enabled, so `--version`,
+`fetch` and `transform` load neither matplotlib nor Jinja, and `report` never loads `pysdmx`. The
 full list of allowed imports is in `tach.toml`; the modules are described in
 [docs/architecture.md](docs/architecture.md).
 
@@ -198,7 +207,7 @@ uv sync --no-dev        # to run the tool: the package and its runtime dependenc
 ```
 
 To work on the code, install every dependency group and every extra: the tests and pyright cover
-the optional parts too (the HTTP API, the chart, Numba).
+the optional parts too (the HTTP API, the chart, Numba, the SDMX checks).
 
 ```bash
 uv sync --all-groups --all-extras
@@ -228,6 +237,14 @@ Two more extras add the HTTP API; a plain install stays small without them:
 
 ```bash
 uv sync --no-dev --extra web
+```
+
+The `sdmx` extra installs `pysdmx`, which the two data-quality rules that check the data against
+the BIS structural metadata use ([Data quality](docs/data-quality.md#the-checks-against-the-bis-structural-metadata)).
+Without it, `transform` still runs, and each of those rules reports "not evaluated":
+
+```bash
+uv sync --no-dev --extra sdmx
 ```
 
 ### Usage
@@ -519,13 +536,22 @@ under a different name.
 - The data is as of the retrieval time; the BIS publishes it with a delay.
 - Some data-quality rules named in the configuration (more decimals than declared, plausible
   ranges, attributes constant within a series) are not implemented yet; `transform` logs them.
+  They were set aside to deliver a working tool by the deadline
+  ([decision 0011](docs/adr/0011-data-quality-rules.md)), and nothing has replaced them.
+- The checks against the BIS structural metadata (`ref_area_not_in_code_list`,
+  `dataflow_mismatch`) need the BIS SDMX API at run time, and the `sdmx` extra. Without them, each
+  enabled rule reports "not evaluated" in `data_quality.json` and the report's "Data quality"
+  table; the run is then not checked against the BIS reference. There is no cache of the
+  reference ([decision 0009](docs/adr/0009-sdmx-validation.md)).
 - The chart is drawn from floating-point values; the tables and summary files carry exact values.
 - The chart tells at most 24 lines apart: from the 25th, the pairs of colour and dash repeat
   ([decision 0016](docs/adr/0016-accessible-charts.md)); the names at the line ends and the
   summary table still tell them apart.
-- Planned extensions: a web front end over the HTTP API, and the validation of reference-area codes against
-  the BIS SDMX metadata. The fast analytics for interactive use are in place (`analytics`, with
-  Numba as the optional `fast` extra). See [docs/milestones.md](docs/milestones.md).
+- Planned extensions: a web front end over the HTTP API; the check of the requested country or area
+  codes against the BIS code list, with suggestions (`GBR → GB`), and the official names in the
+  report. The data is already checked against the BIS SDMX metadata, and the fast analytics for
+  interactive use are in place (`analytics`, with Numba as the optional `fast` extra). See
+  [docs/milestones.md](docs/milestones.md).
 
 The main technical decisions, with their alternatives and costs, are recorded in
 [docs/adr/](docs/adr/index.md).
@@ -561,6 +587,8 @@ src/policy_rate_monitor/
 │   └── __main__.py         # python -m policy_rate_monitor.cli
 ├── fetch.py                # Download the source ZIP and keep a cached copy
 ├── transform.py            # Raw and staged tables from the cached ZIP
+├── reference.py            # ReferenceSource: the interface the SDMX rules read the reference through
+├── sdmx.py                 # SdmxReference, with pysdmx (sdmx extra)
 ├── analytics.py            # Fixed-point arrays and the searches on them (pure; Numba optional)
 ├── snapshot.py             # Latest rate, prior rate and change per country or area (pure)
 ├── report/                 # The five output files
@@ -597,6 +625,13 @@ The test suite is in `tests/` and runs without the network:
 uv run pytest
 ```
 
+The integration tests, in `tests/integration/`, talk to the live BIS SDMX API and are left out of
+that run. Run them on their own:
+
+```bash
+uv run pytest -m integration
+```
+
 **Filter by marker:**
 
 ```bash
@@ -608,7 +643,7 @@ uv run pytest -m contract      # tests at a boundary, with temp files and a fake
 |---|---|
 | `unit` | Quick tests, no I/O, no external dependencies. |
 | `contract` | Tests at a boundary, using local stand-ins (temp files, a fake web). |
-| `integration` | Tests that talk to real external services (none yet). |
+| `integration` | Tests that talk to real external services: the BIS SDMX API. Left out unless asked for with `-m integration`. |
 | `whitebox` | Tests that inspect internal state (use sparingly). |
 | `slow` | Long-running tests. |
 
@@ -617,11 +652,14 @@ What the tests cover:
 | File | Behaviour |
 |---|---|
 | `tests/test_transform.py` | missing values kept and marked invalid; exact and conflicting duplicates, with `keep` applied when the rule is off; the `FREQ = D` selection; the unit multiplier applied exactly; only a plain ASCII number that converts exactly is a value; a bad `UNIT_MULT` or `DECIMALS` cell; one finding per non-numeric value; the `unexpected_column` and `unexpected_value` findings; unparseable dates; the series metadata kept; a corrupt ZIP, a malformed CSV, a CSV with no daily row and an invalid series row as an unexpected format; a date in digits of another script; missing columns and inputs named; the staged release written last; a failed write leaving the previous staged files |
+| `tests/test_transform_sdmx.py` | the SDMX rules through a fake reference source: no finding for a matching reference, also with labelled codes; a code not in the code list, one finding per series, rows unchanged; each kind of structure difference named; "not evaluated" with a count of 0 when the reference cannot be obtained; no request when the rules are off or the ZIP is missing |
+| `tests/test_sdmx.py` | the `pysdmx` source on BIS answers recorded on 2026-11-22 (no time dimension read); each `pysdmx` error turned into a plain reason; any other error propagates |
+| `tests/integration/test_sdmx_api.py` | the committed configuration checked against the live BIS SDMX API (`-m integration` only) |
 | `tests/test_analytics.py` | the search against the plain `bisect` method at every date of a fixture; the NumPy and plain-loop versions of the searches agree, with and without Numba; the target date 12 months back; the change history and the rate moves against exact values; the arrays are read-only |
 | `tests/test_snapshot.py` | the 12-month change exactly in basis points; a target date on a weekend; 29 February; negative rates; invalid observations skipped; a different latest date per country or area; unknown code, insufficient history and no valid data; the `EA` alias; messy requested codes; the stale flags |
 | `tests/test_fetch.py` | the cache; the fallback URL, also when the discovery page fails; a download that is not a ZIP, is corrupt or encrypted, or holds two CSV files; the network down with and without a cached copy; the retries and their pauses; a 404 failing at once and a 503 retried; up to five redirects; an unreadable release record |
 | `tests/test_report.py` | the five files written from hand-made inputs, with the expected CSV and JSON values; a failed report leaving the previous files; the rates of the summary table padded, never rounded; the conflicting row kept, named even with the rule off; the PNG naming only the lines it draws; the PNG in the same line styles as the Plotly chart, with the line ends named, "No data to plot" when empty, and its text alternative in the PNG, `report.md` and `report.html`; `report.md` the same as before the templates; `report.html` with the same sections, its data escaped, nothing loaded from the network, and the PNG when Plotly is missing |
-| `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; a missing input gives a one-line error naming the step to run; what `fetch` prints; an output folder that is a file exits 8; a code outside the code pattern refused; `config validate` and `config schema`; a bad configuration says where its path came from; `serve` without the `web` extra, with a bad configuration, with its options, with a port outside 1 to 65535 and on a busy port; the base commands load neither the web extra nor the report steps |
+| `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; a missing input gives a one-line error naming the step to run; what `fetch` prints; an output folder that is a file exits 8; a code outside the code pattern refused; `config validate` and `config schema`; a bad configuration says where its path came from; `serve` without the `web` extra, with a bad configuration, with its options, with a port outside 1 to 65535 and on a busy port; the base commands load neither the web extra nor the report steps, and `pysdmx` only for `transform` with an SDMX rule on; `transform` without the `sdmx` extra reports "not evaluated" and exits 0; an SDMX rule without a `reference` section exits 4 |
 | `tests/test_service.py` | the steps the CLI and the API share: the codes with their aliases, the valid observations of one series exactly, the summary; summaries computed at once on several threads agree; the staged data held in tuples |
 | `tests/web/` | `/summary` against the `summary.json` of `bis-prates report` for every status; exact rates in `/timeseries`; the chart's lines; every error with the same body (`404`, `405`, `409`, `422`, a bug as `500` without its detail); a code outside the code pattern as `422`; `serve` on a busy port; the jobs from queued to succeeded or failed, one at a time, failed whatever ends them, at most 100 finished jobs kept, new data after a transform, a report job writing the five files |
 | `tests/chart/test_interactive.py` | the Plotly chart has the same lines and rows as the PNG, in request order, from the start date; the n-th line in the n-th style; the line ends named; "No data to plot" when empty, and no line named when the start is after all the data; the text alternative; the hover with the series' decimals |
@@ -655,13 +693,16 @@ See [CREDITS.md](CREDITS.md) for the author and the key dependencies.
 
 ### AI Usage
 
-This project was developed with Claude Code as a coding assistant. I set the design and took every
-technical decision: the configuration-driven design, the extract-load-transform approach, exact
-decimal arithmetic, the data-quality rules and the test strategy. On my prompts and suggestions,
-the assistant laid out options and their trade-offs, and I chose among them. The assistant then
-wrote most of the code, the critical tests and the documentation, following the design principles
-and code style I set. I reviewed every change, asked for changes where needed, and committed every
-change myself.
+This project was developed with Claude Code as a coding assistant. Much of its groundwork is not
+new: the module layering checked with tach, the dependency checks with deptry, the CI pipeline, the
+extract-load-transform approach and several other design choices come from other projects I
+maintain. They gave this one its scaffold, and much of the early code was a matter of porting them.
+I set the design and took every technical decision: the configuration-driven design, exact decimal
+arithmetic, the data-quality rules and the test strategy. On my prompts and suggestions, the
+assistant laid out options and their trade-offs, and I chose among them. The assistant then drafted
+the code specific to this project, the critical tests and the documentation, following the design
+principles and code style I set. I reviewed every change, asked for changes where needed, and
+committed every change myself.
 
 Validation went beyond reading the code: ruff and pyright in strict mode, a test suite that runs
 without the network, a real end-to-end run on the BIS file, and an independent recomputation of
@@ -675,12 +716,14 @@ matches `out/summary.csv` exactly. Review caught real issues, for example:
   exactly, and one with more decimals than the data type holds is marked invalid and reported,
   never rounded; a regression test pins this (see [diagnostics/README.md](diagnostics/README.md)).
 
-**Lessons.** AI coding assistants are great tools for turning one's ideas into working code. They
-speed up the drafting, but the generated code comes at a cost that largely cancels out that gain:
-it needs stricter type checking, well-designed test suites, extra diagnostic checks and a cold
-human review. To take real advantage of it, the developer has to give precise, detailed
-instructions and challenge the assistant's proposals with counter-arguments, which takes solid
-skills and deep knowledge of the subject.
+**Lessons learned.** AI coding assistants are great tools for turning one's ideas into working code.
+With an assistant, development is quicker, because ideas from a brainstorm become working code
+almost at once. But not every idea is a good one, and not every one comes out as intended. The
+generated code therefore comes at a cost: it needs stricter type checking, well-designed test
+suites, extra diagnostic checks and a human review that is not only cold but also more thorough and
+more focused. To take real advantage of it, the developer has to give precise, detailed instructions
+and challenge the assistant's proposals with counter-arguments, which takes solid skills and deep
+knowledge of the subject.
 
 ---
 

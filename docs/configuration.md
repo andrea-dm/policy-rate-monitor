@@ -27,6 +27,7 @@ error: configs/bis_cbpol.json: invalid configuration (1 error)
 |---|---|---|
 | `dataset` | The dataset's identity: its id, the report's title, the "About the data" paragraph and the source credit, and the default data folder | `"data_dir": "data"` |
 | `source` | Where and how the file is downloaded: the page searched for the link, the file name, the fallback address, the cache lifetime, the attempts and the timeouts | `"cache_ttl_hours": 24` |
+| `reference` | Optional. Where the SDMX rules read the BIS structural metadata: the API's address, the dataflow, the country or area code list and the timeout (see "The SDMX reference" below) | `"timeout_seconds": 10` |
 | `structure` | The source's concepts and their roles: the dimensions of the series key, the time period, the measure (with its precision, scale and unit multiplier), the observation and series attributes, which attribute fills each series-metadata field, and the series to keep | `"selection": { "FREQ": "D" }` |
 | `columns` | How the concepts are written in the file: encoding, delimiter, the separators of `CODE:Label` headers and `code: label` values, the texts that mean "no value", the columns that are loaded but not used, and the ones that may be absent | `"missing_values": ["NaN"]` |
 | `rules` | The data-quality rules to run, each with a severity and its parameters (next section) | `{ "name": "exact_duplicate", "severity": "info" }` |
@@ -72,6 +73,8 @@ severities mean, what happens to the rows and what to do with a finding are in
 | `exact_duplicate` | yes | none | rows repeated exactly; the copies are dropped |
 | `conflicting_duplicate` | yes | `keep`: `first` or `last` | rows dropped because another row has the same series and date; the configured one is kept |
 | `unexpected_value` | yes | `expected`: a column name → its expected code | rows whose code differs from the expected one; a column the file does not have is skipped |
+| `ref_area_not_in_code_list` | yes | none (the ids are in `reference`) | rows whose country or area code is not in the official code list, one finding per series; kept |
+| `dataflow_mismatch` | yes | none (the ids are in `reference`) | the differences between `structure` and the dataflow definition, in one finding for the dataset |
 | `excess_decimals` | not yet | none | (planned) values with more decimals than the series' `DECIMALS` |
 | `series_attribute_not_constant` | not yet | `resolve` | (planned) a series attribute that changes within a series |
 | `plausible_range` | not yet | `min`, `max` | (planned) values outside a plausible range |
@@ -80,16 +83,43 @@ A rule that is listed but not built is logged and skipped by `transform`. The pa
 built rules are checked when the configuration is loaded, whether the rule is on or off, so
 `bis-prates config validate` reports them: `keep` is `first` or `last`, and `expected` is an
 object whose every column is a column of the configuration (in `structure` or in
-`columns.unmapped`) and whose every code is a text.
+`columns.unmapped`) and whose every code is a text. An SDMX rule, listed on or off, needs the
+`reference` section.
 Switching `conflicting_duplicate` off stops its findings; its `keep` still decides which row is
 kept (`last` when absent).
+
+### The SDMX reference
+
+The `reference` section tells the two SDMX rules where to read what BIS publishes as the
+definition of the data ([decision 0018](adr/0018-sdmx-reference-and-not-evaluated.md)):
+
+```json
+"reference": {
+  "api_url": "https://stats.bis.org/api/v2",
+  "dataflow": { "agency": "BIS", "id": "WS_CBPOL", "version": "1.0" },
+  "ref_area_code_list": { "agency": "BIS", "id": "CL_BIS_GL_REF_AREA", "version": "1.0" },
+  "timeout_seconds": 10
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `api_url` | The base address of the SDMX REST API |
+| `dataflow` | The dataflow of the data, by agency, id and version. The structure checked against is the one the dataflow points to on the day |
+| `ref_area_code_list` | The code list of the country or area codes. `dataflow_mismatch` also reports it when it is not the list the structure uses |
+| `timeout_seconds` | The time allowed for each request, more than 0 |
+
+No id may be empty. The section is optional: a configuration without it loads, as long as it lists
+no SDMX rule. The rules need the `sdmx` extra (`pysdmx`); without it, or when the API cannot be
+reached, each enabled one reports "not evaluated" ([Data quality](data-quality.md#the-checks-against-the-bis-structural-metadata)).
 
 ### A second dataset
 
 A dataset of the same shape (a flat SDMX CSV from a bulk-download page) needs a new configuration,
 not new code:
 
-1. Copy `configs/bis_cbpol.json` to a new file and change `dataset` and `source`.
+1. Copy `configs/bis_cbpol.json` to a new file and change `dataset` and `source`, and `reference`
+   (or drop it together with the two SDMX rules).
 2. Declare the file's concepts in `structure`, and the series to keep in `structure.selection`.
 3. Adjust `columns` to how the file is written, and the `unexpected_value` codes to the new file.
 4. Load it to check it (the command at the end of this page), then run the commands with
@@ -108,7 +138,7 @@ description. `config.schema.json` describes the configuration format.
     It is generated from the configuration models, never written by hand. `render_json_schema()` in
     `policy_rate_monitor.config.schema` asks pydantic for the schema of `DatasetConfig`; pydantic
     writes one entry for each model, under `$defs`, and copies each field's docstring into the
-    field's `description`. That is why the file is long (about 660 lines): it lists every field of
+    field's `description`. That is why the file is long (about 740 lines): it lists every field of
     every section with its type, limits and description.
 
     After a change to a model, regenerate it and commit it with the change:
@@ -156,7 +186,8 @@ loads the configuration, for example:
 - rule names and listed values must not repeat;
 - `conflicting_duplicate`'s `keep` must be `first` or `last`, and `unexpected_value` must have
   an `expected` object, whose every column is a column of the configuration (in `structure` or
-  in `columns.unmapped`) and every code a text.
+  in `columns.unmapped`) and every code a text;
+- an SDMX rule needs the `reference` section.
 
 So a file the editor shows as clean can still fail to load. The full check is loading it:
 

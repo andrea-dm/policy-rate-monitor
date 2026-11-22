@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Two data-quality rules check the data against the BIS structural metadata:
+  `ref_area_not_in_code_list` (a country or area code that is not in the official code list, one
+  finding per series) and `dataflow_mismatch` (a difference between the configuration's
+  `structure` and the dataflow definition, one finding naming each). Both are enabled in
+  `configs/bis_cbpol.json`. They need the BIS SDMX API at run time, with no cache: when the
+  reference cannot be obtained, each reports "not evaluated" as a finding with a count of 0, and
+  `transform` still ends with exit code 0. See decision 0018 (#37).
+- A new optional configuration section, `reference`: the SDMX API's address, the dataflow, the
+  country or area code list and a timeout. Listing an SDMX rule without it stops the
+  configuration from loading (exit code 4) (#37).
+- A new optional extra, `sdmx`, which installs `pysdmx`. `transform` and `serve` load it only when
+  an SDMX rule is enabled; without it, the SDMX rules report "not evaluated" (#37).
+- A live test against the BIS SDMX API, in `tests/integration/`. A plain `pytest` leaves it out;
+  run it with `pytest -m integration` (#37).
+
 ## [0.3.0] — 2026-11-22
 
 The HTTP API with `bis-prates serve`, an HTML report rendered from templates, charts that

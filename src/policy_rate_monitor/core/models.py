@@ -393,8 +393,9 @@ class DataQualityIssue(_FrozenModel):
         severity: How serious the finding is.
         series_key: The affected series; ``None`` for a finding about the whole dataset.
         detail: Human-readable explanation, including what was done about it.
-        count: Number of affected observations. At least 1 today; 0 is kept for a
-            rule that could not be evaluated, which no rule reports yet.
+        count: Number of affected observations, or of columns or differences for the
+            rules about the whole dataset. 0 for an SDMX rule that could not be
+            evaluated.
 
     See also: [Data quality](data-quality.md#2-what-a-finding-is).
     """

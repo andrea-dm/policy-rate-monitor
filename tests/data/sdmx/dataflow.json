@@ -1,0 +1,42 @@
+{
+ "meta": {
+  "id": "IDREFad355d08-9b7f-42af-b710-64ec15d2d4e7",
+  "test": false,
+  "schema": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+  "prepared": "2026-11-22T13:16:41Z",
+  "contentLanguages": [
+   "en"
+  ],
+  "sender": {
+   "id": "UNKNOWN"
+  }
+ },
+ "data": {
+  "dataflows": [
+   {
+    "links": [
+     {
+      "rel": "self",
+      "type": "dataflow",
+      "uri": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+      "urn": "urn:sdmx:org.sdmx.infomodel.datastructure.Dataflow=BIS:WS_CBPOL(1.0)"
+     }
+    ],
+    "id": "WS_CBPOL",
+    "name": "Central bank policy rates",
+    "names": {
+     "en": "Central bank policy rates"
+    },
+    "description": "The interest rate which best captures the monetary authorities' policy intentions.",
+    "descriptions": {
+     "en": "The interest rate which best captures the monetary authorities' policy intentions."
+    },
+    "version": "1.0",
+    "agencyID": "BIS",
+    "isExternalReference": false,
+    "isFinal": false,
+    "structure": "urn:sdmx:org.sdmx.infomodel.datastructure.DataStructure=BIS:BIS_CBPOL(1.0)"
+   }
+  ]
+ }
+}

@@ -23,6 +23,7 @@ __all__ = [
     "ConfigError",
     "MissingInputError",
     "PolicyRateMonitorError",
+    "ReferenceUnavailableError",
     "SourceUnavailableError",
     "UnexpectedFormatError",
 ]
@@ -48,6 +49,28 @@ class UnexpectedFormatError(PolicyRateMonitorError):
 
     Retrying does not help: the source or the configuration has to change.
     """
+
+
+class ReferenceUnavailableError(PolicyRateMonitorError):
+    """The SDMX reference that the data is checked against cannot be obtained.
+
+    The only error a reference source raises when it cannot answer: the API cannot be
+    reached, has no such artefact, refuses the query or sends an answer that cannot
+    be read. ``transform`` turns it into a "not evaluated" finding, so it never ends
+    a command and has no exit code.
+
+    Attributes:
+        reason: Why, in plain words, e.g. "the sdmx extra is not installed".
+    """
+
+    def __init__(self, reason: str) -> None:
+        """Records why the reference cannot be obtained.
+
+        Args:
+            reason: Why, in plain words; it becomes the finding's detail.
+        """
+        super().__init__(reason)
+        self.reason = reason
 
 
 class MissingInputError(PolicyRateMonitorError):

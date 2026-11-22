@@ -1,6 +1,6 @@
 # 0011 Data-quality rules: named in the configuration, reported as findings, never silently fixed
 
-- **Status:** Accepted; partly built (seven of the ten configured rules)
+- **Status:** Accepted; partly built (nine of the twelve configured rules)
 - **Decided:** 2026-11-17; scope cut on 2026-11-19
 
 ## Context
@@ -77,3 +77,8 @@ share it.
   invalid, with a `non_numeric_value` finding, instead of stopping the transform; a bad `DECIMALS`
   leaves the series' decimals unknown, with a warning; and `status_value_mismatch` no longer
   reports a value that is not a number ([0017](0017-bad-input-failures-and-writes.md)).
+- 2026-11-22 (#37): two more rules are built, so the seven built rules of the decision above
+  become nine: `ref_area_not_in_code_list` and `dataflow_mismatch`,
+  which check the data against the BIS structural metadata
+  ([0009](0009-sdmx-validation.md), [0018](0018-sdmx-reference-and-not-evaluated.md)). When the
+  reference cannot be obtained, each reports "not evaluated" as a finding with a count of 0.

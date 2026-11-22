@@ -7,7 +7,9 @@ follows the layout of [How it works](how-it-works.md): the problem, how it is so
 wrong, and how it is checked. The technical decisions are in
 [decision 0011](adr/0011-data-quality-rules.md) (the rules),
 [0005](adr/0005-exact-decimal-rates.md) (exact numbers) and
-[0017](adr/0017-bad-input-failures-and-writes.md) (bad input and failures); the words used here
+[0017](adr/0017-bad-input-failures-and-writes.md) (bad input and failures), and
+[0009](adr/0009-sdmx-validation.md) with [0018](adr/0018-sdmx-reference-and-not-evaluated.md) (the
+checks against the BIS structural metadata); the words used here
 are in the [glossary](glossary.md).
 
 ---
@@ -45,8 +47,8 @@ A **finding** is one result of one data-quality rule, a
 | `rule` | The name of the rule, as in the configuration (`exact_duplicate`) |
 | `severity` | `info`, `warning` or `error`, as the configuration sets it for the rule (section 4) |
 | `series_key` | The series concerned (`D.US`), or none for a finding about the whole file; the report shows "all" |
-| `count` | The number of observations (rows) concerned, or for `unexpected_column` the number of columns; at least 1 today (`transform._rename_columns`, `_add_issues`) |
-| `detail` | A sentence that says what was found and what was done. For the per-series rules it starts with the count (`transform._add_issues`); for `unexpected_column` it lists the columns: "columns not in the configuration, ignored: ..." (`transform._rename_columns`) |
+| `count` | The number of observations (rows) concerned; for `unexpected_column` the number of columns, and for `dataflow_mismatch` the number of differences. 0 for an SDMX rule that could not be evaluated (section 3); at least 1 otherwise (`transform._rename_columns`, `_add_issues`, `_check_reference`) |
+| `detail` | A sentence that says what was found and what was done. For the per-series rules it starts with the count (`transform._add_issues`); for `unexpected_column` it lists the columns: "columns not in the configuration, ignored: ..." (`transform._rename_columns`); for an SDMX rule that could not be evaluated it reads "not evaluated: " and the reason |
 
 For example, a finding of the rule `exact_duplicate` for the series `D.US`, with a count of 3,
 reads "3 rows repeated exactly; the copies were dropped" (`transform._add_issues`).
@@ -57,7 +59,8 @@ not a hundred findings. A rule that detects two different cases gives one findin
 (`non_numeric_value` for a bad value and for a bad unit multiplier; `status_value_mismatch` for
 both directions), and `unexpected_value` gives one per series and per column. Findings are
 listed in this order: `unexpected_column`, `unparseable_date`, `non_numeric_value`,
-`status_value_mismatch`, `unexpected_value`, `exact_duplicate`, `conflicting_duplicate`. Within a
+`status_value_mismatch`, `unexpected_value`, `exact_duplicate`, `conflicting_duplicate`,
+`ref_area_not_in_code_list`, `dataflow_mismatch`. Within a
 rule they are listed case by case (or column by column, in the order of `params.expected`, for
 `unexpected_value`), then by series key (`transform._stage_observations`; `_add_issues` sorts by
 key). So within `non_numeric_value`, for example, `D.XM` for a bad value comes before `D.US` for a
@@ -87,6 +90,8 @@ in `transform.py` lists the built ones.
 | `non_numeric_value` | A value that is not a number, and a unit multiplier that is blank or not a whole number | Kept as not valid, with no value; never rounded (see "The number format" below) |
 | `status_value_mismatch` | A status that contradicts the value: an invalid status (`M`) with a value, or a valid status with a missing value | Kept as not valid. A value that is not a number is not counted here but under `non_numeric_value`, so such a row is counted by one of the two rules, not both |
 | `unexpected_value` | A row whose code in a column differs from the one expected for it (`params.expected`), for example `OBS_CONF` other than `F` | Nothing: the row is kept; the finding names the column and the expected code ("N observations whose OBS_CONF is not 'F'", `transform._check_expected_values`); what it may mean is in section 8 |
+| `ref_area_not_in_code_list` | A row whose country or area code is not in the official code list. The code is the one of the concept bound to `structure.series_metadata.ref_area`, without its label, compared with the code list as BIS publishes it, before any alias. One finding per series, counting its rows; the series key shows the code | Nothing: the row is kept |
+| `dataflow_mismatch` | A difference between the configuration's `structure` and the dataflow definition (next subsection). One finding for the whole dataset; its count is the number of differences, and its detail names each one | None affected |
 
 How a row ends up in `staged/observations.parquet`:
 
@@ -114,6 +119,47 @@ obeys the provider's contract of one row per series and date: with a rule switch
 are still dropped or kept as above, and only its finding is missing. `conflicting_duplicate`'s
 `keep` still decides which row stays when the rule is off (`last` when absent).
 
+### The checks against the BIS structural metadata
+
+The last two rules check the data against the publisher's own definition of it, the SDMX
+structural metadata ([decision 0009](adr/0009-sdmx-validation.md),
+[decision 0018](adr/0018-sdmx-reference-and-not-evaluated.md)). The `reference` section of the
+configuration names the BIS SDMX API, the dataflow and the code list
+([configuration](configuration.md#the-sdmx-reference)). During `transform`, after the file is read
+and its selection has rows, each enabled rule asks the API once: `ref_area_not_in_code_list` for
+the code list, `dataflow_mismatch` for the dataflow and then the structure it points to. That is
+up to three requests per run, through `pysdmx` (the `sdmx` extra). Nothing is kept between runs, so the
+next `transform` asks again.
+
+`dataflow_mismatch` compares the configuration, not the file, with the definition: the file is
+already held to the configuration (a required column that is missing stops the run, and an extra
+one is an `unexpected_column` finding), so the two checks together cover the data. It reports:
+
+- a component that `structure` declares and the definition does not have;
+- a component of the definition that `structure` does not declare and `columns.unmapped` does not
+  list;
+- a different role (dimension, measure or attribute) or a different `coded`;
+- a country or area dimension coded by a code list other than the configured one.
+
+It does not compare the time dimension, because `pysdmx` cannot read it from BIS's answer; nor the
+level an attribute is attached at (BIS attaches `UNIT_MEASURE` and `UNIT_MULT` to the dataflow, the
+configuration treats them as series attributes, which for this data means the same); nor whether a
+mandatory attribute has values (`TIME_FORMAT` is empty on every row today).
+
+**"Not evaluated".** When the reference cannot be obtained, each enabled SDMX rule gives one
+finding for the whole dataset ("all" in the report), with a count of 0, the rule's severity and a
+detail such as:
+
+- "not evaluated: the SDMX API at https://stats.bis.org/api/v2 could not be reached";
+- "not evaluated: the SDMX API has no dataflow BIS:WS_CBPOL(1.0)";
+- "not evaluated: the sdmx extra is not installed: install policy-rate-monitor[sdmx]".
+
+`transform` also logs a warning for each reason, naming the rules it applies to, and ends with exit
+code 0: the
+other rules ran, and the staged data is the same as without the SDMX rules. A rule that was not
+evaluated never counts as a pass. There is one attempt, with no retry: the next `transform` asks
+again.
+
 ### The rules that are configured and not built
 
 | Rule | What it will detect | Parameters |
@@ -122,7 +168,15 @@ are still dropped or kept as above, and only its finding is missing. `conflictin
 | `series_attribute_not_constant` | A series attribute that changes within a series | `resolve` (`most_frequent`) |
 | `plausible_range` | A value outside a plausible range | `min`, `max` (-5 and 200 in `bis_cbpol.json`) |
 
-`bis_cbpol.json` lists all three, but `transform` has no code for them. At each run, a listed and
+`bis_cbpol.json` lists all three, but `transform` has no code for them. They were set aside on
+2026-11-19 to deliver a working tool by the deadline: the rules the brief asks about (missing
+values, duplicates, inconsistent data) were built first, and these three stayed configured, to be
+built later ([decision 0011](adr/0011-data-quality-rules.md), "How it evolved"). Nothing has
+replaced them: the SDMX rules check other things. On the release of 19 November 2026 they would
+change no number: no value has more decimals than its series' `DECIMALS`, every series attribute
+is constant within its series, and the 2,074 daily rows outside -5 to 200 are six historical
+episodes (Brazil 1987-94, Croatia 1993, Russia 1993-94, Argentina 2001, Sweden 1992, New Zealand
+1985), real rates that the rule would flag and keep. So they were left unbuilt on 2026-11-22. At each run, a listed and
 enabled rule that is not built is logged ("data-quality rule ... is not implemented yet") and
 skipped; it produces no finding, so **an empty list of findings does not mean these checks
 passed**: for example, the implausible values of section 1 are staged as valid and drawn on the
@@ -204,7 +258,9 @@ off:
 - `conflicting_duplicate`'s `keep` is `first` or `last`;
 - `unexpected_value`'s `params.expected` is an object; every column in it is a column of the
   configuration (in `structure` or in `columns.unmapped`), with a "did you mean" hint when it looks
-  like a typo; and every code is a text.
+  like a typo; and every code is a text;
+- an SDMX rule (`ref_area_not_in_code_list`, `dataflow_mismatch`) needs the `reference` section,
+  whose ids are not empty and whose timeout is more than 0. The SDMX rules take no parameters.
 
 A column of the configuration that the file happens not to have is skipped when `unexpected_value`
 runs. The parameters of the rules not built (`resolve`, `min`, `max`) are not checked yet. The
@@ -264,18 +320,22 @@ flowchart LR
   that lists the findings, and `summary.json` and `summary.csv` do not carry them. Read
   `data_quality.json` or call the provider ([HTTP API](api.md)).
 - **The log**: the warnings that are not findings (a bad `DECIMALS`, a missing optional column, a
-  release record that does not match the ZIP) and the rules not built.
+  release record that does not match the ZIP), the SDMX rules that were not evaluated, with the
+  reason, and the rules not built.
 
 ## 8. What to do with the findings
 
 | You see | What it tells you | What to do |
 |---|---|---|
-| No findings | None of the built rules that are enabled found anything | Nothing. The three rules not built did not run, and a built rule that is switched off (`enabled: false`) or not listed gives no finding either (`transform.transform` keeps only the enabled rules) |
+| No findings | None of the built rules that are enabled found anything, and none was "not evaluated" | Nothing. The three rules not built did not run, and a built rule that is switched off (`enabled: false`) or not listed gives no finding either (`transform.transform` keeps only the enabled rules) |
 | `exact_duplicate` (`info`) | The file repeated rows | Nothing; the copies add nothing |
 | `conflicting_duplicate` | The source gave two versions of a day | The report says which was kept; check the source if it matters for a country or area you read |
 | `non_numeric_value`, `status_value_mismatch` | Some observations have no usable rate; they are skipped | Check whether the series you request is affected: its latest or prior rate may be older than expected (flags `stale_latest`, `stale_prior`) |
 | `unparseable_date` | Some rows were dropped | The source may have changed its date format |
 | `unexpected_column`, `unexpected_value` | The source may have changed | Compare with the BIS documentation; update the configuration if the change is intended |
+| `ref_area_not_in_code_list` | The data has a country or area code that BIS's code list does not | The source or the code list changed; the series key shows the code. Its rows are reported as usual |
+| `dataflow_mismatch` | The configuration and BIS's definition of the dataflow disagree | Read the differences in the detail and correct the configuration's `structure`, or `columns.unmapped` |
+| A count of 0 and "not evaluated" | The SDMX rule did not run: the reason says why | Nothing was checked against the BIS reference in this run. Fix the reason (network, an id in `reference`, the extra) and run `transform` again |
 
 The operator's side, with a script that lists the findings, is in the
 [runbooks](advanced/operations/runbooks.md#read-data_qualityjson).
@@ -290,13 +350,11 @@ changed), and reads `data_quality.json` for the detail.
 
 - **The three rules not built** (section 3) are left for a later release
   ([decision 0011](adr/0011-data-quality-rules.md); [milestones](milestones.md)).
-- **SDMX validation (milestone M7, [decision 0009](adr/0009-sdmx-validation.md)).** New rules, enabled
-  in the configuration like the others, will check every country or area in the data against the
-  BIS code list, and the data's dimensions and attributes against the dataflow definition. The
-  reference will come only from the BIS structural metadata, with no cache. When that API cannot
-  be reached, the rules will report "not evaluated" as an explicit finding, never a pass. This is
-  not built: today no code is checked against a code list, and requested codes are only matched
-  against the codes the data has.
+- **The rest of the SDMX validation (milestone M7, [decision 0009](adr/0009-sdmx-validation.md)).**
+  The checks of the data are built (section 3). Still to come: checking the requested codes
+  against the same code list, with suggestions (`GBR → GB`, `USA → US`), in the CLI and the API,
+  and the official country or area names in the report. Until then, requested codes are only
+  matched against the codes the data has.
 - A second data source would need to run the same checks itself until a shared layer exists
   ([decision 0011](adr/0011-data-quality-rules.md), "Consequences").
 
@@ -324,7 +382,21 @@ changed), and reads `data_quality.json` for the detail.
     `tests/providers/contract.py`: `test_data_quality_issues_are_core_models`;
     `tests/test_report.py`: `test_report_md_matches_the_expected_page` (the findings table) and
     `test_text_from_the_data_is_escaped_in_report_html` (a finding's text is shown as text);
-    `tests/test_cli.py`: the count printed by `transform`.
+    `tests/test_cli.py`: the count printed by `transform`, and
+    `test_transform_without_the_sdmx_extra_reports_not_evaluated_and_exits_0`.
+
+    The SDMX rules: `tests/test_transform_sdmx.py`, through a fake reference source
+    (`test_a_matching_reference_gives_no_finding_also_for_labelled_codes`,
+    `test_a_code_not_in_the_code_list_is_one_finding_per_series`,
+    `test_each_structure_difference_is_one_dataset_finding_naming_it`,
+    `test_an_unmapped_column_and_the_time_dimension_are_not_differences`,
+    `test_an_unavailable_reference_gives_one_not_evaluated_finding_per_rule`,
+    `test_rules_that_are_off_never_ask_the_reference`,
+    `test_a_missing_zip_ends_before_the_reference_is_asked`); `tests/test_sdmx.py`, the `pysdmx`
+    source on BIS answers recorded on 2026-11-22; `tests/config/test_models.py`:
+    `test_an_sdmx_rule_needs_the_reference_section_even_when_off`,
+    `test_a_bad_reference_field_is_rejected`. `tests/integration/test_sdmx_api.py` checks the
+    committed configuration against the live API; it runs only with `pytest -m integration`.
 
     The count of 0 findings on the release of 19 November 2026 is the one printed in the
     [CLI reference](cli.md#bis-prates-transform); it is not asserted by a test.

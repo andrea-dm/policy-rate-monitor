@@ -1,7 +1,8 @@
 """The configuration of one dataset, as frozen and validated pydantic models.
 
 ``DatasetConfig`` is the top-level model, with one section per concern: the dataset's
-identity, where its file comes from, its SDMX structure, how that structure is written
+identity, where its file comes from, the SDMX reference its data is checked against,
+its SDMX structure, how that structure is written
 in the file, the data-quality rules, the snapshot thresholds, the output fields and
 the reference-area aliases. Nothing here names a real dataset: every fact comes from
 the configuration document.
@@ -34,7 +35,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime
 from io import BytesIO, TextIOWrapper
 from pathlib import Path  # noqa: TC003  (pydantic resolves the annotation at runtime)
-from typing import Annotated, Final, Literal, Self, TypeVar
+from typing import Annotated, Final, Literal, Self, TypeVar, override
 
 from pydantic import (
     AfterValidator,
@@ -72,6 +73,7 @@ from policy_rate_monitor.config._problems import (
     PATH_TILDE,
     REF_AREA_NOT_CODED,
     RULE_EXPECTED_UNKNOWN,
+    RULE_NEEDS_REFERENCE,
     RULE_PARAM_INVALID,
     RULE_TWICE,
     SCALE_ABOVE_PRECISION,
@@ -92,6 +94,8 @@ from policy_rate_monitor.core.models import DataQualitySeverity, ReadOnlyAttribu
 __all__ = [
     "CANONICAL_COLUMNS",
     "CODE_PATTERN",
+    "SDMX_RULES",
+    "ArtefactRef",
     "ColumnsSection",
     "Concept",
     "DatasetConfig",
@@ -103,6 +107,7 @@ __all__ = [
     "MetadataField",
     "ObservationAttribute",
     "OutputSection",
+    "ReferenceSection",
     "Role",
     "RuleSpec",
     "SnapshotSection",
@@ -117,6 +122,10 @@ CANONICAL_COLUMNS: Final = ("series_key", "date", "value", "is_valid")
 
 CODE_PATTERN: Final = r"^[A-Za-z0-9_@$-]+$"
 """A valid code, in the configuration or a request: letters, digits and ``_@$-``."""
+
+SDMX_RULES: Final = ("ref_area_not_in_code_list", "dataflow_mismatch")
+"""The data-quality rules that check the data against the SDMX reference. Listing
+one, on or off, needs the ``reference`` section."""
 
 
 def requested_codes(texts: Iterable[str]) -> list[str]:
@@ -348,6 +357,44 @@ class SourceSection(_ConfigModel):
             )
             raise_problems(type(self).__name__, [problem])
         return self
+
+
+class ArtefactRef(_ConfigModel):
+    """An SDMX artefact, named by its maintenance agency, id and version.
+
+    Examples:
+        >>> ref = ArtefactRef.model_validate_json(
+        ...     '{"agency": "ORG", "id": "FLOW", "version": "1.0"}'
+        ... )
+        >>> str(ref)
+        'ORG:FLOW(1.0)'
+    """
+
+    agency: Text
+    """Id of the agency that maintains the artefact."""
+    id: Text
+    """Id of the artefact."""
+    version: Text
+    """Version of the artefact, e.g. '1.0'."""
+
+    @override
+    def __str__(self) -> str:
+        """Returns the short SDMX form, ``agency:id(version)``."""
+        return f"{self.agency}:{self.id}({self.version})"
+
+
+class ReferenceSection(_ConfigModel):
+    """Where the SDMX structural metadata that the data is checked against is read."""
+
+    api_url: HttpUrl
+    """Base address of the SDMX REST API that serves the structural metadata."""
+    dataflow: ArtefactRef
+    """The dataflow of the data. The structure it points to is the one checked
+    against."""
+    ref_area_code_list: ArtefactRef
+    """The code list of the reference-area codes."""
+    timeout_seconds: PositiveFloat
+    """Time allowed for each request, in seconds."""
 
 
 class Concept(_ConfigModel):
@@ -706,6 +753,9 @@ class DatasetConfig(_ConfigModel):
     """Identity and defaults."""
     source: SourceSection
     """Download settings: discovery page, file name, fallback URL, cache, attempts."""
+    reference: ReferenceSection | None = None
+    """The SDMX reference the data is checked against; needed by the SDMX rules.
+    Null or absent when no SDMX rule is listed."""
     structure: StructureSection
     """The source's concepts and their roles."""
     columns: ColumnsSection
@@ -773,9 +823,19 @@ class DatasetConfig(_ConfigModel):
         return self
 
     def _rule_problems(self) -> list[Problem]:
-        """Checks the parameters the implemented rules read."""
+        """Checks the parameters the implemented rules read, and that the SDMX
+        rules have a reference."""
         problems: list[Problem] = []
         for index, rule in enumerate(self.rules):
+            if rule.name in SDMX_RULES and self.reference is None:
+                problems.append(
+                    Problem(
+                        RULE_NEEDS_REFERENCE,
+                        ("rules", index, "name"),
+                        rule.name,
+                        {"name": rule.name},
+                    )
+                )
             loc: Loc = ("rules", index, "params")
             if rule.name == "conflicting_duplicate":
                 problems += _keep_problems(rule, loc)

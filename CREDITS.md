@@ -21,6 +21,7 @@
 | [Jinja](https://jinja.palletsprojects.com/) | The templates of `report.md` and `report.html` | BSD-3-Clause |
 | [Plotly](https://plotly.com/python/) | The interactive chart (`interactive` extra) | MIT |
 | [FastAPI](https://fastapi.tiangolo.com/) | The HTTP API (`web` extra) | MIT |
+| [pysdmx](https://sdmx.io/tools/pysdmx) | Reads the BIS structural metadata for the SDMX checks (`sdmx` extra) | Apache-2.0 |
 
 Licences as declared in each package's metadata.
 

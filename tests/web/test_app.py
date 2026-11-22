@@ -33,7 +33,7 @@ def test_summary_gives_the_same_snapshots_as_the_cli(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    def memory_provider(*_args: object) -> InMemoryProvider:
+    def memory_provider(*_args: object, **_kwargs: object) -> InMemoryProvider:
         return provider
 
     monkeypatch.setattr(

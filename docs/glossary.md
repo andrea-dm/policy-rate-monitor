@@ -37,7 +37,8 @@ Each term has one meaning throughout the code, the outputs and these pages.
 | **Canonical data** | The data in the one form every provider returns, whatever its source: the observations table in the schema built from the configuration, and the domain models. |
 | **Provider** | An object that prepares the data (`fetch`, `transform`) and serves the canonical data (`DataProvider`). |
 | **Configuration** | Our description of how to process a dataset: source, structure, rules, settings (`configs/bis_cbpol.json`). |
-| **SDMX structural metadata** | The publisher's definition of the data: dimensions, attributes, code lists. Used only to validate the data (planned). |
+| **SDMX structural metadata** | The publisher's definition of the data: dimensions, attributes, code lists. Used only to validate the data, by the SDMX rules ([Data quality](data-quality.md#the-checks-against-the-bis-structural-metadata)). |
+| **Not evaluated** | The finding of an SDMX rule that could not run because the reference could not be obtained: a count of 0 and the reason. Never a pass. |
 | **Data quality** | How far the data can be relied on as published: what the tool checks, reports and does about rows it cannot use as rates. Explained on the [data quality](data-quality.md) page. |
 | **Data-quality rule** | A named check, selected and set up in the configuration, which sets its severity and can switch it off (`enabled: false`). See [data quality](data-quality.md#5-configuring-a-rule). |
 | **Finding** | One result of a data-quality rule: the rule, its severity, the series, the count and what was done (`DataQualityIssue`). |
