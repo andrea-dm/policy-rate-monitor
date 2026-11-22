@@ -34,3 +34,15 @@ def test_the_bis_reference_still_matches_the_configuration(tmp_path: Path) -> No
         issue for issue in load_data_quality(tmp_path) if issue.rule in SDMX_RULES
     ]
     assert sdmx_findings == []
+
+
+def test_every_configured_suggestion_is_a_code_of_the_bis_list() -> None:
+    config = FileConfigSource(CONFIG).load()
+    assert config.reference is not None
+
+    names = SdmxReference(config.reference).ref_area_names()
+
+    assert names["GB"] == "United Kingdom"
+    assert set(config.ref_area_suggestions.values()) <= set(names)
+    # A suggestion is only looked up for a code the list does not have.
+    assert not set(config.ref_area_suggestions) & set(names)

@@ -5,11 +5,19 @@ functions here, so ``bis-prates report`` and the API give the same numbers. The
 adapters keep only their own concerns: the CLI its arguments, printing and exit
 codes, the API its routes and HTTP statuses.
 
+A requested code the data has no series for is checked against the SDMX
+reference-area code list, through a ``reference.ReferenceSource``: a code the list has
+gets its official name, a code it does not have gets the suggestions of the
+configuration and of the official names. The list is asked for only then, once per
+summary, and kept for nothing else. When it cannot be obtained, the snapshots are
+those of the data alone, and a warning says why.
+
 See also: [Architecture](architecture.md).
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 # pydantic resolves the annotations at runtime, so ``date`` is a runtime import.
@@ -20,23 +28,27 @@ from pandas import ArrowDtype
 from pydantic import BaseModel, ConfigDict
 
 from policy_rate_monitor.chart.lines import valid_rows
-from policy_rate_monitor.core.models import Rate, SeriesMetadata
+from policy_rate_monitor.core.errors import ReferenceUnavailableError
+from policy_rate_monitor.core.models import (
+    DataSnapshot,
+    Rate,
+    SeriesMetadata,
+    SnapshotStatus,
+)
+from policy_rate_monitor.reference import NO_REFERENCE
 from policy_rate_monitor.report import Report, ReportArgs
 from policy_rate_monitor.snapshot import SnapshotArgs, compute_snapshots
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from pandas import DataFrame
 
     from policy_rate_monitor.config import DatasetConfig
-    from policy_rate_monitor.core.models import (
-        DataQualityIssue,
-        DataSnapshot,
-        SourceRelease,
-    )
+    from policy_rate_monitor.core.models import DataQualityIssue, SourceRelease
     from policy_rate_monitor.providers import DataProvider
+    from policy_rate_monitor.reference import ReferenceSource
 
 __all__ = [
     "Observation",
@@ -49,6 +61,8 @@ __all__ = [
     "timeseries",
     "write_report",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -141,19 +155,27 @@ def load_staged(provider: DataProvider) -> StagedData:
 
 
 def summary(
-    config: DatasetConfig, data: StagedData, countries: Sequence[str]
+    config: DatasetConfig,
+    data: StagedData,
+    countries: Sequence[str],
+    reference: ReferenceSource = NO_REFERENCE,
 ) -> list[DataSnapshot]:
     """Computes the snapshot of each requested country or economic area.
 
     Args:
-        config: The dataset configuration (the snapshot settings and the aliases).
+        config: The dataset configuration (the snapshot settings, the aliases and
+            the suggestions).
         data: The staged data.
         countries: The codes as the user typed them.
+        reference: Where the code list of a code with no series is read; with the
+            default, such a code gets no name and no suggestions.
 
     Returns:
-        One snapshot per distinct requested code, in request order.
+        One snapshot per distinct requested code, in request order. A code with no
+        series has the status ``UNKNOWN_REF_AREA``, with its official name or with
+        suggestions when the code list could be read.
     """
-    return compute_snapshots(
+    snapshots = compute_snapshots(
         SnapshotArgs(
             observations=data.observations,
             series=data.series,
@@ -162,6 +184,45 @@ def summary(
             ref_area_aliases=config.ref_area_aliases,
         )
     )
+    if all(item.status is not SnapshotStatus.UNKNOWN_REF_AREA for item in snapshots):
+        return snapshots
+    try:
+        names = reference.ref_area_names()
+    except ReferenceUnavailableError as error:
+        logger.warning(
+            "the requested codes were not checked against the code list: %s",
+            error.reason,
+        )
+        return snapshots
+    return [
+        _checked(item, names, config.ref_area_suggestions)
+        if item.status is SnapshotStatus.UNKNOWN_REF_AREA
+        else item
+        for item in snapshots
+    ]
+
+
+def _checked(
+    snapshot: DataSnapshot, names: Mapping[str, str], suggestions: Mapping[str, str]
+) -> DataSnapshot:
+    """Names a code the code list has, or suggests codes it has for one it lacks.
+
+    The suggestions are the configured one, then the codes whose official name is
+    the requested text, case aside; only codes of the list, each once.
+    """
+    code = snapshot.ref_area
+    if code in names:
+        update: dict[str, object] = {"ref_area_name": names[code]}
+    else:
+        text = snapshot.requested_ref_area.casefold()
+        candidates = [suggestions.get(code, "")]
+        candidates += [
+            found for found, name in names.items() if name.casefold() == text
+        ]
+        found_codes = (found for found in candidates if found in names)
+        update = {"suggestions": tuple(dict.fromkeys(found_codes))}
+    # Validated again: model_copy(update=...) would skip the model's checks.
+    return DataSnapshot.model_validate({**snapshot.model_dump(), **update})
 
 
 def ref_areas(config: DatasetConfig, data: StagedData) -> list[RefArea]:

@@ -727,6 +727,17 @@
       },
       "title": "Ref Area Aliases",
       "type": "object"
+    },
+    "ref_area_suggestions": {
+      "description": "Requested code that is not in the SDMX reference-area code list to the code\nto suggest instead, e.g. a three-letter code to the two-letter one. Offered,\nnever applied. Keys are upper case and not aliases; no suggestion leads to\nitself or to another suggestion.",
+      "patternProperties": {
+        "^[A-Za-z0-9_@$-]+$": {
+          "pattern": "^[A-Za-z0-9_@$-]+$",
+          "type": "string"
+        }
+      },
+      "title": "Ref Area Suggestions",
+      "type": "object"
     }
   },
   "required": [

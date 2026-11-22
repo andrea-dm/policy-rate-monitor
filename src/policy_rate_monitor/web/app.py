@@ -29,6 +29,7 @@ from policy_rate_monitor import __version__
 from policy_rate_monitor.chart.interactive import rate_figure
 from policy_rate_monitor.config import requested_codes
 from policy_rate_monitor.core.errors import MissingInputError
+from policy_rate_monitor.reference import NO_REFERENCE
 from policy_rate_monitor.report import summary_document
 from policy_rate_monitor.service import (
     RefArea,
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
 
     from policy_rate_monitor.config import DatasetConfig
     from policy_rate_monitor.providers import DataProvider
+    from policy_rate_monitor.reference import ReferenceSource
 
 __all__ = ["DEFAULT_OUT_DIR", "ListenError", "ReportRequest", "create_app", "serve"]
 
@@ -140,7 +142,9 @@ def _codes(given: list[str]) -> list[str]:
         raise ApiError(status, "invalid_request", str(error)) from None
 
 
-def _read_routes(config: DatasetConfig, staged: _Staged) -> APIRouter:
+def _read_routes(
+    config: DatasetConfig, staged: _Staged, reference: ReferenceSource
+) -> APIRouter:
     router = APIRouter(tags=["data"], responses=_READ_ERRORS)
 
     @router.get("/ref-areas")
@@ -153,7 +157,7 @@ def _read_routes(config: DatasetConfig, staged: _Staged) -> APIRouter:
         """The latest rate, the rate 12 months earlier and the change, per code."""
         codes = _codes(countries.split(","))
         data = staged.get()
-        snapshots = summary(config, data, codes)
+        snapshots = summary(config, data, codes, reference)
         generated_at = datetime.now(UTC).replace(microsecond=0)
         return summary_document(config, snapshots, data.release, generated_at)
 
@@ -164,9 +168,15 @@ def _read_routes(config: DatasetConfig, staged: _Staged) -> APIRouter:
     ) -> TimeSeries:
         """The valid observations of one country or economic area."""
         [code] = _codes([country])
-        found = timeseries(config, staged.get(), code, start)
+        data = staged.get()
+        found = timeseries(config, data, code, start)
         if found is None:
-            msg = f"no series for {code}; GET /ref-areas lists the codes"
+            # The summary of the code says whether the code list has it.
+            [unknown] = summary(config, data, [code], reference)
+            hint = ""
+            if unknown.suggestions:
+                hint = f"; did you mean {' or '.join(unknown.suggestions)}?"
+            msg = f"no series for {code}{hint}; GET /ref-areas lists the codes"
             raise ApiError(HTTPStatus.NOT_FOUND, "not_found", msg)
         return found
 
@@ -177,7 +187,7 @@ def _read_routes(config: DatasetConfig, staged: _Staged) -> APIRouter:
         """The policy-rate chart as a Plotly figure, in JSON."""
         codes = _codes(countries.split(","))
         data = staged.get()
-        snapshots = summary(config, data, codes)
+        snapshots = summary(config, data, codes, reference)
         figure = rate_figure(config.dataset.title, snapshots, data.observations, start)
         return Response(content=figure.to_json(), media_type="application/json")
 
@@ -190,6 +200,7 @@ def _job_routes(
     staged: _Staged,
     jobs: JobRunner,
     out_dir: Path,
+    reference: ReferenceSource,
 ) -> APIRouter:
     router = APIRouter(prefix="/jobs", tags=["jobs"], responses=_JOB_ERRORS)
 
@@ -227,7 +238,7 @@ def _job_routes(
 
         def work() -> dict[str, Any]:
             data = staged.get()
-            snapshots = summary(config, data, codes)
+            snapshots = summary(config, data, codes, reference)
             paths = write_report(config, data, snapshots, out_dir, request.start)
             return {"files": [str(path) for path in paths]}
 
@@ -245,7 +256,10 @@ def _job_routes(
 
 
 def create_app(
-    config: DatasetConfig, provider: DataProvider, out_dir: Path = DEFAULT_OUT_DIR
+    config: DatasetConfig,
+    provider: DataProvider,
+    out_dir: Path = DEFAULT_OUT_DIR,
+    reference: ReferenceSource = NO_REFERENCE,
 ) -> FastAPI:
     """Builds the HTTP API of one dataset.
 
@@ -253,6 +267,8 @@ def create_app(
         config: The dataset configuration.
         provider: Where the data comes from.
         out_dir: Where a ``report`` job writes its files.
+        reference: Where a requested code with no series is checked against the
+            SDMX code list; with the default, it is not.
 
     Returns:
         The application; ``app.state.jobs`` is its ``JobRunner``.
@@ -276,8 +292,8 @@ def create_app(
     )
     app.state.jobs = jobs
     add_error_handlers(app)
-    app.include_router(_read_routes(config, staged))
-    app.include_router(_job_routes(config, provider, staged, jobs, out_dir))
+    app.include_router(_read_routes(config, staged, reference))
+    app.include_router(_job_routes(config, provider, staged, jobs, out_dir, reference))
     return app
 
 
@@ -288,6 +304,7 @@ def serve(
     host: str,
     port: int,
     out_dir: Path = DEFAULT_OUT_DIR,
+    reference: ReferenceSource = NO_REFERENCE,
 ) -> None:
     """Runs the HTTP API with uvicorn until it is stopped.
 
@@ -301,11 +318,13 @@ def serve(
             taken as an IPv6 address.
         port: The port to listen on, e.g. 8000.
         out_dir: Where a ``report`` job writes its files.
+        reference: Where a requested code with no series is checked against the
+            SDMX code list.
 
     Raises:
         ListenError: The address and port cannot be bound, e.g. the port is in use.
     """
-    app = create_app(config, provider, out_dir)
+    app = create_app(config, provider, out_dir, reference)
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     try:
         sock = socket.create_server((host, port), family=family)

@@ -578,3 +578,33 @@ def test_the_report_says_which_conflicting_row_is_kept_even_with_the_rule_off(
 
     page = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "on the same date, the first one in the file is kept." in page
+
+
+@pytest.mark.contract
+def test_a_code_with_no_series_shows_its_official_name_in_both_pages(
+    config: DatasetConfig, tmp_path: Path
+) -> None:
+    full = _full_args(tmp_path)
+    bulgaria = DataSnapshot(
+        requested_ref_area="BG",
+        ref_area="BG",
+        status=SnapshotStatus.UNKNOWN_REF_AREA,
+        ref_area_name="Bulgaria",
+    )
+    args = ReportArgs(
+        snapshots=[*full.snapshots, bulgaria],
+        observations=full.observations,
+        series=full.series,
+        issues=full.issues,
+        release=full.release,
+        out_dir=tmp_path,
+    )
+
+    Report(config).export(args)
+
+    page = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "| Bulgaria | BG |" in page
+    assert "| - | ZZ |" in page
+    assert '<th scope="row">Bulgaria</th>' in (tmp_path / "report.html").read_text(
+        encoding="utf-8"
+    )

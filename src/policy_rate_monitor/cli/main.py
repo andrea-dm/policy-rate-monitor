@@ -8,8 +8,9 @@ bug: it is logged with its traceback and ends the command with ``INTERNAL_ERROR`
 
 The report steps (``service``, and with it matplotlib and Jinja) are imported
 only by ``report`` and ``serve``, so ``--version``, ``fetch`` and ``transform``
-start without them. ``pysdmx`` (the ``sdmx`` extra) is imported only by
-``transform`` and ``serve``, and only when an SDMX rule is enabled.
+start without them. ``pysdmx`` (the ``sdmx`` extra) is imported only by ``transform``,
+when an SDMX rule is enabled, and by ``report`` and ``serve``, when the configuration
+has a ``reference`` section, to check the requested codes.
 
 See also: [CLI reference](cli.md) and [the command
 line](advanced/operations/workflows.md#the-command-line).
@@ -89,6 +90,8 @@ def main(
         stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # httpx, under pysdmx, logs every request at INFO.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     try:
         return args.command(args, os.environ if environ is None else environ)
     except PolicyRateMonitorError as error:
@@ -254,24 +257,30 @@ def _where(path: Setting) -> str:
 
 
 def _open(
-    args: Namespace, environ: Mapping[str, str], *, transforms: bool = False
-) -> tuple[DatasetConfig, BulkFileProvider]:
-    """Loads the configuration and opens its provider.
+    args: Namespace,
+    environ: Mapping[str, str],
+    *,
+    transforms: bool = False,
+    checks_codes: bool = False,
+) -> tuple[DatasetConfig, BulkFileProvider, ReferenceSource]:
+    """Loads the configuration and opens its provider and its SDMX reference source.
 
-    *transforms* says that the command can run ``transform``: only then does the
-    provider get an SDMX reference source.
+    A command gets a reference source only when it needs one: *transforms* (it can
+    run ``transform``) when an SDMX rule is enabled, *checks_codes* (it checks
+    requested codes) whenever the configuration has a ``reference`` section.
     """
     config = _load(config_path(args.config, environ))
     directory = data_dir(args.data_dir, environ, config)
-    reference = _reference(config) if transforms else NO_REFERENCE
-    return config, BulkFileProvider(config, directory.value, reference=reference)
+    rules_on = any(rule.enabled and rule.name in SDMX_RULES for rule in config.rules)
+    needed = checks_codes or (transforms and rules_on)
+    reference = _reference(config) if needed else NO_REFERENCE
+    provider = BulkFileProvider(config, directory.value, reference=reference)
+    return config, provider, reference
 
 
 def _reference(config: DatasetConfig) -> ReferenceSource:
-    """The SDMX reference source, if an SDMX rule is enabled; ``pysdmx`` is loaded
-    only then."""
-    enabled = any(rule.enabled and rule.name in SDMX_RULES for rule in config.rules)
-    if not enabled or config.reference is None:
+    """The SDMX reference source of the configuration; ``pysdmx`` is loaded here."""
+    if config.reference is None:
         return NO_REFERENCE
     try:
         from policy_rate_monitor.sdmx import (  # noqa: PLC0415 - an optional extra
@@ -285,14 +294,14 @@ def _reference(config: DatasetConfig) -> ReferenceSource:
 
 
 def _fetch(args: Namespace, environ: Mapping[str, str]) -> int:
-    _config, provider = _open(args, environ)
+    _config, provider, _ = _open(args, environ)
     release = provider.fetch()
     sys.stdout.write(f"{release.location} (sha256 {release.checksum_sha256})\n")
     return ExitCode.OK
 
 
 def _transform(args: Namespace, environ: Mapping[str, str]) -> int:
-    _config, provider = _open(args, environ, transforms=True)
+    _config, provider, _ = _open(args, environ, transforms=True)
     counts = provider.transform()
     sys.stdout.write(
         f"{counts.observations} observations of {counts.series} series kept, "
@@ -309,10 +318,10 @@ def _report(args: Namespace, environ: Mapping[str, str]) -> int:
         write_report,
     )
 
-    config, provider = _open(args, environ)
+    config, provider, reference = _open(args, environ, checks_codes=True)
     data = load_staged(provider)
     # The summary upper-cases the codes and drops the repeats.
-    snapshots = summary(config, data, args.countries)
+    snapshots = summary(config, data, args.countries, reference)
     for path in write_report(config, data, snapshots, args.out, args.start):
         sys.stdout.write(f"{path}\n")
     warning = _unknown_ref_area_warning(snapshots, data.series, config.ref_area_aliases)
@@ -341,9 +350,18 @@ def _serve(args: Namespace, environ: Mapping[str, str]) -> int:
         )
         return ExitCode.USAGE_ERROR
     # The API's transform job runs the SDMX rules too.
-    config, provider = _open(args, environ, transforms=True)
+    config, provider, reference = _open(
+        args, environ, transforms=True, checks_codes=True
+    )
     try:
-        serve(config, provider, host=args.host, port=args.port, out_dir=args.out)
+        serve(
+            config,
+            provider,
+            host=args.host,
+            port=args.port,
+            out_dir=args.out,
+            reference=reference,
+        )
     except ListenError as error:
         sys.stderr.write(f"error: {error}\n")
         return ExitCode.USAGE_ERROR
@@ -373,22 +391,35 @@ def _unknown_ref_area_warning(
     """Names the requested codes the data does not have, and lists the ones it has.
 
     The user cannot be expected to know the source's codes, e.g. that the BIS
-    calls the euro area ``XM``, so the warning shows every code with its name.
+    calls the euro area ``XM``, so the warning shows every code with its name. A
+    code the code list has is named; one it does not have gets its suggestions.
     """
     unknown = [
-        item.requested_ref_area
-        for item in snapshots
-        if item.status == SnapshotStatus.UNKNOWN_REF_AREA
+        item for item in snapshots if item.status == SnapshotStatus.UNKNOWN_REF_AREA
     ]
     if not unknown:
         return ""
     names = {item.ref_area: item.ref_area_name for item in series}
+    lines = [_unknown_line(item, names) for item in unknown]
     available = ", ".join(f"{code} ({names[code]})" for code in sorted(names))
     aliases = "".join(
         f"; {alias} stands for {code}"
         for alias, code in sorted(ref_area_aliases.items())
     )
-    return (
-        f"warning: no series for {', '.join(unknown)}. "
-        f"Available codes: {available}{aliases}.\n"
-    )
+    return "".join(lines) + f"Available codes: {available}{aliases}.\n"
+
+
+def _unknown_line(snapshot: DataSnapshot, names: Mapping[str, str]) -> str:
+    code = snapshot.requested_ref_area
+    if snapshot.ref_area_name is not None:
+        return f"warning: no series for {code} ({snapshot.ref_area_name}).\n"
+    if snapshot.suggestions:
+        offered = " or ".join(
+            f"{found} ({names[found]})" if found in names else found
+            for found in snapshot.suggestions
+        )
+        return (
+            f"warning: {code} is not in the country or area code list; "
+            f"did you mean {offered}?\n"
+        )
+    return f"warning: no series for {code}.\n"

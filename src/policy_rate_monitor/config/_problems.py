@@ -160,6 +160,24 @@ ALIAS_CHAIN: Final = Template(
     "'{code}' maps to '{target}', which is itself an alias: map '{code}' to the "
     "final code",
 )
+SUGGESTION_NOT_UPPER_CASE: Final = Template(
+    "suggestion_not_upper_case",
+    "'{code}' is not upper case; requested codes are upper-cased before suggestions "
+    "are looked up, so it would never match",
+)
+SUGGESTION_TO_ITSELF: Final = Template(
+    "suggestion_to_itself", "'{code}' suggests itself"
+)
+SUGGESTION_CHAIN: Final = Template(
+    "suggestion_chain",
+    "'{code}' suggests '{target}', which itself has a suggestion: suggest the final "
+    "code",
+)
+SUGGESTION_IS_ALIAS: Final = Template(
+    "suggestion_is_alias",
+    "'{code}' is also in ref_area_aliases: an alias is applied first, so this "
+    "suggestion would never be offered",
+)
 RULE_TWICE: Final = Template(
     "rule_twice", "rule '{name}' is configured twice (first at rules[{first}])"
 )
@@ -275,6 +293,10 @@ TEMPLATES: Final = (
     ALIAS_NOT_UPPER_CASE,
     ALIAS_TO_ITSELF,
     ALIAS_CHAIN,
+    SUGGESTION_NOT_UPPER_CASE,
+    SUGGESTION_TO_ITSELF,
+    SUGGESTION_CHAIN,
+    SUGGESTION_IS_ALIAS,
     RULE_TWICE,
     LISTED_TWICE,
     PATH_EMPTY,

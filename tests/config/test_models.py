@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from policy_rate_monitor.core.models import ReadOnlyAttributes
 from tests.config.fixtures import changed, error_lines, load, minimal_document
 
 
@@ -297,3 +298,48 @@ def test_a_bad_reference_field_is_rejected(
     document = changed(changed(minimal_document(), "reference", REFERENCE), path, value)
 
     assert error_lines(document) == [expected]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("suggestions", "expected"),
+    [
+        (
+            {"gbr": "GB"},
+            (
+                "ref_area_suggestions.gbr: 'gbr' is not upper case; requested codes are"
+                " upper-cased before suggestions are looked up, so it would never match"
+            ),
+        ),
+        ({"GB": "GB"}, "ref_area_suggestions.GB: 'GB' suggests itself"),
+        (
+            {"UK": "GBR", "GBR": "GB"},
+            (
+                "ref_area_suggestions.UK: 'UK' suggests 'GBR', which itself has a"
+                " suggestion: suggest the final code"
+            ),
+        ),
+        (
+            {"Q1": "GB"},
+            (
+                "ref_area_suggestions.Q1: 'Q1' is also in ref_area_aliases: an alias is"
+                " applied first, so this suggestion would never be offered"
+            ),
+        ),
+    ],
+    ids=["lower_case", "to_itself", "chain", "alias"],
+)
+def test_a_suggestion_must_lead_to_a_final_code(
+    suggestions: dict[str, str], expected: str
+) -> None:
+    document = changed(minimal_document(), "ref_area_suggestions", suggestions)
+
+    assert error_lines(document) == [expected]
+
+
+@pytest.mark.unit
+def test_a_configuration_without_suggestions_loads_read_only() -> None:
+    suggestions = load(minimal_document()).ref_area_suggestions
+
+    assert suggestions == {}
+    assert isinstance(suggestions, ReadOnlyAttributes)

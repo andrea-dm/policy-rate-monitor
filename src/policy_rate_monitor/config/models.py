@@ -35,7 +35,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime
 from io import BytesIO, TextIOWrapper
 from pathlib import Path  # noqa: TC003  (pydantic resolves the annotation at runtime)
-from typing import Annotated, Final, Literal, Self, TypeVar, override
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Self, TypeVar, override
 
 from pydantic import (
     AfterValidator,
@@ -80,6 +80,10 @@ from policy_rate_monitor.config._problems import (
     SELECTION_MISSING,
     SELECTION_NOT_SELECTABLE,
     SELECTION_REF_AREA,
+    SUGGESTION_CHAIN,
+    SUGGESTION_IS_ALIAS,
+    SUGGESTION_NOT_UPPER_CASE,
+    SUGGESTION_TO_ITSELF,
     UNKNOWN_ENCODING,
     UNMAPPED_CASE_CLASH,
     UNMAPPED_IS_DECLARED,
@@ -90,6 +94,9 @@ from policy_rate_monitor.config._problems import (
     raise_problems,
 )
 from policy_rate_monitor.core.models import DataQualitySeverity, ReadOnlyAttributes
+
+if TYPE_CHECKING:
+    from policy_rate_monitor.config._problems import Template
 
 __all__ = [
     "CANONICAL_COLUMNS",
@@ -260,20 +267,36 @@ def _plain_dict(value: Mapping[str, str]) -> dict[str, str]:
     return dict(value)
 
 
-def _check_aliases(aliases: Mapping[str, str]) -> Mapping[str, str]:
+def _code_map_problems(
+    codes: Mapping[str, str], not_upper: Template, to_itself: Template, chain: Template
+) -> list[Problem]:
+    """Checks a map from requested code to code: upper-case keys, no loop, no chain."""
     problems: list[Problem] = []
-    for code, target in aliases.items():
+    for code, target in codes.items():
         if code != code.upper():
-            problems.append(
-                Problem(ALIAS_NOT_UPPER_CASE, (code,), code, {"code": code})
-            )
+            problems.append(Problem(not_upper, (code,), code, {"code": code}))
         elif code == target:
-            problems.append(Problem(ALIAS_TO_ITSELF, (code,), target, {"code": code}))
-        elif target in aliases:
+            problems.append(Problem(to_itself, (code,), target, {"code": code}))
+        elif target in codes:
             context = {"code": code, "target": target}
-            problems.append(Problem(ALIAS_CHAIN, (code,), target, context))
+            problems.append(Problem(chain, (code,), target, context))
+    return problems
+
+
+def _check_aliases(aliases: Mapping[str, str]) -> Mapping[str, str]:
+    problems = _code_map_problems(
+        aliases, ALIAS_NOT_UPPER_CASE, ALIAS_TO_ITSELF, ALIAS_CHAIN
+    )
     raise_problems("ref_area_aliases", problems)
     return aliases
+
+
+def _check_suggestions(suggestions: Mapping[str, str]) -> Mapping[str, str]:
+    problems = _code_map_problems(
+        suggestions, SUGGESTION_NOT_UPPER_CASE, SUGGESTION_TO_ITSELF, SUGGESTION_CHAIN
+    )
+    raise_problems("ref_area_suggestions", problems)
+    return suggestions
 
 
 LocalPath = Annotated[Path, BeforeValidator(_check_local_path)]
@@ -283,6 +306,12 @@ Selection = Annotated[Mapping[ConceptId, Code], AfterValidator(_read_only), _AsD
 RefAreaAliases = Annotated[
     Mapping[Code, Code],
     AfterValidator(_check_aliases),
+    AfterValidator(_read_only),
+    _AsDict,
+]
+RefAreaSuggestions = Annotated[
+    Mapping[Code, Code],
+    AfterValidator(_check_suggestions),
     AfterValidator(_read_only),
     _AsDict,
 ]
@@ -770,6 +799,14 @@ class DatasetConfig(_ConfigModel):
     ref_area_aliases: RefAreaAliases
     """Requested code to reference-area code. Keys are upper case; no alias maps to
     itself or to another alias."""
+    # validate_default: the default too is checked and made read-only.
+    ref_area_suggestions: RefAreaSuggestions = Field(
+        default_factory=dict[str, str], validate_default=True
+    )
+    """Requested code that is not in the SDMX reference-area code list to the code
+    to suggest instead, e.g. a three-letter code to the two-letter one. Offered,
+    never applied. Keys are upper case and not aliases; no suggestion leads to
+    itself or to another suggestion."""
 
     def required_columns(self) -> tuple[str, ...]:
         """Returns the columns the file must have: declared and not optional.
@@ -818,6 +855,7 @@ class DatasetConfig(_ConfigModel):
             *self._optional_problems(),
             *self._output_problems(),
             *self._rule_problems(),
+            *self._suggestion_problems(),
         ]
         raise_problems(type(self).__name__, problems)
         return self
@@ -842,6 +880,18 @@ class DatasetConfig(_ConfigModel):
             if rule.name == "unexpected_value":
                 problems += _expected_problems(rule, loc, self.known_columns())
         return problems
+
+    def _suggestion_problems(self) -> list[Problem]:
+        return [
+            Problem(
+                SUGGESTION_IS_ALIAS,
+                ("ref_area_suggestions", code),
+                code,
+                {"code": code},
+            )
+            for code in self.ref_area_suggestions
+            if code in self.ref_area_aliases
+        ]
 
     def _unmapped_problems(self) -> list[Problem]:
         declared = {concept_id for _loc, concept_id, _role in self.structure.concepts()}

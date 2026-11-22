@@ -14,8 +14,10 @@ from fastapi.testclient import TestClient
 
 from policy_rate_monitor.cli.main import main
 from policy_rate_monitor.core.models import SnapshotStatus
+from policy_rate_monitor.reference import NO_REFERENCE, ReferenceSource
 from policy_rate_monitor.service import Observation, TimeSeries
 from policy_rate_monitor.web import ListenError, create_app, serve
+from tests.fake_reference import FakeReference
 from tests.web.conftest import CONFIG, REQUESTED, StagedLater
 
 if TYPE_CHECKING:
@@ -39,6 +41,12 @@ def test_summary_gives_the_same_snapshots_as_the_cli(
     monkeypatch.setattr(
         "policy_rate_monitor.cli.main.BulkFileProvider", memory_provider
     )
+
+    # The API below has no reference source, so neither does the command.
+    def no_reference(_config: object) -> ReferenceSource:
+        return NO_REFERENCE
+
+    monkeypatch.setattr("policy_rate_monitor.cli.main._reference", no_reference)
     argv = ["report", "--countries", ",".join(REQUESTED), "--config", str(CONFIG)]
     main([*argv, "--out", str(tmp_path / "cli")])
     from_cli = json.loads((tmp_path / "cli" / "summary.json").read_text())
@@ -304,3 +312,29 @@ def test_the_openapi_document_lists_every_route(client: TestClient) -> None:
         "/jobs/report",
         "/jobs/{job_id}",
     }
+
+
+def test_an_invalid_code_gets_its_suggestions_and_a_valid_one_its_name(
+    config: DatasetConfig, provider: InMemoryProvider, tmp_path: Path
+) -> None:
+    names = {"US": "United States", "XM": "Euro area", "GB": "United Kingdom"}
+    client = TestClient(
+        create_app(config, provider, tmp_path / "out", FakeReference(names=names))
+    )
+
+    summary = client.get("/summary", params={"countries": "US,USA,GB"}).json()
+    timeseries = client.get("/timeseries", params={"country": "USA"})
+
+    fields = {
+        item["requested_ref_area"]: (item["ref_area_name"], item["suggestions"])
+        for item in summary["snapshots"]
+    }
+    assert fields == {
+        "US": (None, []),
+        "USA": (None, ["US"]),
+        "GB": ("United Kingdom", []),
+    }
+    assert timeseries.status_code == 404
+    assert timeseries.json()["message"] == (
+        "no series for USA; did you mean US?; GET /ref-areas lists the codes"
+    )
