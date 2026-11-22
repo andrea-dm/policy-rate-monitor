@@ -75,6 +75,8 @@ What BIS serves was checked live on 2026-11-22, with `pysdmx` 1.22.0:
 | Retries, as for the bulk file | A failure costs only a finding; retries would add waits to every offline `transform` |
 | Exit 7 on a 404 or another error answer | Getting the reference is optional, and 0009 makes its failures findings; the reason names the id to fix |
 | The "not implemented yet" log line when the extra is missing | Easy to miss; 0009 asks for an explicit finding |
+| Stopping `transform` (exit 2) when an SDMX rule is enabled and the extra is missing, as `serve` does without the `web` extra | Considered on 2026-11-22 and not chosen: the base install must keep working with `bis_cbpol.json`, the data is still held to the configuration and checked by the other rules, and the "not evaluated" finding in the report says the run was not checked against BIS |
+| Making `pysdmx` a base dependency, so the checks always run when BIS is reachable | Considered on 2026-11-22 and not chosen: 0009 makes it an optional extra, like the other ends of the pipeline, and it adds `httpx`, `msgspec` and `parsy` to every install |
 | Reading `TIME_PERIOD` from the raw answer beside `pysdmx` | The answer would be parsed twice; a missing time column already stops the run |
 | Comparing the file's columns with the definition | The file is already held to the configuration, and role and coding can only be compared on the configuration |
 | Checking every coded value against its code list, and mandatory attributes for values | 0009 names the reference-area code only; `TIME_FORMAT` is empty on every row, so the second check would flag the whole dataset |

@@ -172,7 +172,11 @@ again.
 2026-11-19 to deliver a working tool by the deadline: the rules the brief asks about (missing
 values, duplicates, inconsistent data) were built first, and these three stayed configured, to be
 built later ([decision 0011](adr/0011-data-quality-rules.md), "How it evolved"). Nothing has
-replaced them: the SDMX rules check other things. At each run, a listed and
+replaced them: the SDMX rules check other things. On the release of 19 November 2026 they would
+change no number: no value has more decimals than its series' `DECIMALS`, every series attribute
+is constant within its series, and the 2,074 daily rows outside -5 to 200 are six historical
+episodes (Brazil 1987-94, Croatia 1993, Russia 1993-94, Argentina 2001, Sweden 1992, New Zealand
+1985), real rates that the rule would flag and keep. So they were left unbuilt on 2026-11-22. At each run, a listed and
 enabled rule that is not built is logged ("data-quality rule ... is not implemented yet") and
 skipped; it produces no finding, so **an empty list of findings does not mean these checks
 passed**: for example, the implausible values of section 1 are staged as valid and drawn on the
