@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-22T13:19:10+00:00",
+  "generated_at": "2026-11-22T18:36:05+00:00",
   "source": {
     "location": "https://data.bis.org/static/bulk/WS_CBPOL_csv_flat.zip",
     "version_id": null,
@@ -35,7 +35,9 @@
       "prior_value": 3.875,
       "change_bps": 0.0,
       "status": "ok",
-      "flags": []
+      "flags": [],
+      "ref_area_name": null,
+      "suggestions": []
     },
     {
       "requested_ref_area": "EA",
@@ -61,7 +63,9 @@
       "prior_value": 2.0,
       "change_bps": 50.0,
       "status": "ok",
-      "flags": []
+      "flags": [],
+      "ref_area_name": null,
+      "suggestions": []
     },
     {
       "requested_ref_area": "GB",
@@ -87,7 +91,9 @@
       "prior_value": 4.0,
       "change_bps": 0.0,
       "status": "ok",
-      "flags": []
+      "flags": [],
+      "ref_area_name": null,
+      "suggestions": []
     },
     {
       "requested_ref_area": "JP",
@@ -114,7 +120,9 @@
       "prior_value": 0.5,
       "change_bps": 75.0,
       "status": "ok",
-      "flags": []
+      "flags": [],
+      "ref_area_name": null,
+      "suggestions": []
     },
     {
       "requested_ref_area": "CH",
@@ -140,7 +148,9 @@
       "prior_value": 0.0,
       "change_bps": 0.0,
       "status": "ok",
-      "flags": []
+      "flags": [],
+      "ref_area_name": null,
+      "suggestions": []
     }
   ]
 }

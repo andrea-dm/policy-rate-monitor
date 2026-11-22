@@ -1,6 +1,6 @@
 # Central bank policy rates
 
-Generated on 2026-11-22 at 13:19 UTC.
+Generated on 2026-11-22 at 18:36 UTC.
 
 ## Summary
 
