@@ -1,6 +1,6 @@
 # Central bank policy rates
 
-Generated on 2026-11-21 at 22:14 UTC.
+Generated on 2026-11-22 at 13:19 UTC.
 
 ## Summary
 
@@ -21,7 +21,7 @@ Policy rates set by central banks, as published by the Bank for International Se
 Source: Bank for International Settlements (BIS), central bank policy rates (WS_CBPOL).
 
 - Downloaded from: https://data.bis.org/static/bulk/WS_CBPOL_csv_flat.zip
-- Retrieved at: 2026-11-19 22:44 UTC
+- Retrieved at: 2026-11-22 13:18 UTC
 - SHA-256 of the file: `79f614ab22c21d172694cd48e9a9d551c7196f53c525008bc7ea4da8831d6494`
 
 The staged data holds 49 series.
