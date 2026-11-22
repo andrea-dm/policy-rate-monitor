@@ -227,7 +227,12 @@ def _rate(value: Decimal | None, decimals: int | None) -> str:
 def _summary_rows(snapshots: Sequence[DataSnapshot]) -> list[list[str]]:
     rows: list[list[str]] = []
     for snapshot in snapshots:
-        name = "-" if snapshot.series is None else snapshot.series.ref_area_name
+        # A code with no series has a name when the code list has it.
+        name = (
+            snapshot.series.ref_area_name
+            if snapshot.series is not None
+            else snapshot.ref_area_name or "-"
+        )
         decimals = None if snapshot.series is None else snapshot.series.decimals
         rows += [
             [

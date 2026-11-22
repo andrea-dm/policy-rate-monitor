@@ -20,6 +20,7 @@ from policy_rate_monitor.config import SDMX_RULES, FileConfigSource
 from policy_rate_monitor.core.errors import (
     MissingInputError,
     PolicyRateMonitorError,
+    ReferenceUnavailableError,
     SourceUnavailableError,
 )
 from policy_rate_monitor.core.models import (
@@ -28,9 +29,11 @@ from policy_rate_monitor.core.models import (
     TransformSummary,
 )
 from policy_rate_monitor.providers import InMemoryProvider
+from policy_rate_monitor.sdmx import SdmxReference
 from policy_rate_monitor.settings import CONFIG_VARIABLE, DATA_DIR_VARIABLE
 from policy_rate_monitor.transform import load_data_quality
 from tests.bis_zip import write_bis_zip
+from tests.fake_reference import FakeReference
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -54,6 +57,28 @@ class NothingStaged(InMemoryProvider):
     def observations(self, series_keys: Sequence[str] | None = None) -> Table:
         msg = "data/staged/observations.parquet does not exist"
         raise MissingInputError(msg, step=self.step)
+
+
+@pytest.fixture(autouse=True)
+def no_sdmx_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keeps the pysdmx source off the network: the committed configuration has a
+    reference section, so report and serve build one."""
+
+    def offline(*_args: object) -> object:
+        msg = "the tests do not reach the SDMX API"
+        raise ReferenceUnavailableError(msg)
+
+    monkeypatch.setattr(SdmxReference, "structure", offline)
+    monkeypatch.setattr(SdmxReference, "ref_area_names", offline)
+
+
+def use_reference(monkeypatch: pytest.MonkeyPatch, reference: FakeReference) -> None:
+    """Makes the commands use *reference* in place of the pysdmx one."""
+
+    def make(_config: object) -> FakeReference:
+        return reference
+
+    monkeypatch.setattr("policy_rate_monitor.cli.main._reference", make)
 
 
 def use_provider(monkeypatch: pytest.MonkeyPatch, provider: InMemoryProvider) -> None:
@@ -454,6 +479,44 @@ def without_sdmx_rules(directory: Path) -> Path:
     return path
 
 
+def without_reference(directory: Path) -> Path:
+    """Writes the committed configuration with no reference section and no SDMX rule;
+    returns its path."""
+    document = json.loads(CONFIG.read_text(encoding="utf-8"))
+    del document["reference"]
+    document["rules"] = [
+        rule for rule in document["rules"] if rule["name"] not in SDMX_RULES
+    ]
+    path = directory / "no_reference.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return path
+
+
+def loaded_packages(argv: list[str], data_dir: Path) -> list[str]:
+    """Runs the command in a fresh interpreter and returns the optional or heavy
+    packages it loaded: the modules this test suite imported stay loaded here."""
+    code = (
+        "import json, sys\n"
+        "from policy_rate_monitor.cli.main import main\n"
+        "try:\n"
+        f"    main({argv!r})\n"
+        "except SystemExit:\n"
+        "    pass\n"
+        "print(json.dumps(sorted({name.split('.')[0] for name in sys.modules} & "
+        "{'fastapi', 'plotly', 'starlette', 'uvicorn', 'matplotlib', 'jinja2', "
+        "'pysdmx'})))\n"
+    )
+    environ = {**os.environ, DATA_DIR_VARIABLE: str(data_dir)}
+    result = subprocess.run(  # noqa: S603 - our own interpreter and code
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=environ,
+    )
+    return json.loads(result.stdout.splitlines()[-1])
+
+
 @pytest.mark.contract
 # With nothing fetched, transform ends at once with exit 5: no network is needed.
 @pytest.mark.parametrize(
@@ -470,29 +533,20 @@ def test_the_base_commands_load_neither_the_web_extra_nor_the_report_steps(
     tmp_path: Path, argv: list[str], loaded: list[str]
 ) -> None:
     argv = [str(without_sdmx_rules(tmp_path)) if a == "SDMX_OFF" else a for a in argv]
-    # A fresh interpreter, as the modules this test suite imported stay loaded.
-    code = (
-        "import sys\n"
-        "from policy_rate_monitor.cli.main import main\n"
-        "try:\n"
-        f"    main({argv!r})\n"
-        "except SystemExit:\n"
-        "    pass\n"
-        "print(sorted({name.split('.')[0] for name in sys.modules} & "
-        "{'fastapi', 'plotly', 'starlette', 'uvicorn', 'matplotlib', 'jinja2', "
-        "'pysdmx'}))\n"
-    )
-    environ = {**os.environ, DATA_DIR_VARIABLE: str(tmp_path)}
 
-    result = subprocess.run(  # noqa: S603 - our own interpreter and code
-        [sys.executable, "-c", code],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=environ,
-    )
+    assert loaded_packages(argv, tmp_path) == loaded
 
-    assert result.stdout.splitlines()[-1] == str(loaded)
+
+@pytest.mark.contract
+# With nothing staged, report ends at once with exit 5: no network is needed.
+@pytest.mark.parametrize(("has_reference", "loads"), [(True, True), (False, False)])
+def test_report_loads_pysdmx_only_with_a_reference_section(
+    tmp_path: Path, *, has_reference: bool, loads: bool
+) -> None:
+    config = CONFIG if has_reference else without_reference(tmp_path)
+    argv = ["report", "--countries", "US", "--config", str(config)]
+
+    assert ("pysdmx" in loaded_packages(argv, tmp_path)) is loads
 
 
 @pytest.mark.contract
@@ -535,3 +589,62 @@ def test_an_sdmx_rule_without_a_reference_section_fails_validation_with_exit_4(
     code = main(["config", "validate", "--config", str(path)])
 
     assert code == ExitCode.CONFIG_ERROR
+
+
+@pytest.mark.contract
+def test_report_names_a_code_with_no_series_and_suggests_one_for_an_invalid_code(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    use_provider(monkeypatch, us_and_xm())
+    names = {"US": "United States", "XM": "Euro area", "BG": "Bulgaria"}
+    use_reference(monkeypatch, FakeReference(names=names))
+    argv = ["report", "--countries", "US,USA,BG", "--config", str(CONFIG)]
+
+    code = main([*argv, "--out", str(tmp_path)])
+
+    assert code == ExitCode.OK
+    warning = capsys.readouterr().err
+    assert (
+        "warning: USA is not in the country or area code list; "
+        "did you mean US (United States)?\n"
+    ) in warning
+    assert "warning: no series for BG (Bulgaria).\n" in warning
+    assert "Available codes: US (United States), XM (Euro area)" in warning
+    written = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    fields = {
+        item["requested_ref_area"]: (item["ref_area_name"], item["suggestions"])
+        for item in written["snapshots"]
+    }
+    assert fields == {
+        "US": (None, []),
+        "USA": (None, ["US"]),
+        "BG": ("Bulgaria", []),
+    }
+
+
+@pytest.mark.contract
+def test_report_without_the_code_list_warns_once_and_suggests_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    # The pysdmx source cannot reach the API here (no_sdmx_api).
+    use_provider(monkeypatch, us_and_xm())
+    argv = ["report", "--countries", "US,GBR,BG", "--config", str(CONFIG)]
+
+    code = main([*argv, "--out", str(tmp_path)])
+
+    assert code == ExitCode.OK
+    warning = capsys.readouterr().err
+    assert "warning: no series for GBR.\n" in warning
+    assert "did you mean" not in warning
+    not_checked = [line for line in caplog.messages if "not checked" in line]
+    assert not_checked == [
+        (
+            "the requested codes were not checked against the code list: "
+            "the tests do not reach the SDMX API"
+        )
+    ]

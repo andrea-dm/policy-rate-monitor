@@ -35,7 +35,7 @@ from policy_rate_monitor.reference import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from pysdmx.model import Agency, Component
 
@@ -83,7 +83,7 @@ class SdmxReference(ReferenceSource):
         )
 
     @override
-    def ref_area_codes(self) -> frozenset[str]:
+    def ref_area_names(self) -> Mapping[str, str]:
         """Asks for the configured reference-area code list.
 
         Raises:
@@ -96,7 +96,8 @@ class SdmxReference(ReferenceSource):
                 code_list.agency, code_list.id, code_list.version
             ),
         )
-        return frozenset(code.id for code in codes.codes)
+        # A code with no name is named by its code.
+        return {code.id: code.name or code.id for code in codes.codes}
 
     def _structure_of(self, dataflow: ArtefactRef) -> ArtefactRef:
         """The data structure the dataflow points to."""

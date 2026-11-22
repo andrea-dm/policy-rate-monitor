@@ -350,11 +350,6 @@ changed), and reads `data_quality.json` for the detail.
 
 - **The three rules not built** (section 3) are left for a later release
   ([decision 0011](adr/0011-data-quality-rules.md); [milestones](milestones.md)).
-- **The rest of the SDMX validation (milestone M7, [decision 0009](adr/0009-sdmx-validation.md)).**
-  The checks of the data are built (section 3). Still to come: checking the requested codes
-  against the same code list, with suggestions (`GBR → GB`, `USA → US`), in the CLI and the API,
-  and the official country or area names in the report. Until then, requested codes are only
-  matched against the codes the data has.
 - A second data source would need to run the same checks itself until a shared layer exists
   ([decision 0011](adr/0011-data-quality-rules.md), "Consequences").
 

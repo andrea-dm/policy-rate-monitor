@@ -172,8 +172,9 @@ flowchart BT
 ```
 
 The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, `service` only inside
-`report`, and `sdmx` only for `transform` and `serve` when an SDMX rule is enabled, so `--version`,
-`fetch` and `transform` load neither matplotlib nor Jinja, and `report` never loads `pysdmx`. The
+`report`, and `sdmx` only when a command needs the BIS reference, so `--version`, `fetch` and
+`transform` load neither matplotlib nor Jinja, and `fetch` and `config validate` never load
+`pysdmx`. The
 full list of allowed imports is in `tach.toml`; the modules are described in
 [docs/architecture.md](docs/architecture.md).
 
@@ -547,11 +548,12 @@ under a different name.
 - The chart tells at most 24 lines apart: from the 25th, the pairs of colour and dash repeat
   ([decision 0016](docs/adr/0016-accessible-charts.md)); the names at the line ends and the
   summary table still tell them apart.
-- Planned extensions: a web front end over the HTTP API; the check of the requested country or area
-  codes against the BIS code list, with suggestions (`GBR → GB`), and the official names in the
-  report. The data is already checked against the BIS SDMX metadata, and the fast analytics for
-  interactive use are in place (`analytics`, with Numba as the optional `fast` extra). See
-  [docs/milestones.md](docs/milestones.md).
+- Suggestions for an invalid requested code come only from the configured map and the exact
+  official names, and need the BIS SDMX API; a code the map does not list gets none. A name with a
+  space ("united kingdom") does not pass the code pattern, so only one-word names are matched.
+- Planned extension: a web front end over the HTTP API. The data and the requested codes are
+  checked against the BIS SDMX metadata, and the fast analytics for interactive use are in place
+  (`analytics`, with Numba as the optional `fast` extra). See [docs/milestones.md](docs/milestones.md).
 
 The main technical decisions, with their alternatives and costs, are recorded in
 [docs/adr/](docs/adr/index.md).

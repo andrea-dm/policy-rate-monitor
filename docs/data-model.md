@@ -111,7 +111,10 @@ reader in another process can still pair files of two runs while the renames run
 | `status`, `flags` | the outcome, and the warnings separated by `;` |
 
 `summary.json` holds the same snapshots with the full series record nested in each, the target
-date, the dataset, the source release and the generation time. Rates are JSON numbers, not
+date, the dataset, the source release and the generation time. A snapshot with the status
+`unknown_ref_area` also has `ref_area_name`, the official name of a code the SDMX code list has but
+the data does not, and `suggestions`, the codes of the list to offer for one it does not have;
+otherwise they are `null` and `[]`. `summary.csv` has neither. Rates are JSON numbers, not
 strings. Python's `json` reads them as floats, which brings back the rounding the tool avoids;
 read them as decimals instead:
 

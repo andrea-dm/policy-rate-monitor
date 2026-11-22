@@ -87,6 +87,7 @@ depends_on = [
     "policy_rate_monitor.config",
     "policy_rate_monitor.core",
     "policy_rate_monitor.providers",
+    "policy_rate_monitor.reference",
     "policy_rate_monitor.report",
     "policy_rate_monitor.snapshot",
 ]
@@ -100,12 +101,13 @@ depends_on = [
     "policy_rate_monitor.config",
     "policy_rate_monitor.core",
     "policy_rate_monitor.providers",
+    "policy_rate_monitor.reference",
     "policy_rate_monitor.report",
     "policy_rate_monitor.service",
 ]
 
-# cli imports web only inside `serve`, and sdmx only when an SDMX rule is enabled, so
-# the base install never loads them.
+# cli imports web only inside `serve`, and sdmx only when a command needs the SDMX
+# reference, so the base install never loads them.
 [[modules]]
 path = "policy_rate_monitor.cli"
 depends_on = [

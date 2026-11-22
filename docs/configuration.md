@@ -34,6 +34,7 @@ error: configs/bis_cbpol.json: invalid configuration (1 error)
 | `snapshot` | The calculation: the look-back in months and the two staleness thresholds in days | `"lookback_months": 12` |
 | `output` | The series-metadata fields added to each row of `summary.csv`, in column order | `["series_key", "ref_area_name", …]` |
 | `ref_area_aliases` | Requested codes that stand for a code in the data | `{ "EA": "XM" }` |
+| `ref_area_suggestions` | Optional. Requested codes that are not in the SDMX code list, with the code to suggest instead; offered, never applied (see "Suggestions for invalid codes" below) | `{ "GBR": "GB" }` |
 
 Every field, with its type, limits and description, is listed in `config.schema.json`, and in the
 [API reference](reference.md) under `DatasetConfig`.
@@ -112,6 +113,21 @@ definition of the data ([decision 0018](adr/0018-sdmx-reference-and-not-evaluate
 No id may be empty. The section is optional: a configuration without it loads, as long as it lists
 no SDMX rule. The rules need the `sdmx` extra (`pysdmx`); without it, or when the API cannot be
 reached, each enabled one reports "not evaluated" ([Data quality](data-quality.md#the-checks-against-the-bis-structural-metadata)).
+
+### Suggestions for invalid codes
+
+When a requested code has no series, and the configuration has a `reference` section, the code is
+checked against the SDMX code list
+([How it works](how-it-works.md#8-countries-or-areas-the-tool-cannot-answer-for-13)). A code the
+list does not have gets suggestions: its entry in `ref_area_suggestions`, then any code whose
+official name is the requested text, case aside (`switzerland` → `CH`). Only codes of the list are
+suggested. `bis_cbpol.json` maps the three-letter code of every country or area the data has
+(`GBR` → `GB`, `USA` → `US`), and `UK`, `GER`, `SUI`, `EU`, `EZ` and `EMU`. `EU` → `XM` points to
+the closest series: the EU is not the euro area.
+
+When the configuration loads, a key must be upper case and must not also be an alias (an alias is
+applied first, so the suggestion would never be offered), and no suggestion may lead to itself or
+to another suggestion (exit 4).
 
 ### A second dataset
 

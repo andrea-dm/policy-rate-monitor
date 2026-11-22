@@ -92,12 +92,12 @@ def test_a_matching_reference_gives_no_finding_also_for_labelled_codes(
 ) -> None:
     # The file writes each code with its label ("US: United States").
     write_zip(tmp_path, US_ROW, GB_ROW)
-    reference = FakeReference(MATCHING, frozenset({"US", "GB"}))
+    reference = FakeReference(MATCHING, {"US": "United States", "GB": "United Kingdom"})
 
     transform(sdmx_config(), tmp_path, reference)
 
     assert sdmx_findings(tmp_path) == []
-    assert sorted(reference.calls) == ["ref_area_codes", "structure"]
+    assert sorted(reference.calls) == ["ref_area_names", "structure"]
 
 
 def test_a_code_not_in_the_code_list_is_one_finding_per_series(
@@ -108,7 +108,7 @@ def test_a_code_not_in_the_code_list_is_one_finding_per_series(
     write_zip(without, US_ROW, GB_ROW, GB_ROW.replace("2024-01-01", "2024-01-02"))
     transform(sdmx_config(rules=[]), without)
 
-    transform(sdmx_config(), tmp_path, FakeReference(MATCHING, frozenset({"US"})))
+    transform(sdmx_config(), tmp_path, FakeReference(MATCHING, {"US": "United States"}))
 
     (finding,) = sdmx_findings(tmp_path)
     assert finding.rule == "ref_area_not_in_code_list"
@@ -166,7 +166,9 @@ def test_each_structure_difference_is_one_dataset_finding_naming_it(
 ) -> None:
     write_zip(tmp_path, US_ROW)
 
-    transform(sdmx_config(), tmp_path, FakeReference(definition, frozenset({"US"})))
+    transform(
+        sdmx_config(), tmp_path, FakeReference(definition, {"US": "United States"})
+    )
 
     (finding,) = sdmx_findings(tmp_path)
     assert finding.rule == "dataflow_mismatch"
@@ -190,7 +192,7 @@ def test_an_unmapped_column_and_the_time_dimension_are_not_differences(
     transform(
         sdmx_config(columns=columns),
         tmp_path,
-        FakeReference(definition, frozenset({"US"})),
+        FakeReference(definition, {"US": "United States"}),
     )
 
     assert sdmx_findings(tmp_path) == []
@@ -236,7 +238,7 @@ def test_an_unavailable_reference_gives_one_not_evaluated_finding_per_rule(
 
 def test_rules_that_are_off_never_ask_the_reference(tmp_path: Path) -> None:
     write_zip(tmp_path, US_ROW)
-    reference = FakeReference(MATCHING, frozenset({"US"}))
+    reference = FakeReference(MATCHING, {"US": "United States"})
     rules = [{**rule, "enabled": False} for rule in SDMX_RULES]
 
     transform(sdmx_config(rules=rules), tmp_path, reference)
@@ -246,7 +248,7 @@ def test_rules_that_are_off_never_ask_the_reference(tmp_path: Path) -> None:
 
 
 def test_a_missing_zip_ends_before_the_reference_is_asked(tmp_path: Path) -> None:
-    reference = FakeReference(MATCHING, frozenset({"US"}))
+    reference = FakeReference(MATCHING, {"US": "United States"})
 
     with pytest.raises(MissingInputError):
         transform(sdmx_config(), tmp_path, reference)

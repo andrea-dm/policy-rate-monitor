@@ -47,9 +47,9 @@
       "names": {
        "en": "SDMX"
       },
-      "description": "SDMX is an initiative to foster standards for the exchange of statistical information. It is sponsored by the Bank for International Settlements (BIS), the European Central Bank (ECB), the Statistical Office of the European Union (Eurostat), the International Monetary Fund (IMF), the Organization for Economic Co-Operation and Development (OECD), the United Nations (UN) and the World Bank.",
+      "description": "SDMX is an initiative to foster standards for the exchange of statistical information.",
       "descriptions": {
-       "en": "SDMX is an initiative to foster standards for the exchange of statistical information. It is sponsored by the Bank for International Settlements (BIS), the European Central Bank (ECB), the Statistical Office of the European Union (Eurostat), the International Monetary Fund (IMF), the Organization for Economic Co-Operation and Development (OECD), the United Nations (UN) and the World Bank."
+       "en": "SDMX is an initiative to foster standards for the exchange of statistical information."
       },
       "contacts": [
        {
@@ -459,9 +459,9 @@
      }
     ],
     "id": "CL_DECIMALS",
-    "name": "Decimals codelist (BIS, ECB)",
+    "name": "Decimals codelist",
     "names": {
-     "en": "Decimals codelist (BIS, ECB)"
+     "en": "Decimals codelist"
     },
     "version": "1.0",
     "agencyID": "BIS",
@@ -593,9 +593,9 @@
      }
     ],
     "id": "CL_OBS_STATUS",
-    "name": "Observation status codelist (BIS, ECB, Eurostat-BoP)",
+    "name": "Observation status codelist",
     "names": {
-     "en": "Observation status codelist (BIS, ECB, Eurostat-BoP)"
+     "en": "Observation status codelist"
     },
     "version": "1.0",
     "agencyID": "BIS",

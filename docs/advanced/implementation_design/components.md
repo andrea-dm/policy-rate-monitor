@@ -101,7 +101,7 @@ through, which the adapters report as a file error ([Failure modes](failure_mode
 [`reference`](../../reference.md#policy_rate_monitor.reference).
 
 - **Contract.** `ReferenceSource` answers `structure()` (the components of the structure the
-  configured dataflow points to, without the time dimension) and `ref_area_codes()` (the codes of
+  configured dataflow points to, without the time dimension) and `ref_area_names()` (the codes, with their names, of
   the configured code list). It raises `ReferenceUnavailableError` when it cannot answer, and
   nothing else on purpose. `UnavailableReference(reason)` always raises with its reason;
   `NO_REFERENCE` is the default. A source keeps nothing between calls.

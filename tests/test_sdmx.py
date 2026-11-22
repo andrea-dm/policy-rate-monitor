@@ -1,8 +1,9 @@
 """The ``pysdmx``-backed reference source, with the client's queries replaced.
 
 ``tests/data/sdmx/`` holds BIS's answers to the three queries, recorded on 2026-11-22
-and cut down to a few codes per code list. They are decoded by ``pysdmx`` itself, so
-a change in how it reads them (such as reading BIS's time dimension) shows here.
+and cut down to a few codes per code list, with some descriptive texts shortened. They
+are decoded by ``pysdmx`` itself, so a change in how it reads them (such as reading
+BIS's time dimension) shows here.
 """
 
 from __future__ import annotations
@@ -94,13 +95,20 @@ def test_the_structure_is_the_one_the_dataflow_points_to(
     assert "TIME_PERIOD" not in by_id
 
 
-def test_the_codes_are_those_of_the_configured_code_list(
+def test_the_codes_and_names_are_those_of_the_configured_code_list(
     asked: list[tuple[str, ...]],
 ) -> None:
-    codes = source().ref_area_codes()
+    codes = source().ref_area_names()
 
     assert asked == [("codelist", "BIS", "CL_BIS_GL_REF_AREA", "1.0")]
-    assert codes == {"00", "CH", "GB", "JP", "US", "XM"}
+    assert codes == {
+        "00": "Others",
+        "CH": "Switzerland",
+        "GB": "United Kingdom",
+        "JP": "Japan",
+        "US": "United States",
+        "XM": "Euro area",
+    }
 
 
 @pytest.mark.parametrize(
@@ -156,7 +164,7 @@ def test_a_missing_code_list_names_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(RegistryClient, "get_codes", fail)
 
     with pytest.raises(ReferenceUnavailableError) as raised:
-        source().ref_area_codes()
+        source().ref_area_names()
 
     assert raised.value.reason == (
         "the SDMX API has no code list BIS:CL_BIS_GL_REF_AREA(1.0)"
@@ -172,4 +180,4 @@ def test_any_other_error_is_a_bug_and_propagates(
     monkeypatch.setattr(RegistryClient, "get_codes", fail)
 
     with pytest.raises(KeyError):
-        source().ref_area_codes()
+        source().ref_area_names()

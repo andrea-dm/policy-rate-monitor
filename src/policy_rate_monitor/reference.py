@@ -1,11 +1,11 @@
 """The SDMX reference that the data is checked against, read through an interface.
 
 A ``ReferenceSource`` answers two questions about the configured dataflow: which
-components its structure has, and which codes the configured reference-area code list
-holds. The ``sdmx`` module answers them from an SDMX REST API (it needs the ``sdmx``
-extra); tests use a fake. When a source cannot answer, it raises
-``ReferenceUnavailableError``, and ``transform`` reports each SDMX rule as "not
-evaluated" instead of failing.
+components its structure has, and which codes, with their names, the configured
+reference-area code list holds. The ``sdmx`` module answers them from an SDMX REST
+API (it needs the ``sdmx`` extra); tests use a fake. When a source cannot answer, it
+raises ``ReferenceUnavailableError``: ``transform`` then reports each SDMX rule as
+"not evaluated", and ``service.summary`` leaves the requested codes unchecked.
 
 A source keeps nothing between calls: every run of ``transform`` asks again, so a
 long-running ``serve`` never checks against an old reference.
@@ -17,7 +17,7 @@ Examples:
     With no source given, every question is answered with the reason:
 
     >>> try:
-    ...     NO_REFERENCE.ref_area_codes()
+    ...     NO_REFERENCE.ref_area_names()
     ... except ReferenceUnavailableError as error:
     ...     print(error.reason)
     no SDMX reference source was given
@@ -32,6 +32,8 @@ from typing import TYPE_CHECKING, Final, Literal, override
 from policy_rate_monitor.core.errors import ReferenceUnavailableError
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from policy_rate_monitor.config.models import ArtefactRef
 
 __all__ = [
@@ -97,11 +99,11 @@ class ReferenceSource(ABC):
         """
 
     @abstractmethod
-    def ref_area_codes(self) -> frozenset[str]:
-        """Returns the codes of the configured reference-area code list.
+    def ref_area_names(self) -> Mapping[str, str]:
+        """Returns the codes of the configured reference-area code list, with names.
 
         Returns:
-            The codes, as the code list publishes them.
+            Each code, as the code list publishes it, with its official name.
 
         Raises:
             ReferenceUnavailableError: The code list cannot be obtained.
@@ -126,7 +128,7 @@ class UnavailableReference(ReferenceSource):
         raise ReferenceUnavailableError(self._reason)
 
     @override
-    def ref_area_codes(self) -> frozenset[str]:
+    def ref_area_names(self) -> Mapping[str, str]:
         """Raises ``ReferenceUnavailableError`` with the reason."""
         raise ReferenceUnavailableError(self._reason)
 

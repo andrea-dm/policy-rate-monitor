@@ -88,7 +88,10 @@ curl 'http://127.0.0.1:8000/summary?countries=US,EA'
 It returns the same document as `out/summary.json` (see [Data model](data-model.md)): `generated_at`,
 `source`, `dataset` and `snapshots`, where `generated_at` is the time of the request and `source`
 the release the staged data was built from (`null` when it is unknown). A code the data does not
-have is not an error: its snapshot has the status `unknown_ref_area`.
+have is not an error: its snapshot has the status `unknown_ref_area`. With a `reference` section in
+the configuration, that code is also checked against the BIS code list: a code the list has gets
+its official name in `ref_area_name`, and one it does not have gets `suggestions`, for example
+`["GB"]` for `GBR` ([How it works](how-it-works.md#8-countries-or-areas-the-tool-cannot-answer-for-13)).
 
 ```json
 {
@@ -112,7 +115,9 @@ have is not an error: its snapshot has the status `unknown_ref_area`.
       "prior_value": 2.0,
       "change_bps": 50.0,
       "status": "ok",
-      "flags": []
+      "flags": [],
+      "ref_area_name": null,
+      "suggestions": []
     }
   ]
 }
@@ -141,7 +146,8 @@ curl 'http://127.0.0.1:8000/timeseries?country=EA&start=2025-11-14'
 ```
 
 Only valid observations are listed, oldest first. A code the data does not have gives `404` with
-the kind `not_found`.
+the kind `not_found`; the message names the suggestions, if any: "no series for USA; did you mean
+US?; GET /ref-areas lists the codes".
 
 ### `GET /chart`
 

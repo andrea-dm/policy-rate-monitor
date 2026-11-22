@@ -643,7 +643,7 @@ def _check_reference(
             continue
         try:
             if name == "ref_area_not_in_code_list":
-                codes = reference.ref_area_codes()
+                codes = frozenset(reference.ref_area_names())
                 _check_ref_area_codes(data, keys, config, rule, codes, issues)
             else:
                 definition = reference.structure()

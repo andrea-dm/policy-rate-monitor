@@ -303,11 +303,29 @@ in the configuration. For an unknown code, `report` prints a warning that lists 
 has, with its name. If no requested country or area is `ok`, the command still writes the outputs and ends
 with exit code 1.
 
+An unknown code is also checked against the BIS code list, from the BIS SDMX API, when the
+configuration has a `reference` section ([decision 0009](adr/0009-sdmx-validation.md)). A code the
+list has but the data does not, such as `BG`, is named: "no series for BG (Bulgaria)", in the
+warning and in the report's table. A code the list does not have gets a suggestion, from the
+configuration (`GBR` → `GB`) or from the official names (`switzerland` → `CH`): "GBR is not in the
+country or area code list; did you mean GB (United Kingdom)?". No similar-looking code is guessed:
+`GBR` is as close to Greece (`GR`) as to `GB`. The list is asked for only when a code has no
+series. When it cannot be obtained, the codes are not checked, no suggestion is made, and a
+warning in the log says why. `summary.json` and the API carry the name (`ref_area_name`) and the
+suggestions (`suggestions`) in the snapshot.
+
 ??? info "Checked by"
 
     `tests/test_snapshot.py::test_unknown_ref_area_insufficient_history_and_no_valid_data`,
     `test_stale_latest_and_stale_prior_are_flagged`;
-    `tests/test_cli.py::test_an_unknown_code_lists_the_codes_the_data_has`.
+    `tests/test_cli.py::test_an_unknown_code_lists_the_codes_the_data_has`,
+    `test_report_names_a_code_with_no_series_and_suggests_one_for_an_invalid_code`,
+    `test_report_without_the_code_list_warns_once_and_suggests_nothing`;
+    `tests/test_service.py`: `test_a_code_of_the_code_list_with_no_series_gets_its_name`,
+    `test_a_code_not_in_the_code_list_gets_its_suggestions`,
+    `test_without_the_code_list_the_codes_are_not_checked`;
+    `tests/integration/test_sdmx_api.py::test_every_configured_suggestion_is_a_code_of_the_bis_list`
+    (`pytest -m integration`).
 
 ## 9. Countries or areas named the way people name them (§1.3)
 
