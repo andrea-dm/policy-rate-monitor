@@ -138,8 +138,11 @@ data, 639,926 valid daily observations in 49 series. Best of 5 runs; two runs of
 | Version | One-off cost | Run | Speed-up |
 |---|---|---|---|
 | Pure Python | none | 330–490 ms | 1× |
-| Numba | 1.0 s compile on first call, in every new process | 3.9–5.9 ms | ~55–125× |
+| Numba | 1.0 s compile on first call, in every new process (`cache=False`) | 3.9–5.9 ms | ~55–125× |
 | Cython | 8–11 s build (C compiler needed) | 2.9–5.5 ms | ~90–110× |
+
+The 1.0 s is this trial kernel's. The package's two searches compile in 0.68 s on the first call,
+and load from the disk cache in 0.17 s in later processes (the analytics kernels, below).
 
 All three give identical results. Numba and Cython are equally fast here: the difference between
 them is within run-to-run noise. They differ in what they cost the project:

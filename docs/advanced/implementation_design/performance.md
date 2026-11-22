@@ -67,8 +67,11 @@ the script.
 | Version | One-off cost | Run | Speed-up |
 |---|---|---|---|
 | Pure Python | none | 330 to 490 ms | 1× |
-| Numba | 1.0 s compile on first call, in every new process | 3.9 to 5.9 ms | about 55 to 125× |
+| Numba | 1.0 s compile on first call, in every new process (`cache=False`) | 3.9 to 5.9 ms | about 55 to 125× |
 | Cython | 8 to 11 s build (C compiler needed) | 2.9 to 5.5 ms | about 90 to 110× |
+
+The 1.0 s is this trial kernel's. The package's two searches compile in 0.68 s on the first call,
+and load from the disk cache in 0.17 s in later processes (the analytics kernels, below).
 
 Update of 2026-11-22: after the Cython kernel was rewritten at C level and both versions stopped
 pre-filling their result array, four runs on a loaded machine gave Numba 5.0 to 6.0 ms and Cython
