@@ -21,7 +21,7 @@ uv run tach check && \
 uv run ruff check && \
 uv run ruff format --check && \
 uv run deptry src/ tests/ && \
-uv run pyright src/ tests/ && \
+uv run pyright src/ tests/ diagnostics/ && \
 uv run pytest && \
 uv run mkdocs build --strict
 ```
