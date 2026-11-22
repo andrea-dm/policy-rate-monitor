@@ -53,6 +53,12 @@ the release of 19 November 2026:
 The findings themselves are in `data_quality.json` and in the report
 ([Data quality](data-quality.md#7-where-the-findings-go)).
 
+With an SDMX rule enabled, as in `bis_cbpol.json`, `transform` also asks the BIS SDMX API for the
+dataflow definition and the code list (up to three requests, the `sdmx` extra). When the API cannot be
+reached, or the extra is not installed, each SDMX rule gives a "not evaluated" finding and a
+warning in the log, and the command still ends with code 0
+([Data quality](data-quality.md#the-checks-against-the-bis-structural-metadata)).
+
 ### `bis-prates report`
 
 For each requested country or economic area, finds the latest valid rate, the rate 12 months earlier and the change in

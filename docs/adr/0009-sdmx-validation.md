@@ -1,6 +1,7 @@
 # 0009 SDMX validation: check the data against BIS structural metadata, with no cache and no fallback
 
-- **Status:** Accepted, not built yet (M7)
+- **Status:** Accepted; the checks of the data built (#37), the requested codes and the official
+  names not built yet (M7)
 - **Decided:** 2026-11-17
 
 ## Context
@@ -68,3 +69,11 @@ hidden risk, and stating the drawback is better than hiding it.
 - `docs/milestones.md`, M7.
 - Tests to write with it: a reachable, an unreachable and a mismatching reference, all through a
   fake reference source.
+
+## Updates
+
+- 2026-11-22 (#37): the checks of the data are built, as the rules `ref_area_not_in_code_list` and
+  `dataflow_mismatch`, with the `reference` section of the configuration and the `sdmx` extra; the
+  choices this record left open are in [0018](0018-sdmx-reference-and-not-evaluated.md). The
+  check of the requested codes, with suggestions, and the official names in the report come in a
+  later issue.

@@ -82,3 +82,8 @@ our processing configuration.
 - 2026-11-22 (#34): the parameters of the built rules (`conflicting_duplicate`'s `keep`,
   `unexpected_value`'s `expected`) are checked when the configuration is loaded, whether the rule
   is on or off ([0017](0017-bad-input-failures-and-writes.md)).
+- 2026-11-22 (#37): a new optional section, `reference`, names the BIS SDMX API, the dataflow and
+  the country or area code list that the SDMX rules check the data against; listing an SDMX rule
+  without it stops the configuration from loading. The ids and the address are in the
+  configuration only, and the test of the `config` package also checks the `reference` and
+  `sdmx` modules for them ([0018](0018-sdmx-reference-and-not-evaluated.md)).

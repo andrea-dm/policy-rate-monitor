@@ -80,3 +80,4 @@ nav:
           - adr/0015-report-templates-and-html.md
           - adr/0016-accessible-charts.md
           - adr/0017-bad-input-failures-and-writes.md
+          - adr/0018-sdmx-reference-and-not-evaluated.md

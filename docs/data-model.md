@@ -81,7 +81,9 @@ attribute as published, for example `COMPILATION` (how the series is compiled) a
 (the publishing central bank).
 
 `data_quality.json`, one record per finding (`DataQualityIssue`): the `rule`, its `severity`, the
-`series_key` (or none for a finding about the whole file), the number of rows (`count`) and a
+`series_key` (or none for a finding about the whole file), the number of rows concerned (`count`;
+the number of columns or differences for the rules about the whole file, and 0 for an SDMX rule
+that was not evaluated) and a
 `detail` saying what was done ([Data quality](data-quality.md#2-what-a-finding-is)).
 
 `release.json`, the release the staged data was built from (`SourceRelease`): a copy of the record

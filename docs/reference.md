@@ -85,6 +85,12 @@ for snapshot in snapshots:
 
 ::: policy_rate_monitor.transform
 
+## SDMX reference
+
+::: policy_rate_monitor.reference
+
+::: policy_rate_monitor.sdmx
+
 ## Analytics and snapshot
 
 ::: policy_rate_monitor.analytics

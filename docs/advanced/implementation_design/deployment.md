@@ -54,9 +54,11 @@ pre-push hook and a CI job) checks that the declared dependencies match the impo
 | `fast` | `numba` | compiled search loops in `analytics` | the same functions run on NumPy, with the same results |
 | `interactive` | `plotly` | `chart.interactive`: the Plotly figure, and the interactive chart in `report.html` | `report.html` embeds the PNG as an image |
 | `web` | `fastapi`, `starlette`, `uvicorn`, and `interactive` | `bis-prates serve` and the `web` module | `serve` prints `error: bis-prates serve needs the web extra: install policy-rate-monitor[web]` and exits 2 |
+| `sdmx` | `pysdmx`, `msgspec` | the `sdmx` module: the SDMX rules `ref_area_not_in_code_list` and `dataflow_mismatch` | each enabled SDMX rule reports "not evaluated: the sdmx extra is not installed: install policy-rate-monitor[sdmx]"; `transform` still exits 0 |
 
 The base layers never import an extra: the `numba` import is in a `try` in `analytics`, `plotly` is
-imported inside the function that draws the HTML chart, and `web` only inside `serve`
+imported inside the function that draws the HTML chart, `web` only inside `serve`, and `sdmx`
+only by `transform` and `serve` when an SDMX rule is enabled
 ([System overview](system_overview.md#the-layering-rule)).
 
 ### Dependency groups
@@ -83,6 +85,7 @@ runtime dependencies only.
 uv sync --no-dev                       # from a clone: the package and its runtime dependencies
 uv sync --no-dev --extra web           # with the HTTP API
 uv sync --no-dev --extra fast          # with Numba
+uv sync --no-dev --extra sdmx          # with the SDMX checks (pysdmx)
 pip install './policy_rate_monitor-<version>-py3-none-any.whl[web]'  # the wheel of a GitHub release
 ```
 

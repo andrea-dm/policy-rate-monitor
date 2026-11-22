@@ -15,6 +15,7 @@ be rerun on its own, and a scheduler can run them one after the other
 ```mermaid
 flowchart LR
     bis[("BIS bulk download")]
+    api[("BIS SDMX API")]
     fetch["fetch"]
     transform["transform"]
     report["report"]
@@ -23,6 +24,7 @@ flowchart LR
     out[("out/<br/>summary.csv, summary.json,<br/>policy_rates.png, report.md, report.html")]
 
     bis --> fetch --> raw --> transform --> staged --> report --> out
+    api -. structural metadata, SDMX rules .-> transform
 ```
 
 The files of each layer are described in [Data model](data-model.md).
@@ -39,6 +41,8 @@ flowchart BT
     config["config<br/>configuration models, ConfigSource"]
     fetch["fetch"]
     transform["transform"]
+    reference["reference<br/>ReferenceSource"]
+    sdmx["sdmx<br/>pysdmx source (sdmx extra)"]
     providers["providers<br/>DataProvider, schema, in-memory provider"]
     bulk["bulk<br/>BulkFileProvider"]
     analytics["analytics<br/>fixed-point arrays, searches"]
@@ -55,6 +59,9 @@ flowchart BT
     config --> providers
     config --> analytics
     fetch --> transform
+    config --> reference
+    reference --> transform
+    reference --> sdmx
     transform --> bulk
     providers --> bulk
     analytics --> snapshot
@@ -71,13 +78,15 @@ flowchart BT
     service -.-> cli
     bulk --> cli
     web -.-> cli
+    sdmx -.-> cli
     config --> settings
     settings --> cli
 ```
 
-The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, and `service` (with
-matplotlib and Jinja) only inside `report`, so `--version`, `fetch` and `transform` start without
-them. In the same way,
+The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, `service` (with
+matplotlib and Jinja) only inside `report`, and `sdmx` (with `pysdmx`) only for `transform` and
+`serve` when an SDMX rule is enabled, so `--version`, `fetch` and `transform` start without the
+first two, and `report` and `config validate` without `pysdmx`. In the same way,
 `report` imports `chart.interactive` only when Plotly is installed, so the base install never
 loads FastAPI or Plotly. The diagram shows the main arrows; the full list of allowed imports of each
 module is in `tach.toml`.
@@ -87,9 +96,11 @@ module is in `tach.toml`.
 | `core` | The domain models (`SeriesMetadata`, `DataSnapshot`, `DataQualityIssue`, `SourceRelease`, `TransformSummary`), the typed errors, and `files.write_files`, which writes a set of files to temporary names and then renames them into place | the files it is given |
 | `config` | The configuration models, their checks, the JSON Schema, and `ConfigSource` with its file implementation | the configuration file |
 | `fetch` | Finds, downloads, checks and caches the source ZIP, with its release record | `data/raw/` |
-| `transform` | Loads the CSV into the raw layer, then stages the observations, the series metadata, the data-quality findings and the release they were built from (`release.json`, written last) | `data/raw/`, `data/staged/` |
+| `transform` | Loads the CSV into the raw layer, then stages the observations, the series metadata, the data-quality findings and the release they were built from (`release.json`, written last). The SDMX rules ask a `ReferenceSource` | `data/raw/`, `data/staged/` |
+| `reference` | The `ReferenceSource` interface the SDMX rules read the BIS structural metadata through, the models it answers with, and `UnavailableReference` (the default, `NO_REFERENCE`, is one) | nothing |
+| `sdmx` | `SdmxReference`: the `ReferenceSource` over an SDMX REST API, with `pysdmx`'s registry client; needs the `sdmx` extra | the BIS SDMX API, nothing on disk |
 | `providers` | The `DataProvider` interface, the canonical observations schema, and `InMemoryProvider` | nothing |
-| `bulk` | `BulkFileProvider`: the provider over the bulk-download file, built on `fetch` and `transform` | through `fetch` and `transform` |
+| `bulk` | `BulkFileProvider`: the provider over the bulk-download file, built on `fetch` and `transform`; passes the reference source on to `transform` | through `fetch` and `transform` |
 | `analytics` | The staged observations as fixed-point NumPy arrays, and the searches on them: the snapshot at any date, the change history, the rate moves | nothing |
 | `snapshot` | `compute_snapshots`: one `DataSnapshot` per requested country or area | nothing |
 | `chart` | The two charts and what they share: `lines` (which series get a line, and their valid rows), `style` (the colour-blind palette, the dash patterns, the line labels, the text alternative and the "No data to plot" message, with no plotting library), `static` (the PNG, matplotlib) and `interactive` (`rate_figure`, the Plotly figure; needs the `interactive` extra). Imports `core` | nothing |
@@ -97,7 +108,7 @@ module is in `tach.toml`.
 | `service` | The steps the CLI and the HTTP API share: `load_staged`, `ref_areas`, `summary`, `timeseries` and `write_report`. Imports `report`, `chart`, `snapshot`, `providers`, `config` and `core` | `out/`, through `report` |
 | `web` | The HTTP API (FastAPI): routes, background jobs, error bodies. An adapter beside `cli`. Imports `service`, `chart`, `report`, `providers`, `config` and `core`; needs the `web` extra | `data/raw/` and `data/staged/` through the provider (the `fetch` and `transform` jobs); `out/` for `report` jobs |
 | `settings` | Where the configuration file and the data directory come from: the command line, an environment variable, the configuration or a default; shared by the CLI and the HTTP API | nothing |
-| `cli` | The `bis-prates` command: parses and checks the arguments (the codes against the code pattern, the port), calls `service` and the provider, prints, returns an exit code; `report` imports `service` and `serve` imports `web` only when they run | nothing directly |
+| `cli` | The `bis-prates` command: parses and checks the arguments (the codes against the code pattern, the port), calls `service` and the provider, prints, returns an exit code; `report` imports `service` and `serve` imports `web` only when they run; `transform` and `serve` build the SDMX reference source when an SDMX rule is enabled | nothing directly |
 
 Four rules keep the design testable:
 
