@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-22
+
+The HTTP API with `bis-prates serve`, an HTML report rendered from templates, charts that
+can be read with a colour vision deficiency, and stricter handling of bad input and failures.
+
 ### Added
 
 - Both charts, the PNG and the Plotly one (`/chart` and `report.html`), can be read with a colour
@@ -23,14 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Both report pages show an emoji beside each status, flag and finding severity (✅ ok, ⚠️ a
   warning, ⏳ a stale rate, and so on); the name is always written too (#12).
 - `examples/http_api.ipynb`, which uses only the HTTP API: start `bis-prates serve`, then the
-  notebook runs the jobs and reads the summary, a time series and the chart over HTTP.
+  notebook runs the jobs and reads the summary, a time series and the chart over HTTP (#30).
 - The HTTP API: `GET /ref-areas`, `/summary`, `/timeseries` and `/chart`, and `fetch`,
   `transform` and `report` as background jobs with a status endpoint, one at a time. Errors
   are one JSON body, `{"error": kind, "message": ...}`, with a status per kind. See
   docs/api.md and decision 0014 (#27).
 - `bis-prates serve [--host] [--port] [--out]` runs the API; without the `web` extra it
-  ends with a message naming it and exit code 2. Ctrl+C waits for the running job.
-- The extras `interactive` (Plotly) and `web` (FastAPI, Starlette, uvicorn and `interactive`).
+  ends with a message naming it and exit code 2. Ctrl+C waits for the running job (#27).
+- The extras `interactive` (Plotly) and `web` (FastAPI, Starlette, uvicorn and `interactive`)
+  (#27).
 - `examples/policy_rates.ipynb` also draws the interactive Plotly chart, as `/chart` returns it, and
   uses the `service` steps instead of repeating them (#27).
 - `transform` also writes `data/staged/release.json`, the release record of the ZIP it staged; the
@@ -53,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   install (#12).
 - The steps the command line and the API share are in the new `service` module, and the
   report's choice of charted series and valid rows is shared with the interactive chart
-  (`chart.lines`), so both draw the same lines. The commands behave as before.
+  (`chart.lines`), so both draw the same lines. The commands behave as before (#27).
 - One name for a country or economic area, `ref_area`, everywhere. **Breaking:** the
   configuration key `area_aliases` is now `ref_area_aliases`, and the snapshot status
   `unknown_area` is now `unknown_ref_area` in `summary.csv`, `summary.json` and `report.md`. In
@@ -73,13 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   staged, `None` when nothing staged records one. `MissingInputError` takes the step to run
   (`step`); the command line words it as `bis-prates <step>`, the API as `POST /jobs/<step>`
   (#34).
-- `fetch` retries only a temporary failure (a connection error, a timeout, a 5xx, 408 or 429),
-  then ends with exit code 6; any other answer but 200, a 404 say, ends at once with exit code 7.
-  Up to five redirects are followed (#34).
+- **Breaking:** `fetch` retries only a temporary failure (a connection error, a timeout, a 5xx,
+  408 or 429), then ends with exit code 6; any other answer but 200, a 404 say, ends at once with
+  exit code 7. Up to five redirects are followed (#34).
 - Every staged file and output is written to a temporary file, then renamed into place once all
   are written, `staged/release.json` last: a failure while writing leaves the previous files as
-  they were. A reader in another process can still pair files of two runs while the renames run
-  (#35) (#34).
+  they were. A reader in another process can still pair files of two runs while the renames run,
+  see #35 (#34).
 - Run `bis-prates transform` once after upgrading: data staged by an earlier version has no
   `staged/release.json`, so its release shows as unknown until then (#34).
 - The summary table in `report.md` and `report.html` pads a rate to its series' decimals and
@@ -223,6 +229,7 @@ The first release: the `bis-prates` command line, from the BIS bulk download to 
 - CI: ruff, pyright (strict), deptry, tach, the docs build, dependency audits and the package
   build on Python 3.12, and pytest with the docstring examples on Python 3.12, 3.13 and 3.14.
 
-[Unreleased]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/andrea-dm/policy-rate-monitor/releases/tag/v0.1.0
