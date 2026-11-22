@@ -73,3 +73,8 @@ drive the choice of types:
 
 - 2026-11-20: `analytics` adds a fourth targeted `# pyright: ignore`, where the stubs leave the
   decimal type's scale untyped ([0013](0013-fast-analytics-numpy-numba.md)).
+- 2026-11-22: the table is converted to pandas once by `service.load_staged`, which the CLI and
+  the HTTP API both call ([0014](0014-http-api.md)), not by the CLI itself.
+- 2026-11-22: the spike and the `join_asof` reproduction are one script,
+  `diagnostics/bench_pyarrow_types.py`, which checks only the behaviour this record and
+  [0006](0006-twelve-month-look-back.md) rely on.

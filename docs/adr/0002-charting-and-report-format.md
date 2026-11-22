@@ -35,6 +35,10 @@ pre-commit hooks set for a committed file in `out/`), or from a CDN (small, but 
 internet to show). The leaning is the CDN, with the PNG as the offline fallback. It is settled in
 #12.
 
+**Update, 2026-11-21:** settled by [0015](0015-report-templates-and-html.md): the JavaScript is
+inline, so the page works offline, and the file is exempt from the size limit. The test cited in
+Evidence is now `test_report_writes_the_five_files`.
+
 ## Alternatives considered
 
 | Alternative | Why not |
@@ -56,3 +60,9 @@ internet to show). The leaning is the CDN, with the PNG as the offline fallback.
 - `src/policy_rate_monitor/report.py` (`_write_chart`); `out/policy_rates.png` and `out/report.md`
   from a real run.
 - `tests/test_report.py::test_report_writes_the_four_files`.
+
+## Updates
+
+- 2026-11-22: the code named in Evidence has moved: the PNG is drawn by `rate_chart` in
+  `src/policy_rate_monitor/chart/static.py`, and written with the other files by `Report` in
+  `src/policy_rate_monitor/report/export.py` ([0016](0016-accessible-charts.md)).

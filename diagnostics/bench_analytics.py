@@ -13,7 +13,7 @@ times, for every series:
    first numba call, which compiles them, is timed on its own);
 3. ``change_history`` NumPy against numba, and ``rate_moves`` (NumPy only);
 4. a ``Decimal`` loop doing what ``change_history`` does;
-5. ``compute_snapshots`` for all areas, the call the report makes.
+5. ``compute_snapshots`` for every country or area, the call the report makes.
 
 Each fast result is checked against the slow one it replaces.
 """
@@ -281,16 +281,16 @@ def bench_report(
     series: list[SeriesMetadata],
     settings: SnapshotSection,
 ) -> Row:
-    """Times compute_snapshots for every area, the call the report makes."""
+    """Times compute_snapshots for every country or area, the call the report makes."""
     args = SnapshotArgs(
         observations=observations,
         series=series,
         requested=[item.ref_area for item in series],
         settings=settings,
-        area_aliases={},
+        ref_area_aliases={},
     )
     return (
-        f"compute_snapshots, all {len(series)} areas (the report's call)",
+        f"compute_snapshots, all {len(series)} countries or areas (the report's call)",
         best_of(3, lambda: compute_snapshots(args)),
         "",
     )

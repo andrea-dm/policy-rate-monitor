@@ -76,3 +76,5 @@ interactive front end, where the calculation runs on every user action (#13).
 - 2026-11-20: the search is replaced by one search over all series
   ([0013](0013-fast-analytics-numpy-numba.md)); the target-date rule and the "on or before" rule
   still apply.
+- 2026-11-22: the `join_asof` reproduction is part of `diagnostics/bench_pyarrow_types.py`,
+  with the pyarrow-type checks of [0001](0001-data-stack-pyarrow.md).

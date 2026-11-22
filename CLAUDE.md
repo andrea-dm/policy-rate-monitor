@@ -5,7 +5,7 @@ Guidance for Claude Code in this repository.
 ## Quick Start
 
 ```bash
-uv sync --group dev                                   # create/refresh the venv
+uv sync --all-groups --all-extras                     # create/refresh the venv (tests need every extra)
 uv sync --locked --only-group lint --no-install-project   # CI-style lint env
 ```
 
@@ -17,13 +17,11 @@ rejects machine-scoped keys there).
 ## Checks
 
 ```bash
-uv run ruff check --fix   # fixes first, always before the formatter
-uv run ruff format
 uv run tach check && \
 uv run ruff check && \
 uv run ruff format --check && \
 uv run deptry src/ tests/ && \
-uv run pyright src/ tests/ && \
+uv run pyright src/ tests/ diagnostics/ && \
 uv run pytest && \
 uv run mkdocs build --strict
 ```

@@ -38,9 +38,9 @@ def _observations(rows: list[Row]) -> pd.DataFrame:
     """Builds staged observations shaped like the transform's output."""
     return pd.DataFrame(
         {
-            "series_key": [f"D.{area}" for area, _, _, _ in rows],
+            "series_key": [f"D.{ref_area}" for ref_area, _, _, _ in rows],
             "freq": ["D"] * len(rows),
-            "ref_area": [area for area, _, _, _ in rows],
+            "ref_area": [ref_area for ref_area, _, _, _ in rows],
             "date": pd.Series(
                 [date.fromisoformat(day) for _, day, _, _ in rows],
                 dtype="date32[pyarrow]",
@@ -54,27 +54,27 @@ def _observations(rows: list[Row]) -> pd.DataFrame:
     )
 
 
-def _series(*areas: str) -> list[SeriesMetadata]:
+def _series(*ref_areas: str) -> list[SeriesMetadata]:
     return [
         SeriesMetadata(
-            series_key=f"D.{area}",
-            ref_area=area,
-            ref_area_name=NAMES[area],
+            series_key=f"D.{ref_area}",
+            ref_area=ref_area,
+            ref_area_name=NAMES[ref_area],
             frequency="D",
-            title=f"Policy rate, {NAMES[area]}, daily",
+            title=f"Policy rate, {NAMES[ref_area]}, daily",
         )
-        for area in areas
+        for ref_area in ref_areas
     ]
 
 
 def _snapshots(rows: list[Row], requested: list[str]) -> list[DataSnapshot]:
-    areas = sorted({area for area, _, _, _ in rows})
+    ref_areas = sorted({ref_area for ref_area, _, _, _ in rows})
     args = SnapshotArgs(
         observations=_observations(rows),
-        series=_series(*areas),
+        series=_series(*ref_areas),
         requested=requested,
         settings=SETTINGS,
-        area_aliases=ALIASES,
+        ref_area_aliases=ALIASES,
     )
     return compute_snapshots(args)
 
@@ -148,7 +148,7 @@ def test_invalid_observations_are_skipped() -> None:
     assert snapshot.prior_date == date(2025, 11, 7)
 
 
-def test_each_area_looks_back_from_its_own_latest_date() -> None:
+def test_each_ref_area_looks_back_from_its_own_latest_date() -> None:
     rows: list[Row] = [
         ("GB", "2025-11-05", "5.00", True),
         ("GB", "2026-11-05", "4.75", True),
@@ -162,7 +162,7 @@ def test_each_area_looks_back_from_its_own_latest_date() -> None:
     assert (us.target_date, us.change_bps) == (date(2025, 11, 10), Decimal(25))
 
 
-def test_unknown_area_insufficient_history_and_no_valid_data() -> None:
+def test_unknown_ref_area_insufficient_history_and_no_valid_data() -> None:
     rows: list[Row] = [
         ("US", "2026-06-01", "3.75", True),
         ("US", "2026-11-10", "4.00", True),
@@ -174,7 +174,7 @@ def test_unknown_area_insufficient_history_and_no_valid_data() -> None:
     assert us.status is SnapshotStatus.INSUFFICIENT_HISTORY
     assert us.latest_value == Decimal("4.00")
     assert gb.status is SnapshotStatus.NO_VALID_DATA
-    assert zz.status is SnapshotStatus.UNKNOWN_AREA
+    assert zz.status is SnapshotStatus.UNKNOWN_REF_AREA
     assert zz.series is None
 
 

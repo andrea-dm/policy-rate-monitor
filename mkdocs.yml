@@ -24,28 +24,59 @@ markdown_extensions:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
+# A missing anchor is only INFO by default; warn makes --strict fail on it.
+validation:
+  anchors: warn
 nav:
   - Home: index.md
   - How it works: how-it-works.md
   - Architecture: architecture.md
   - Data model: data-model.md
+  - Data quality: data-quality.md
   - CLI reference: cli.md
+  - HTTP API: api.md
   - Configuration: configuration.md
   - API reference: reference.md
   - Glossary: glossary.md
   - Milestones: milestones.md
-  - Decisions:
-      - adr/index.md
-      - adr/0001-data-stack-pyarrow.md
-      - adr/0002-charting-and-report-format.md
-      - adr/0003-web-extension-stack.md
-      - adr/0004-domain-model.md
-      - adr/0005-exact-decimal-rates.md
-      - adr/0006-twelve-month-look-back.md
-      - adr/0007-config-driven-design.md
-      - adr/0008-provider-interface.md
-      - adr/0009-sdmx-validation.md
-      - adr/0010-cli-and-exit-codes.md
-      - adr/0011-data-quality-rules.md
-      - adr/0012-elt-raw-and-staged-layers.md
-      - adr/0013-fast-analytics-numpy-numba.md
+  - Advanced:
+      - Overview: advanced/index.md
+      - Implementation design:
+          - advanced/implementation_design/index.md
+          - advanced/implementation_design/system_overview.md
+          - advanced/implementation_design/components.md
+          - advanced/implementation_design/interfaces.md
+          - advanced/implementation_design/data_model.md
+          - advanced/implementation_design/runtime_behavior.md
+          - advanced/implementation_design/failure_modes.md
+          - advanced/implementation_design/performance.md
+          - advanced/implementation_design/deployment.md
+          - advanced/implementation_design/observability.md
+          - advanced/implementation_design/security.md
+      - Operations:
+          - advanced/operations/index.md
+          - advanced/operations/upstreams.md
+          - advanced/operations/downstreams.md
+          - advanced/operations/workflows.md
+          - advanced/operations/ci_cd.md
+          - advanced/operations/release_engineering.md
+          - advanced/operations/runbooks.md
+      - Decision records:
+          - adr/index.md
+          - adr/0001-data-stack-pyarrow.md
+          - adr/0002-charting-and-report-format.md
+          - adr/0003-web-extension-stack.md
+          - adr/0004-domain-model.md
+          - adr/0005-exact-decimal-rates.md
+          - adr/0006-twelve-month-look-back.md
+          - adr/0007-config-driven-design.md
+          - adr/0008-provider-interface.md
+          - adr/0009-sdmx-validation.md
+          - adr/0010-cli-and-exit-codes.md
+          - adr/0011-data-quality-rules.md
+          - adr/0012-elt-raw-and-staged-layers.md
+          - adr/0013-fast-analytics-numpy-numba.md
+          - adr/0014-http-api.md
+          - adr/0015-report-templates-and-html.md
+          - adr/0016-accessible-charts.md
+          - adr/0017-bad-input-failures-and-writes.md

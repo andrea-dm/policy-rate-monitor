@@ -22,6 +22,7 @@ if TYPE_CHECKING:
         DataQualityIssue,
         SeriesMetadata,
         SourceRelease,
+        TransformSummary,
     )
 
 pytestmark = pytest.mark.unit
@@ -35,7 +36,7 @@ def table(*rows: tuple[str, date, str | None, bool | None]) -> Table:
             {
                 "series_key": key,
                 "frq": "D",
-                "area": key.split(".")[1],
+                "geo": key.split(".")[1],
                 "date": day,
                 "value": None if value is None else Decimal(value),
                 "sts": "A",
@@ -93,7 +94,7 @@ def test_a_provider_missing_a_method_cannot_be_created() -> None:
             raise NotImplementedError
 
         @override
-        def transform(self) -> None:
+        def transform(self) -> TransformSummary:
             raise NotImplementedError
 
         @override
@@ -122,7 +123,7 @@ def test_schema_follows_the_structure() -> None:
     assert schema.names == [
         "series_key",
         "frq",
-        "area",
+        "geo",
         "date",
         "value",
         "sts",
@@ -149,7 +150,7 @@ def test_an_extra_dimension_or_kept_attribute_adds_a_column() -> None:
     assert schema.names == [
         "series_key",
         "frq",
-        "area",
+        "geo",
         "sector",
         "date",
         "value",

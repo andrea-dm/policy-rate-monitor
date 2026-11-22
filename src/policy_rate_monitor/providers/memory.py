@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, override
 
 from pyarrow import Table
 
-from policy_rate_monitor.core.models import SourceRelease
+from policy_rate_monitor.core.models import SourceRelease, TransformSummary
 from policy_rate_monitor.providers.base import DataProvider
 from policy_rate_monitor.providers.schema import observation_schema, select_series
 
@@ -31,8 +31,7 @@ _RELEASE = SourceRelease(
 class InMemoryProvider(DataProvider):
     """Canonical data given as plain rows; ``fetch`` and ``transform`` do nothing.
 
-    The snapshot and the report can be tested on it without a source file, and the
-    planned HTTP API will be too.
+    The snapshot, the report and the HTTP API are tested on it without a source file.
     """
 
     def __init__(
@@ -68,8 +67,15 @@ class InMemoryProvider(DataProvider):
         return self._release
 
     @override
-    def transform(self) -> None:
-        """Does nothing: the rows are already canonical."""
+    def transform(self) -> TransformSummary:
+        """Changes nothing, the rows being canonical; returns their counts."""
+        observations = self._observations.num_rows
+        return TransformSummary(
+            rows_read=observations,
+            observations=observations,
+            series=len(self._series),
+            issues=len(self._issues),
+        )
 
     @override
     def list_series(self) -> list[str]:

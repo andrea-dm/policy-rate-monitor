@@ -14,22 +14,20 @@ local development workflow.
    intact; `tach.toml` declares which module may import which.
 4. **Test**: add tests in `tests/` with the right marker (see [Testing](#testing)). One test per
    behaviour, each meaningful on its own; no test written only to raise the coverage.
-5. **Check** before pushing: fix what ruff can fix, then run the checks in order, each stopping
-   the chain when it fails:
+5. **Check** before pushing: run the checks in order, each stopping the chain when it fails:
    ```bash
-   uv run ruff check --fix
-   uv run ruff format
    uv run tach check && \
    uv run ruff check && \
    uv run ruff format --check && \
    uv run deptry src/ tests/ && \
-   uv run pyright src/ tests/ && \
+   uv run pyright src/ tests/ diagnostics/ && \
    uv run pytest && \
    uv run mkdocs build --strict
    ```
    The hooks in `.pre-commit-config.yaml` follow the same order and stop at the first failure:
    tach and ruff at every commit, deptry and pyright at every push. pytest and the docs build run
-   in CI. Install the hooks once with `uvx pre-commit install`.
+   in CI. Install the hooks once with `uvx prek install`: the `builtin` repo in the file is a prek
+   feature, which pre-commit itself refuses.
 6. **Update the changelog**: add an entry under `## [Unreleased]` in `CHANGELOG.md`.
 7. **Open a pull request** against `develop`, saying what changed and why, and linking the issue
    (`Closes #<number>`).
@@ -63,21 +61,27 @@ commands are the local equivalents.
 
 | Check | Command | Scope |
 |---|---|---|
-| Secret detection | (CI job `secret-detection`, informational) | Pull requests and branch pushes |
-| Security audit | `uv export --locked --no-dev --all-extras --no-emit-project --output-file requirements-audit.txt` then `uvx --from 'pip-audit>=2.7,<3' pip-audit --strict --disable-pip --requirement requirements-audit.txt` | Runtime dependencies (CI job `audit`); blocking on `main` and `develop` |
-| Security audit, development groups | The same with `--all-groups` (CI job `audit-dev`) | Every dependency group and extra |
+| Import graph | `uv run tach check` | Module boundaries declared in `tach.toml` |
 | Lint | `uv run ruff check` | `src/`, `tests/`, `diagnostics/` (`include` in `pyproject.toml`) |
 | Format | `uv run ruff format --check` | Same as lint |
 | Dependencies | `uv run deptry src/ tests/` | Declared dependencies match the imports |
-| Import graph | `uv run tach check` | Module boundaries declared in `tach.toml` |
-| Commit format | (CI job `commit-format`) | Every non-merge commit of a pull request |
-| Docs build | `uv run mkdocs build --strict` | Broken links and anchors |
-| Type check | `uv run pyright src/ tests/` | Strict mode |
+| Type check | `uv run pyright src/ tests/ diagnostics/` | Strict mode |
 | Tests | `uv run pytest` | Python 3.12, 3.13 and 3.14, with the docstring examples (the other checks run on 3.12) |
+| Docs build | `uv run mkdocs build --strict` | Broken links and anchors |
+| Commit format | (CI job `commit-format`) | Every non-merge commit of a pull request |
+| Secret detection | (CI job `secret-detection`, informational) | Pull requests and branch pushes |
+| Security audit | `uv export --locked --no-dev --all-extras --no-emit-project --output-file requirements-audit.txt` then `uvx --from 'pip-audit>=2.7,<3' pip-audit --strict --disable-pip --requirement requirements-audit.txt` | Runtime dependencies (CI job `audit`); blocking on `main` and `develop` |
+| Security audit, development groups | The same with `--all-groups` (CI job `audit-dev`) | Every dependency group and extra |
 | Package | `uv build`, then import the wheel in a clean environment (CI jobs `build-package`, `wheel-smoke`) | Pushes to `develop` (dev version) and releases |
 
 Do not silence a lint or type error without a reason; when a trade-off is needed, explain it in
 the pull request.
+
+The example notebooks in `examples/` are outside these checks. In the editor, Pylance checks them
+in strict mode, with the `examples` entry of `executionEnvironments` in `pyrightconfig.json`
+turning off the rules on missing or unknown types. The notebooks are short teaching code, with
+untyped helpers and matplotlib and Plotly calls. A `# pyright: basic` comment would not do the
+same: in a notebook it reaches only the cell it is in.
 
 ---
 
@@ -85,7 +89,10 @@ the pull request.
 
 `pytest` runs the tests in `tests/` and the examples of the docstrings in `src/`
 (`--doctest-modules`, `testpaths = ["tests", "src"]` in `pyproject.toml`). The tests never use the
-network.
+network. They import every module, the optional ones too, so install every extra first:
+`uv sync --all-groups --all-extras`. The HTTP API tests (`tests/web/`) call the app with FastAPI's
+`TestClient`, which runs on `httpx2`, from plain test functions: the routes are `def` ones, so
+there is no `pytest-asyncio`.
 
 ```bash
 uv run pytest                   # everything

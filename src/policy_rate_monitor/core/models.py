@@ -1,12 +1,12 @@
 """Domain models exchanged between the layers.
 
 ``fetch`` produces ``SourceRelease``; ``transform`` produces ``SeriesMetadata`` and
-``DataQualityIssue``; ``snapshot`` produces ``DataSnapshot``; providers serve them, and
-the report serialises them. All models are frozen pydantic models whose invariants are
-checked whenever they are built through the constructor or
-``model_validate``/``model_validate_json``. pydantic's ``model_copy(update=...)`` and
-``model_construct`` skip validation by design: derive a changed object with
-``Model.model_validate({**obj.model_dump(), "field": value})``.
+``DataQualityIssue`` and returns a ``TransformSummary``; ``snapshot`` produces
+``DataSnapshot``; providers serve them, and the report serialises them. All models
+are frozen pydantic models whose invariants are checked whenever they are built
+through the constructor or ``model_validate``/``model_validate_json``. pydantic's
+``model_copy(update=...)`` and ``model_construct`` skip validation by design: derive
+a changed object with ``Model.model_validate({**obj.model_dump(), "field": value})``.
 
 Rates are ``Decimal`` end to end. In JSON they are written as numbers, not as strings
 (pydantic's default for ``Decimal``), so ``summary.json`` and the API stay numeric. A
@@ -48,6 +48,7 @@ __all__ = [
     "SnapshotFlag",
     "SnapshotStatus",
     "SourceRelease",
+    "TransformSummary",
 ]
 
 BASIS_POINTS_PER_PERCENT = Decimal(100)
@@ -159,7 +160,7 @@ class SeriesMetadata(_FrozenModel):
 
     Attributes:
         series_key: The source's key of the series, e.g. ``"D.CH"``.
-        ref_area: Code of the area, a country or an economic area, e.g. ``"CH"``.
+        ref_area: Code of the country or economic area, e.g. ``"CH"``.
         ref_area_name: Its name, e.g. ``"Switzerland"``.
         frequency: Frequency code, e.g. ``"D"`` for daily.
         title: The series title.
@@ -180,11 +181,11 @@ class SeriesMetadata(_FrozenModel):
 
 
 class SnapshotStatus(StrEnum):
-    """Outcome of the snapshot calculation for one requested area."""
+    """Outcome of the snapshot calculation for one requested country or area."""
 
     OK = auto()
     """Latest rate, prior rate and change are all available."""
-    UNKNOWN_AREA = auto()
+    UNKNOWN_REF_AREA = auto()
     """No series exists for the requested code."""
     NO_VALID_DATA = auto()
     """The series exists but has no valid observation."""
@@ -213,7 +214,7 @@ class DataSnapshot(_FrozenModel):
     Attributes:
         requested_ref_area: The code as requested, e.g. ``"ea"`` (whitespace stripped).
         ref_area: The normalised code after aliases, e.g. ``"XM"``.
-        series: Metadata of the matched series; ``None`` only for ``UNKNOWN_AREA``.
+        series: Metadata of the matched series; ``None`` only for ``UNKNOWN_REF_AREA``.
         latest_date: Date of the latest valid observation.
         latest_value: Its rate, in per cent.
         target_date: ``latest_date`` minus the look-back.
@@ -287,10 +288,10 @@ class DataSnapshot(_FrozenModel):
 
     @model_validator(mode="after")
     def _check_consistency(self) -> Self:
-        if self.status is SnapshotStatus.UNKNOWN_AREA:
+        if self.status is SnapshotStatus.UNKNOWN_REF_AREA:
             self._require_absent("series", *self._value_fields())
             if self.flags:
-                msg = "an UNKNOWN_AREA snapshot carries no flags"
+                msg = "an UNKNOWN_REF_AREA snapshot carries no flags"
                 raise ValueError(msg)
             return self
         if self.series is None:
@@ -394,6 +395,8 @@ class DataQualityIssue(_FrozenModel):
         detail: Human-readable explanation, including what was done about it.
         count: Number of affected observations. At least 1 today; 0 is kept for a
             rule that could not be evaluated, which no rule reports yet.
+
+    See also: [Data quality](data-quality.md#2-what-a-finding-is).
     """
 
     rule: NonEmptyStr
@@ -418,3 +421,20 @@ class SourceRelease(_FrozenModel):
     version_id: NonEmptyStr | None = None
     checksum_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
     retrieved_at: AwareDatetime
+
+
+class TransformSummary(_FrozenModel):
+    """What one transform run produced: returned by ``DataProvider.transform``, and
+    the same counts are written to the log.
+
+    Attributes:
+        rows_read: Rows in the source data.
+        observations: Observations staged.
+        series: Series staged.
+        issues: Data-quality findings staged.
+    """
+
+    rows_read: Annotated[int, Field(ge=0)]
+    observations: Annotated[int, Field(ge=0)]
+    series: Annotated[int, Field(ge=0)]
+    issues: Annotated[int, Field(ge=0)]

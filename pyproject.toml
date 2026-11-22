@@ -1,6 +1,6 @@
 [project]
 name = "policy-rate-monitor"
-version = "0.2.0"
+version = "0.3.0"
 description = "Monitor of central-bank policy rates."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
@@ -16,6 +16,7 @@ classifiers = [
 ]
 # Add runtime dependencies with `uv add <pkg>`; deptry (pre-push) checks they match the imports.
 dependencies = [
+    "jinja2>=3.1.6",
     "matplotlib>=3.11.2",
     "numpy>=2.5.5",
     "pandas>=3.1.1",
@@ -30,6 +31,15 @@ bis-prates = "policy_rate_monitor.cli.main:main"
 [project.optional-dependencies]
 fast = [
     "numba>=0.68.1",
+]
+interactive = [
+    "plotly>=7.1.0",
+]
+web = [
+    "fastapi>=0.165.0",
+    "starlette>=1.10.0",
+    "uvicorn>=0.54.0",
+    "policy-rate-monitor[interactive]",
 ]
 
 [build-system]
@@ -279,6 +289,9 @@ docstring-code-format = true
 
 [tool.deptry]
 known_first_party = ["policy_rate_monitor"]
+# The web extra lists the package itself to include the interactive extra; there is
+# nothing to import.
+per_rule_ignores = { DEP002 = ["policy-rate-monitor"] }
 
 # ══════════════════════════════════════════════════════════════════════ UV CONFIG ═══ #
 
@@ -300,6 +313,7 @@ test = [
     "pytest-mock>=3.14",
     "pytest-cov>=7.0.0",
     "hypothesis>=6.100",
+    "httpx2>=2.16.2",
 ]
 
 dev = [
@@ -316,6 +330,14 @@ docs = [
     "mkdocs-material>=9.6",
     "mkdocstrings[python]>=0.28",
     "griffe>=1.0",
+]
+
+# Only the scripts in diagnostics/ import these; the package never does. setuptools is
+# what pyximport (from Cython) builds the trial kernel with.
+diagnostics = [
+    "cython>=3.3.1",
+    "duckdb>=2.0.0",
+    "setuptools>=80.9.0",
 ]
 
 # ════════════════════════════════════════════════════════════════════════ Testing ═══ #

@@ -52,3 +52,15 @@ it?" would get no answer.
   `src/policy_rate_monitor/fetch.py` (the ZIP and its release record, replaced only by a download
   that passed its checks).
 - `data/raw/` and `data/staged/` after a run.
+
+## Updates
+
+- 2026-11-22 (#34): `transform` also stages the release record of the ZIP it read, in
+  `staged/release.json`, and the report reads the release from there. Every staged file and every
+  output is written to a temporary file and renamed into place once all are written,
+  `staged/release.json` last, so a failure while writing leaves the previous set as it was (with
+  no release to stage, the old `release.json` is removed first, so that set's release is then
+  unknown); the
+  raw `raw/<zip>.parquet` is written in the same set, at the end of the run, so a run that fails
+  leaves the raw and staged files of the last run as they were
+  ([0017](0017-bad-input-failures-and-writes.md)).

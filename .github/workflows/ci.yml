@@ -306,7 +306,7 @@ jobs:
           python-version: ${{ env.PY_VERSION }}
           save-cache: "true"
       - run: uv sync --locked --all-groups --all-extras
-      - run: uv run pyright src/ tests/
+      - run: uv run pyright src/ tests/ diagnostics/
 
   # ──────────────────────────────────────────────────────────────────────────── test ─── #
   pytest:
@@ -609,7 +609,7 @@ jobs:
   # legitimately diverge, and a failed fast-forward must not mark a release as broken.
   # A push made with GITHUB_TOKEN starts no new run, so develop is not checked again.
   sync-develop-with-main:
-    needs: [route, audit, audit-dev, ruff, deptry, tach, docs-build, pyright, pytest]
+    needs: [route, tach, ruff, deptry, pyright, pytest, docs-build, audit, audit-dev]
     if: >-
       ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
       && !contains(needs.*.result, 'failure') }}

@@ -28,7 +28,7 @@ def test_bis_cbpol_loads(bis_cbpol: tuple[DatasetConfig, dict[str, Any]]) -> Non
     config, _document = bis_cbpol
 
     assert config.structure.selection == {"FREQ": "D"}
-    assert config.area_aliases == {"EA": "XM"}
+    assert config.ref_area_aliases == {"EA": "XM"}
     assert len(config.known_columns()) == 18
 
 

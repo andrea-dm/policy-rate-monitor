@@ -3,8 +3,8 @@
 ``DatasetConfig`` is the top-level model, with one section per concern: the dataset's
 identity, where its file comes from, its SDMX structure, how that structure is written
 in the file, the data-quality rules, the snapshot thresholds, the output fields and
-the area aliases. Nothing here names a real dataset: every fact comes from the
-configuration document.
+the reference-area aliases. Nothing here names a real dataset: every fact comes from
+the configuration document.
 
 Every model is frozen, forbids unknown keys and is strict: ``"24"`` is not an integer
 and ``"false"`` is not a boolean. Strict mode reads JSON text, so build a configuration
@@ -27,9 +27,10 @@ Examples:
 
 from __future__ import annotations
 
+import json
 import re
 import warnings
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime
 from io import BytesIO, TextIOWrapper
 from pathlib import Path  # noqa: TC003  (pydantic resolves the annotation at runtime)
@@ -70,6 +71,8 @@ from policy_rate_monitor.config._problems import (
     PATH_EMPTY,
     PATH_TILDE,
     REF_AREA_NOT_CODED,
+    RULE_EXPECTED_UNKNOWN,
+    RULE_PARAM_INVALID,
     RULE_TWICE,
     SCALE_ABOVE_PRECISION,
     SELECTION_MISSING,
@@ -88,6 +91,7 @@ from policy_rate_monitor.core.models import DataQualitySeverity, ReadOnlyAttribu
 
 __all__ = [
     "CANONICAL_COLUMNS",
+    "CODE_PATTERN",
     "ColumnsSection",
     "Concept",
     "DatasetConfig",
@@ -105,10 +109,49 @@ __all__ = [
     "SourceSection",
     "StructureSection",
     "TimeDimension",
+    "requested_codes",
 ]
 
 CANONICAL_COLUMNS: Final = ("series_key", "date", "value", "is_valid")
 """The fixed columns of the canonical observations table, in table order."""
+
+CODE_PATTERN: Final = r"^[A-Za-z0-9_@$-]+$"
+"""A valid code, in the configuration or a request: letters, digits and ``_@$-``."""
+
+
+def requested_codes(texts: Iterable[str]) -> list[str]:
+    """Strips the codes a user asks for, drops the empty ones and checks the rest.
+
+    The command line and the API both check requested codes with it, so a formula or
+    markup never reaches the outputs.
+
+    Args:
+        texts: The codes as typed, e.g. ``--countries`` split at the commas.
+
+    Returns:
+        The stripped codes, in the order given.
+
+    Raises:
+        ValueError: No code is left, or one does not match ``CODE_PATTERN``.
+
+    Examples:
+        >>> requested_codes([" US", "", "EA "])
+        ['US', 'EA']
+        >>> requested_codes(["=HYPERLINK(1)"])
+        Traceback (most recent call last):
+        ...
+        ValueError: invalid code '=HYPERLINK(1)': use letters, digits and _ @ $ -
+    """
+    codes = [text.strip() for text in texts if text.strip()]
+    if not codes:
+        msg = "name at least one country or area code, e.g. US or EA"
+        raise ValueError(msg)
+    for code in codes:
+        if not re.fullmatch(CODE_PATTERN, code):
+            msg = f"invalid code {code!r}: use letters, digits and _ @ $ -"
+            raise ValueError(msg)
+    return codes
+
 
 MetadataField = Literal[
     "series_key", "ref_area", "ref_area_name", "frequency", "title", "unit", "decimals"
@@ -124,7 +167,7 @@ _SNAKE_CASE = r"^[a-z][a-z0-9_]*$"
 _T = TypeVar("_T")
 
 ConceptId = Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")]
-Code = Annotated[str, Field(pattern=r"^[A-Za-z0-9_@$-]+$")]
+Code = Annotated[str, Field(pattern=CODE_PATTERN)]
 ColumnName = Annotated[str, Field(pattern=_SNAKE_CASE)]
 RuleName = Annotated[str, Field(pattern=_SNAKE_CASE)]
 DatasetId = Annotated[str, Field(pattern=_SNAKE_CASE)]
@@ -220,7 +263,7 @@ def _check_aliases(aliases: Mapping[str, str]) -> Mapping[str, str]:
         elif target in aliases:
             context = {"code": code, "target": target}
             problems.append(Problem(ALIAS_CHAIN, (code,), target, context))
-    raise_problems("area_aliases", problems)
+    raise_problems("ref_area_aliases", problems)
     return aliases
 
 
@@ -228,7 +271,7 @@ LocalPath = Annotated[Path, BeforeValidator(_check_local_path)]
 UniqueTuple = Annotated[tuple[_T, ...], AfterValidator(_unique)]
 _AsDict = PlainSerializer(_plain_dict, return_type=dict[str, str])
 Selection = Annotated[Mapping[ConceptId, Code], AfterValidator(_read_only), _AsDict]
-AreaAliases = Annotated[
+RefAreaAliases = Annotated[
     Mapping[Code, Code],
     AfterValidator(_check_aliases),
     AfterValidator(_read_only),
@@ -528,13 +571,13 @@ class StructureSection(_ConfigModel):
         dimensions = {d.id: d for d in self.dimensions}
         series = {a.id for a in self.series_attributes}
         problems: list[Problem] = []
-        area = dimensions.get(bound.ref_area)
-        if area is None:
+        ref_area = dimensions.get(bound.ref_area)
+        if ref_area is None:
             hint = did_you_mean(bound.ref_area, dimensions)
             context = {"id": bound.ref_area, "hint": hint}
             loc = ("series_metadata", "ref_area")
             problems.append(Problem(NOT_A_DIMENSION, loc, bound.ref_area, context))
-        elif not area.coded:
+        elif not ref_area.coded:
             loc = ("series_metadata", "ref_area")
             context = {"id": bound.ref_area}
             problems.append(Problem(REF_AREA_NOT_CODED, loc, bound.ref_area, context))
@@ -612,7 +655,8 @@ class RuleSpec(_ConfigModel):
     severity: DataQualitySeverity
     """Severity of the rule's findings."""
     params: Mapping[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
-    """The rule's parameters, checked by the rule itself."""
+    """The rule's parameters. Those of the built rules are checked on loading: keep is
+    first or last, and expected maps columns of the configuration to codes."""
 
 
 def _unique_rule_names(rules: tuple[RuleSpec, ...]) -> tuple[RuleSpec, ...]:
@@ -673,7 +717,7 @@ class DatasetConfig(_ConfigModel):
     """Snapshot parameters."""
     output: OutputSection
     """Output fields."""
-    area_aliases: AreaAliases
+    ref_area_aliases: RefAreaAliases
     """Requested code to reference-area code. Keys are upper case; no alias maps to
     itself or to another alias."""
 
@@ -699,15 +743,45 @@ class DatasetConfig(_ConfigModel):
         declared = {concept_id for _loc, concept_id, _role in self.structure.concepts()}
         return frozenset(declared | set(self.columns.unmapped))
 
+    def conflict_keep(self) -> Literal["first", "last"]:
+        """Returns which of two rows with the same series and date is kept.
+
+        The ``keep`` of the ``conflicting_duplicate`` rule, whether the rule is
+        enabled or not: switching a rule off stops its findings, not what staging
+        does. ``"last"`` when the rule or its ``keep`` is absent.
+
+        Returns:
+            ``"first"`` or ``"last"``, the row's place in the source file.
+        """
+        for rule in self.rules:
+            if (
+                rule.name == "conflicting_duplicate"
+                and rule.params.get("keep") == "first"
+            ):
+                return "first"
+        return "last"
+
     @model_validator(mode="after")
     def _check_sections(self) -> Self:
         problems = [
             *self._unmapped_problems(),
             *self._optional_problems(),
             *self._output_problems(),
+            *self._rule_problems(),
         ]
         raise_problems(type(self).__name__, problems)
         return self
+
+    def _rule_problems(self) -> list[Problem]:
+        """Checks the parameters the implemented rules read."""
+        problems: list[Problem] = []
+        for index, rule in enumerate(self.rules):
+            loc: Loc = ("rules", index, "params")
+            if rule.name == "conflicting_duplicate":
+                problems += _keep_problems(rule, loc)
+            if rule.name == "unexpected_value":
+                problems += _expected_problems(rule, loc, self.known_columns())
+        return problems
 
     def _unmapped_problems(self) -> list[Problem]:
         declared = {concept_id for _loc, concept_id, _role in self.structure.concepts()}
@@ -719,7 +793,7 @@ class DatasetConfig(_ConfigModel):
                 context = {"id": concept_id}
                 problems.append(Problem(UNMAPPED_IS_DECLARED, loc, concept_id, context))
             elif (match := by_case.get(concept_id.casefold())) is not None:
-                # Ids are case-sensitive, so "area" next to a declared "AREA" would be
+                # Ids are case-sensitive, so "geo" next to a declared "GEO" would be
                 # a second, unmapped column: almost certainly a mistake, so rejected.
                 context = {"id": concept_id, "declared": match}
                 problems.append(Problem(UNMAPPED_CASE_CLASH, loc, concept_id, context))
@@ -782,3 +856,58 @@ class DatasetConfig(_ConfigModel):
             for index, name in enumerate(self.output.metadata_fields)
             if name in bound and bound[name] is None
         ]
+
+
+def _keep_problems(rule: RuleSpec, loc: Loc) -> list[Problem]:
+    keep = rule.params.get("keep", "last")
+    if keep in ("first", "last"):
+        return []
+    context = {
+        "name": rule.name,
+        "param": "keep",
+        "expected": "'first' or 'last'",
+        "value": json.dumps(keep),
+    }
+    return [Problem(RULE_PARAM_INVALID, (*loc, "keep"), keep, context)]
+
+
+def _expected_problems(
+    rule: RuleSpec, loc: Loc, known: frozenset[str]
+) -> list[Problem]:
+    expected = rule.params.get("expected")
+    if not isinstance(expected, dict):
+        context = {
+            "name": rule.name,
+            "param": "expected",
+            "expected": "an object of column ids and their codes",
+            "value": json.dumps(expected),
+        }
+        return [Problem(RULE_PARAM_INVALID, (*loc, "expected"), expected, context)]
+    problems: list[Problem] = []
+    for concept_id, code in expected.items():
+        if not isinstance(code, str):
+            context = {
+                "name": rule.name,
+                "param": f"expected.{concept_id}",
+                "expected": "a text",
+                "value": json.dumps(code),
+            }
+            problems.append(
+                Problem(
+                    RULE_PARAM_INVALID, (*loc, "expected", concept_id), code, context
+                )
+            )
+        if concept_id not in known:
+            context = {
+                "id": concept_id,
+                "hint": did_you_mean(concept_id, sorted(known)),
+            }
+            problems.append(
+                Problem(
+                    RULE_EXPECTED_UNKNOWN,
+                    (*loc, "expected", concept_id),
+                    concept_id,
+                    context,
+                )
+            )
+    return problems

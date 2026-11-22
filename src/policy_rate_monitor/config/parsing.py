@@ -5,6 +5,8 @@
 on its own line, located the way the JSON is written (``rules[1] ("name").enabled``),
 so every source gives the same messages.
 
+See also: [Configuration](configuration.md).
+
 Examples:
     >>> try:
     ...     parse_config('{"dataset": ', origin="inline")

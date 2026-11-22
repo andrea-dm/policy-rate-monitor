@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-11-19T22:45:01+00:00",
+  "generated_at": "2026-11-22T13:19:10+00:00",
   "source": {
     "location": "https://data.bis.org/static/bulk/WS_CBPOL_csv_flat.zip",
     "version_id": null,
     "checksum_sha256": "79f614ab22c21d172694cd48e9a9d551c7196f53c525008bc7ea4da8831d6494",
-    "retrieved_at": "2026-11-19T22:44:41.308601Z"
+    "retrieved_at": "2026-11-22T13:18:44.013893Z"
   },
   "dataset": {
     "id": "bis_cbpol",

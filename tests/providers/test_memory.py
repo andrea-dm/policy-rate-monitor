@@ -24,7 +24,7 @@ def row(key: str, day: date, value: str | None, status: str = "A") -> dict[str, 
     return {
         "series_key": key,
         "frq": "D",
-        "area": key.split(".")[1],
+        "geo": key.split(".")[1],
         "date": day,
         "value": None if value is None else Decimal(value),
         "sts": status,
@@ -33,13 +33,13 @@ def row(key: str, day: date, value: str | None, status: str = "A") -> dict[str, 
 
 
 def series(key: str) -> SeriesMetadata:
-    area = key.split(".")[1]
+    ref_area = key.split(".")[1]
     return SeriesMetadata(
         series_key=key,
-        ref_area=area,
-        ref_area_name=f"Area {area}",
+        ref_area=ref_area,
+        ref_area_name=f"Name of {ref_area}",
         frequency="D",
-        title=f"Rate of {area}",
+        title=f"Rate of {ref_area}",
     )
 
 

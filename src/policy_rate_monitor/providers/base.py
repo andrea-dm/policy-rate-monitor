@@ -1,6 +1,7 @@
 """The interface between the data and the rest of the package.
 
-See also: [decision 0008](adr/0008-provider-interface.md).
+See also: [decision 0008](adr/0008-provider-interface.md) and
+[Architecture](architecture.md).
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
         DataQualityIssue,
         SeriesMetadata,
         SourceRelease,
+        TransformSummary,
     )
 
 __all__ = ["DataProvider"]
@@ -26,12 +28,14 @@ class DataProvider(ABC):
     """Where the snapshot, the report and the CLI get their data from.
 
     A provider prepares the data with the two lifecycle methods, which change
-    state, and serves it through the five query methods, which only read. Settings
+    state, and serves it through the query methods, which only read. Settings
     fixed for a provider's lifetime (where the source is, where the data goes) are
     arguments of its constructor.
 
     The query methods raise ``MissingInputError`` when the data is not prepared yet,
-    except ``source_release``, which returns ``None`` when the release is unknown.
+    or was prepared for another configuration, with ``step`` naming the lifecycle
+    method to run; ``source_release`` raises nothing and returns ``None`` when the
+    release is unknown.
     ``observations`` returns a table in the schema of ``observation_schema``, with at
     most one row per series and date, sorted by date within each series. Why an Arrow
     table: [decision 0001](adr/0001-data-stack-pyarrow.md).
@@ -51,14 +55,21 @@ class DataProvider(ABC):
         """
 
     @abstractmethod
-    def transform(self) -> None:
+    def transform(self) -> TransformSummary:
         """Builds the canonical data from the source data.
 
-        Its data-quality findings are read with ``data_quality_issues``.
+        Its data-quality findings are read with ``data_quality_issues``. A failure
+        leaves the canonical data of the previous run as it was.
+
+        Returns:
+            The counts of the run: rows read, observations, series and findings.
 
         Raises:
-            MissingInputError: The source data has not been fetched.
-            UnexpectedFormatError: The source data is not in the expected format.
+            MissingInputError: The source data has not been fetched (``step`` is
+                ``"fetch"``).
+            UnexpectedFormatError: The source data is not in the expected format:
+                it cannot be read or parsed, a required column is missing, or a
+                series does not make valid metadata.
         """
 
     @abstractmethod
@@ -66,7 +77,7 @@ class DataProvider(ABC):
         """Returns the key of every series.
 
         Returns:
-            The series keys, e.g. ``["D.GB", "D.US"]``.
+            The series keys, sorted, e.g. ``["D.GB", "D.US"]``.
 
         Raises:
             MissingInputError: The data is not prepared yet.
@@ -95,10 +106,12 @@ class DataProvider(ABC):
             series_keys: The series to return; ``None`` returns every series.
 
         Returns:
-            A table in the schema of ``observation_schema``.
+            A table in the schema of ``observation_schema``, with at most one row per
+            series and date, sorted by series and date. An unknown key adds no row.
 
         Raises:
-            MissingInputError: The data is not prepared yet.
+            MissingInputError: The data is not prepared yet, or does not match the
+                configured schema.
         """
 
     @abstractmethod
@@ -117,6 +130,7 @@ class DataProvider(ABC):
         """Returns the release the canonical data was built from.
 
         Returns:
-            The release; ``None`` when the provider has no record of it: the data can
+            The release; ``None`` when the provider has no record of it (nothing is
+            prepared yet, or it was prepared with no release record): the data can
             still be used, with its provenance unknown.
         """

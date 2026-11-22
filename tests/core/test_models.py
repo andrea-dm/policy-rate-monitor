@@ -80,11 +80,11 @@ def _no_valid_data(**overrides: Any) -> DataSnapshot:
     return DataSnapshot(**fields)
 
 
-def _unknown_area(**overrides: Any) -> DataSnapshot:
+def _unknown_ref_area(**overrides: Any) -> DataSnapshot:
     fields: dict[str, Any] = {
         "requested_ref_area": "ZZ",
         "ref_area": "ZZ",
-        "status": SnapshotStatus.UNKNOWN_AREA,
+        "status": SnapshotStatus.UNKNOWN_REF_AREA,
     }
     fields.update(overrides)
     return DataSnapshot(**fields)
@@ -164,10 +164,10 @@ def test_insufficient_history_has_the_latest_rate_and_no_prior(
     ("build", "field", "value"),
     [
         (_no_valid_data, "latest_value", Decimal("4.00")),
-        (_unknown_area, "latest_date", LATEST),
-        (_unknown_area, "series", _series("ZZ")),
+        (_unknown_ref_area, "latest_date", LATEST),
+        (_unknown_ref_area, "series", _series("ZZ")),
     ],
-    ids=["no_valid_data", "unknown_area_value", "unknown_area_series"],
+    ids=["no_valid_data", "unknown_ref_area_value", "unknown_ref_area_series"],
 )
 def test_snapshot_without_data_carries_no_values(
     build: Any, field: str, value: object
@@ -239,7 +239,7 @@ def test_every_model_round_trips_through_its_own_json() -> None:
         _ok(flags=(SnapshotFlag.STALE_PRIOR,)),
         _insufficient(),
         _no_valid_data(),
-        _unknown_area(),
+        _unknown_ref_area(),
         DataQualityIssue(
             rule="excess_decimals", severity=DataQualitySeverity.WARNING, detail="x"
         ),

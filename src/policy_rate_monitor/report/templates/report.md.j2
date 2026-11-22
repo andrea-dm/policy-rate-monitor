@@ -1,0 +1,71 @@
+{# A status, a flag or a severity gets an emoji beside its name, never instead of it. #}
+{% macro with_icon(value) %}
+{% if value in icons %}{{ icons[value] }} {% endif %}{{ value }}
+{%- endmacro %}
+{% macro with_icons(values) %}
+{% for value in values.split(", ") %}{{ with_icon(value) }}{% if not loop.last %}, {% endif %}{% endfor %}
+{%- endmacro %}
+# {{ title }}
+
+Generated on {{ generated_date }} at {{ generated_time }} UTC.
+
+## Summary
+
+| Country or area | Code | Latest date | Latest (%) | Prior date | Prior (%) | Change (bp) | Status | Flags |
+|---|---|---|--:|---|--:|--:|---|---|
+{% for name, code, latest_date, latest, prior_date, prior, change, status, flags in summary_rows %}
+| {{ [name, code, latest_date, latest, prior_date, prior, change, with_icon(status), with_icons(flags)] | map("md_cell") | join(" | ") }} |
+{% endfor %}
+
+![{{ chart_alt }}]({{ chart_file }})
+
+## About the data
+
+{{ description }}
+
+{{ attribution }}.
+
+{% if release is none %}
+No record of the source file's retrieval was found.
+{% else %}
+- Downloaded from: {{ release.location }}
+- Retrieved at: {{ release.retrieved_at }}
+{% if release.version_id is not none %}
+- Version: {{ release.version_id }}
+{% endif %}
+{% if release.checksum is not none %}
+- SHA-256 of the file: `{{ release.checksum }}`
+{% endif %}
+{% endif %}
+
+The staged data holds {{ series_count }} series.
+
+## Method and assumptions
+
+{% for line in method %}
+- {{ line }}
+{% endfor %}
+
+### Status legend
+
+{% for status, text in statuses %}
+- {{ with_icon(status) }}: {{ text }}
+{% endfor %}
+
+## Data quality
+
+{% if issue_rows %}
+| Rule | Severity | Series | Count | Detail |
+|---|---|---|--:|---|
+{% for rule, severity, series, count, detail in issue_rows %}
+| {{ [rule, with_icon(severity), series, count, detail] | map("md_cell") | join(" | ") }} |
+{% endfor %}
+{% else %}
+{{ icons["ok"] }} No findings.
+{% endif %}
+
+## Limitations
+
+{% for line in limitations %}
+- {{ line }}
+{% endfor %}

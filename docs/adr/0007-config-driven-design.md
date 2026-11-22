@@ -76,3 +76,9 @@ our processing configuration.
 - `tests/config/`: `test_bis_cbpol_loads`, `test_config_package_holds_no_dataset_facts`,
   `test_every_failing_field_is_listed`, `test_reference_to_an_undeclared_concept_is_rejected`,
   `test_committed_schema_is_current`, `test_source_without_load_cannot_be_instantiated`.
+
+## Updates
+
+- 2026-11-22 (#34): the parameters of the built rules (`conflicting_duplicate`'s `keep`,
+  `unexpected_value`'s `expected`) are checked when the configuration is loaded, whether the rule
+  is on or off ([0017](0017-bad-input-failures-and-writes.md)).

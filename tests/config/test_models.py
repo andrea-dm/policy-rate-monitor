@@ -80,11 +80,11 @@ def test_output_field_must_be_a_series_metadata_field() -> None:
 @pytest.mark.parametrize(
     ("aliases", "expected"),
     [
-        ({"Q1": "Q1"}, "area_aliases.Q1: 'Q1' maps to itself"),
+        ({"Q1": "Q1"}, "ref_area_aliases.Q1: 'Q1' maps to itself"),
         (
             {"Q1": "Q2", "Q2": "Q3"},
             (
-                "area_aliases.Q1: 'Q1' maps to 'Q2', which is itself an alias:"
+                "ref_area_aliases.Q1: 'Q1' maps to 'Q2', which is itself an alias:"
                 " map 'Q1' to the final code"
             ),
         ),
@@ -92,7 +92,7 @@ def test_output_field_must_be_a_series_metadata_field() -> None:
     ids=["to_itself", "chain"],
 )
 def test_alias_must_map_to_a_final_code(aliases: dict[str, str], expected: str) -> None:
-    document = changed(minimal_document(), "area_aliases", aliases)
+    document = changed(minimal_document(), "ref_area_aliases", aliases)
 
     assert error_lines(document) == [expected]
 
@@ -140,3 +140,87 @@ def test_models_are_frozen() -> None:
         setattr(config.snapshot, "lookback_months", 6)  # noqa: B010
     with pytest.raises(TypeError, match="does not support item assignment"):
         selection["FRQ"] = "M"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("rule", "expected"),
+    [
+        (
+            {
+                "name": "conflicting_duplicate",
+                "severity": "warning",
+                "params": {"keep": "First"},
+            },
+            (
+                'rules[0] ("conflicting_duplicate").params.keep: rule'
+                " 'conflicting_duplicate' needs params.keep to be 'first' or 'last',"
+                ' not "First"'
+            ),
+        ),
+        (
+            {"name": "unexpected_value", "severity": "warning", "params": {}},
+            (
+                'rules[0] ("unexpected_value").params.expected: rule'
+                " 'unexpected_value' needs params.expected to be an object of column"
+                " ids and their codes, not null"
+            ),
+        ),
+        (
+            {
+                "name": "unexpected_value",
+                "severity": "warning",
+                "params": {"expected": {"TTLX": "A"}},
+            },
+            (
+                "rules[0] (\"unexpected_value\").params.expected.TTLX: 'TTLX' is not"
+                " a column of the configuration; did you mean 'TTL'?"
+            ),
+        ),
+        (
+            {
+                "name": "unexpected_value",
+                "severity": "warning",
+                "params": {"expected": {"TTL": ["A", "B"]}},
+            },
+            (
+                'rules[0] ("unexpected_value").params.expected.TTL: rule'
+                " 'unexpected_value' needs params.expected.TTL to be a text, not"
+                ' ["A", "B"]'
+            ),
+        ),
+    ],
+    ids=["keep", "expected_missing", "expected_unknown_id", "expected_not_a_code"],
+)
+def test_rule_parameters_are_checked_even_when_the_rule_is_off(
+    rule: dict[str, Any], expected: str
+) -> None:
+    document = changed(minimal_document(), "rules", [{**rule, "enabled": False}])
+
+    assert error_lines(document) == [expected]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("rules", "keep"),
+    [
+        ([], "last"),
+        ([{"name": "conflicting_duplicate", "severity": "info"}], "last"),
+        (
+            [
+                {
+                    "name": "conflicting_duplicate",
+                    "severity": "info",
+                    "enabled": False,
+                    "params": {"keep": "first"},
+                }
+            ],
+            "first",
+        ),
+    ],
+    ids=["no_rule", "no_keep", "rule_off"],
+)
+def test_conflict_keep_applies_whether_the_rule_is_on_or_not(
+    rules: list[dict[str, Any]], keep: str
+) -> None:
+    assert load(changed(minimal_document(), "rules", rules)).conflict_keep() == keep

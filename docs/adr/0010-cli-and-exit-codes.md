@@ -89,3 +89,14 @@ above.
   `python -m` entry that regenerated the schema. Not taken: `pydantic-settings` (two variables
   need no dependency) and a `--source` override for `fetch` (neither the API nor the tests need
   it; a configuration can name another URL).
+- 2026-11-22: the shared steps came with the HTTP API (#27), as the `service` module rather
+  than a `services` package ([0014](0014-http-api.md)); the CLI calls it for `report`.
+- 2026-11-22 (#34): bad source data (a corrupt ZIP, a CSV that cannot be parsed or decoded or has
+  no row of the configured selection, a series row that does not make valid metadata) and an HTTP
+  answer that is not temporary end with 7; only a connection error, a timeout, a 5xx, 408 or 429
+  is retried before 6. Staged data built with an older configuration ends with 5, and a `--port`
+  outside 1 to 65535 or one that cannot be bound with 2.
+  `MissingInputError` names the step to run, and each adapter words the hint its own way.
+  `test_report_before_transform_gives_a_one_line_error` is now
+  `test_a_missing_input_gives_a_one_line_error_naming_the_step`
+  ([0017](0017-bad-input-failures-and-writes.md)).

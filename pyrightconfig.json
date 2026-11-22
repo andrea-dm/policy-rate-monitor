@@ -19,7 +19,7 @@
   "reportImplicitStringConcatenation": "none",
   "reportCallInDefaultInitializer": "none",
 
-  "include": ["src", "tests", "housekeeping", ".github/utils"],
+  "include": ["src", "tests", "diagnostics", "housekeeping", ".github/utils"],
   "exclude": ["**/.*", "**/__pycache__", "**/node_modules", "notebooks", "tmp"],
   "executionEnvironments": [
     {
@@ -33,6 +33,16 @@
       "reportUninitializedInstanceVariable": "none",
       "reportMissingSuperCall": "none",
       "reportUnnecessaryComparison": "none"
+    },
+    {
+      "root": "examples",
+      "extraPaths": ["./src"],
+      "reportMissingParameterType": "none",
+      "reportUnknownParameterType": "none",
+      "reportUnknownMemberType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportUnknownVariableType": "none",
+      "reportMissingTypeStubs": "none"
     },
     {
       "root": "housekeeping",

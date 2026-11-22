@@ -1,0 +1,194 @@
+{#
+  The HTML report: the same content as report.md, plus the chart. Written to the HTML
+  Living Standard and to WCAG 2.2 level AA; the choices are in decision 0015.
+  Autoescaping is on: every value from the data is escaped, except the Plotly chart.
+#}
+{# A status, a flag or a severity gets an emoji beside its name, never instead of it. The
+   emoji is hidden from screen readers, which would otherwise read its name aloud. #}
+{% macro with_icon(value) %}
+{% if value in icons %}<span aria-hidden="true">{{ icons[value] }}</span> {% endif %}{{ value }}
+{%- endmacro %}
+{# The method lines mark code with backticks, as in Markdown. #}
+{% macro with_code(text) %}
+{% for part in text.split("`") %}{% if loop.index is even %}<code>{{ part }}</code>{% else %}{{ part }}{% endif %}{% endfor %}
+{% endmacro %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<style>
+  :root { color-scheme: light; }
+  body {
+    margin: 0 auto;
+    max-width: 72rem;
+    padding: 1rem 1.5rem 3rem;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    color: #1f2328;
+    background: #ffffff;
+  }
+  h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.3rem; margin-top: 2rem; border-bottom: 1px solid #848d97; }
+  .table-scroll { overflow-x: auto; }
+  .table-scroll:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
+  table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
+  caption { text-align: left; font-weight: 600; padding-bottom: 0.25rem; }
+  th, td { border: 1px solid #848d97; padding: 0.3rem 0.6rem; text-align: left; vertical-align: top; }
+  thead th { background: #f6f8fa; }
+  tbody th { font-weight: normal; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f6f8fa; padding: 0.1rem 0.3rem; border-radius: 4px; overflow-wrap: anywhere; }
+  figure { margin: 1rem 0; }
+  figure img { max-width: 100%; height: auto; }
+  figcaption { color: #59636e; font-size: 0.9rem; }
+  dt { font-weight: 600; }
+  dd { margin: 0 0 0.5rem 1.5rem; }
+</style>
+</head>
+<body>
+<header>
+<h1>{{ title }}</h1>
+<p>Generated on <time datetime="{{ generated_iso }}">{{ generated_date }} at {{ generated_time }} UTC</time>.</p>
+</header>
+
+<main>
+<section aria-labelledby="summary">
+<h2 id="summary">Summary</h2>
+
+<div class="table-scroll" role="region" aria-labelledby="summary-caption" tabindex="0">
+<table>
+<caption id="summary-caption">The latest rate of each requested country or area, and its change since the prior rate</caption>
+<thead>
+<tr>
+<th scope="col">Country or area</th>
+<th scope="col">Code</th>
+<th scope="col">Latest date</th>
+<th scope="col" class="num">Latest (%)</th>
+<th scope="col">Prior date</th>
+<th scope="col" class="num">Prior (%)</th>
+<th scope="col" class="num">Change (bp)</th>
+<th scope="col">Status</th>
+<th scope="col">Flags</th>
+</tr>
+</thead>
+<tbody>
+{% for name, code, latest_date, latest, prior_date, prior, change, status, flags in summary_rows %}
+<tr>
+{# A code the data does not have has no name: its code names the row. #}
+<th scope="row">{{ code if name == "-" else name }}</th>
+<td>{{ code }}</td>
+<td>{{ latest_date }}</td>
+<td class="num">{{ latest }}</td>
+<td>{{ prior_date }}</td>
+<td class="num">{{ prior }}</td>
+<td class="num">{{ change }}</td>
+<td>{{ with_icon(status) }}</td>
+<td>{% for flag in flags.split(", ") %}{{ with_icon(flag) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<figure>
+{% if chart_html is none %}
+<img src="data:image/png;base64,{{ chart_png }}" alt="{{ title }}">
+{% else %}
+{{ chart_html | safe }}
+{% endif %}
+<figcaption>{{ chart_alt }} The latest and prior rate of each country or area are in the table above.</figcaption>
+</figure>
+</section>
+
+<section aria-labelledby="about">
+<h2 id="about">About the data</h2>
+
+<p>{{ description }}</p>
+
+<p>{{ attribution }}.</p>
+
+{% if release is none %}
+<p>No record of the source file's retrieval was found.</p>
+{% else %}
+<ul>
+<li>Downloaded from: {{ release.location }}</li>
+<li>Retrieved at: {{ release.retrieved_at }}</li>
+{% if release.version_id is not none %}
+<li>Version: {{ release.version_id }}</li>
+{% endif %}
+{% if release.checksum is not none %}
+<li>SHA-256 of the file: <code>{{ release.checksum }}</code></li>
+{% endif %}
+</ul>
+{% endif %}
+
+<p>The staged data holds {{ series_count }} series.</p>
+</section>
+
+<section aria-labelledby="method">
+<h2 id="method">Method and assumptions</h2>
+
+<ul>
+{% for line in method %}
+<li>{{ with_code(line) }}</li>
+{% endfor %}
+</ul>
+
+<h3 id="status-legend">Status legend</h3>
+
+<dl>
+{% for status, text in statuses %}
+<dt>{{ with_icon(status) }}</dt>
+<dd>{{ text }}</dd>
+{% endfor %}
+</dl>
+</section>
+
+<section aria-labelledby="quality">
+<h2 id="quality">Data quality</h2>
+
+{% if issue_rows %}
+<div class="table-scroll" role="region" aria-labelledby="quality-caption" tabindex="0">
+<table>
+<caption id="quality-caption">The findings of the data-quality checks</caption>
+<thead>
+<tr>
+<th scope="col">Rule</th>
+<th scope="col">Severity</th>
+<th scope="col">Series</th>
+<th scope="col" class="num">Count</th>
+<th scope="col">Detail</th>
+</tr>
+</thead>
+<tbody>
+{% for rule, severity, series, count, detail in issue_rows %}
+<tr>
+<td>{{ rule }}</td>
+<td>{{ with_icon(severity) }}</td>
+<td>{{ series }}</td>
+<td class="num">{{ count }}</td>
+<td>{{ detail }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<p><span aria-hidden="true">{{ icons["ok"] }}</span> No findings.</p>
+{% endif %}
+</section>
+
+<section aria-labelledby="limitations">
+<h2 id="limitations">Limitations</h2>
+
+<ul>
+{% for line in limitations %}
+<li>{{ line }}</li>
+{% endfor %}
+</ul>
+</section>
+</main>
+</body>
+</html>

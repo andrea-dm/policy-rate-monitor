@@ -30,7 +30,7 @@ Research on 2026-11-17 confirmed, with live calls:
   being validated: data that has not been validated cannot be its own reference.
 - **No cache of the reference.** When the BIS SDMX API cannot be reached, the SDMX rules report
   "not evaluated" as an explicit finding, never a pass. Requested codes then get the core behaviour:
-  aliases, the `UNKNOWN_AREA` status, and a warning listing the codes the data has, with no
+  aliases, the `UNKNOWN_REF_AREA` status, and a warning listing the codes the data has, with no
   suggestions.
 - **A known limitation, stated.** SDMX validation depends on the BIS SDMX API being reachable at
   run time; a run without it is not SDMX-validated, and says so in the README and the report.
@@ -60,7 +60,7 @@ hidden risk, and stating the drawback is better than hiding it.
 - One more external service, with its own failure modes: timeouts and outages give "not
   evaluated" findings, not errors.
 - `pysdmx` comes as an optional extra, like the other ends of the pipeline.
-- The core already handles unknown codes safely (status `UNKNOWN_AREA`, and a warning that lists
+- The core already handles unknown codes safely (status `UNKNOWN_REF_AREA`, and a warning that lists
   the available codes), so the tool stays correct without this extension.
 
 ## Evidence

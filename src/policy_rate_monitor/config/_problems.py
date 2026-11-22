@@ -14,8 +14,8 @@ Examples:
     ... except ValidationError as error:
     ...     print(error.errors()[0]["loc"], error.errors()[0]["msg"])
     ('Q1',) 'Q1' maps to itself
-    >>> did_you_mean("AREAS", ["AREA", "FRQ"])
-    "; did you mean 'AREA'?"
+    >>> did_you_mean("GEOS", ["GEO", "FRQ"])
+    "; did you mean 'GEO'?"
 """
 
 from __future__ import annotations
@@ -125,7 +125,7 @@ def closest(name: str, candidates: Iterable[str]) -> str | None:
         ``difflib`` similarity of at least 0.6.
     """
     choices = list(candidates)
-    # Ids are case-sensitive, so "area" matches no declared "AREA"; it is still the
+    # Ids are case-sensitive, so "geo" matches no declared "GEO"; it is still the
     # likeliest meaning, which difflib's case-sensitive ratio would miss.
     folded = name.casefold()
     for choice in choices:
@@ -216,11 +216,13 @@ SELECTION_NOT_SELECTABLE: Final = Template(
 )
 SELECTION_REF_AREA: Final = Template(
     "selection_ref_area",
-    "'{key}' is the reference-area dimension: areas are chosen per request, not here",
+    "'{key}' is the reference-area dimension: its codes are chosen per request, "
+    "not here",
 )
 SELECTION_MISSING: Final = Template(
     "selection_missing",
-    "dimension '{id}' has no selected code, so one area could have several series",
+    "dimension '{id}' has no selected code, so one country or area could have "
+    "several series",
 )
 NOT_A_DIMENSION: Final = Template(
     "not_a_dimension", "'{id}' is not a declared dimension{hint}"
@@ -257,6 +259,13 @@ OUTPUT_FIELD_UNBOUND: Final = Template(
     "output_field_unbound",
     "'{field}' would always be empty: structure.series_metadata.{field} is null",
 )
+RULE_PARAM_INVALID: Final = Template(
+    "rule_param_invalid",
+    "rule '{name}' needs params.{param} to be {expected}, not {value}",
+)
+RULE_EXPECTED_UNKNOWN: Final = Template(
+    "rule_expected_unknown", "'{id}' is not a column of the configuration{hint}"
+)
 
 TEMPLATES: Final = (
     ALIAS_NOT_UPPER_CASE,
@@ -289,6 +298,8 @@ TEMPLATES: Final = (
     OPTIONAL_UNDECLARED,
     OPTIONAL_IS_NEEDED,
     OUTPUT_FIELD_UNBOUND,
+    RULE_PARAM_INVALID,
+    RULE_EXPECTED_UNKNOWN,
 )
 """Every template, so the parser can tell this package's errors from pydantic's."""
 
