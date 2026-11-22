@@ -33,7 +33,7 @@ Each term has one meaning throughout the code, the outputs and these pages.
 | **Parquet** | A compact file format for tables that keeps each column's type; the format of the raw and staged layers. |
 | **Arrow** | The in-memory table format behind parquet; the provider returns the observations as an Arrow table, with exact decimal rates. |
 | **Raw layer** | The source as it was loaded, with nothing selected or cleaned (`data/raw/`). |
-| **Staged layer** | The canonical data built from the raw layer: observations, series metadata and findings (`data/staged/`). |
+| **Staged layer** | The canonical data built from the raw layer: observations, series metadata, findings and the release they were built from (`data/staged/`). |
 | **Canonical data** | The data in the one form every provider returns, whatever its source: the observations table in the schema built from the configuration, and the domain models. |
 | **Provider** | An object that prepares the data (`fetch`, `transform`) and serves the canonical data (`DataProvider`). |
 | **Configuration** | Our description of how to process a dataset: source, structure, rules, settings (`configs/bis_cbpol.json`). |

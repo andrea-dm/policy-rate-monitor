@@ -109,45 +109,66 @@ flowchart LR
     transform["transform"]
     report["report"]
     raw[("data/raw/<br/>ZIP, release record,<br/>CSV as loaded")]
-    staged[("data/staged/<br/>observations, series,<br/>data quality")]
+    staged[("data/staged/<br/>observations, series,<br/>data quality, release")]
     out[("out/<br/>summary.csv, summary.json,<br/>policy_rates.png, report.md, report.html")]
 
     bis --> fetch --> raw --> transform --> staged --> report --> out
 ```
 
 The modules are layered. Here an arrow means "is imported by", not "runs before": the `report`
-module only writes the output files from the figures it is given, and the `report` command in
-`cli` is what reads the staged data, through the provider, and passes it on. tach checks that no
-import goes against the arrows:
+module only writes the output files from the figures it is given. `service` is what reads the
+staged data, through the provider, computes the snapshots and draws the report, for both `cli` and
+`web`, so the command line and the HTTP API give the same numbers. tach checks that no import goes
+against the arrows:
 
 ```mermaid
 flowchart BT
     core["core<br/>domain models, typed errors"]
-    config["config<br/>configuration models"]
+    config["config<br/>configuration models, ConfigSource"]
     fetch["fetch"]
     transform["transform"]
-    providers["providers<br/>DataProvider, schema, in-memory fake"]
+    providers["providers<br/>DataProvider, schema, in-memory provider"]
     bulk["bulk<br/>BulkFileProvider"]
     analytics["analytics<br/>fixed-point arrays, searches"]
     snapshot["snapshot"]
     report["report"]
+    service["service<br/>the steps both adapters share"]
+    chart["chart<br/>PNG, Plotly figure (interactive extra), shared style"]
+    web["web<br/>HTTP API (web extra)"]
+    settings["settings<br/>where the options come from"]
     cli["cli"]
 
     core --> config
     config --> fetch
     config --> providers
+    config --> analytics
     fetch --> transform
     transform --> bulk
     providers --> bulk
-    config --> analytics
     analytics --> snapshot
     config --> report
+    core --> chart
+    providers --> service
+    snapshot --> service
+    report --> service
+    chart --> report
+    chart --> service
+    chart --> web
+    service --> web
+    providers --> web
+    service -.-> cli
     bulk --> cli
-    snapshot --> cli
-    report --> cli
+    web -.-> cli
+    config --> settings
+    settings --> cli
 ```
 
-The CLI reads data only through a `DataProvider`: `fetch` and `transform` prepare it, and five
+The dotted arrows are lazy imports: `cli` imports `web` only inside `serve`, and `service` only
+inside `report`, so `--version`, `fetch` and `transform` load neither matplotlib nor Jinja. The
+full list of allowed imports is in `tach.toml`; the modules are described in
+[docs/architecture.md](docs/architecture.md).
+
+`service` reads data only through a `DataProvider`: `fetch` and `transform` prepare it, and five
 read-only queries serve the series, their metadata, the observations, the data-quality findings
 and the source release. `BulkFileProvider` is the one over the BIS bulk download; another source
 (a query engine, an SDMX API) would be another provider, with no change to the snapshot or the
@@ -186,7 +207,7 @@ uv sync --all-groups --all-extras
 | Group | Content |
 |---|---|
 | `lint` | ruff, pyright, deptry, tach and the pandas and pyarrow type stubs |
-| `test` | pytest, pytest-mock, pytest-cov, hypothesis |
+| `test` | pytest, pytest-mock, pytest-cov, hypothesis, and httpx2 for FastAPI's test client |
 | `dev` | `lint` and `test` together; plain `uv sync` installs it by default |
 | `docs` | MkDocs and its plugins, for `mkdocs serve` and `mkdocs build` |
 | `jupyter` | JupyterLab and a kernel, for the example notebooks in `examples/` |
@@ -232,21 +253,21 @@ curl 'http://127.0.0.1:8000/summary?countries=US,EA'
 | Command | Reads | Writes |
 |---|---|---|
 | `fetch` | the BIS bulk-download page | `data/raw/WS_CBPOL_csv_flat.zip` and its release record (`.json`) |
-| `transform` | the cached ZIP | `data/raw/WS_CBPOL_csv_flat.parquet` (the file as loaded), `data/staged/observations.parquet`, `series.json`, `data_quality.json` |
+| `transform` | the cached ZIP | `data/raw/WS_CBPOL_csv_flat.parquet` (the file as loaded), `data/staged/observations.parquet`, `series.json`, `data_quality.json`, and `release.json` (the release staged) last |
 | `report` | the staged data | `out/summary.csv`, `out/summary.json`, `out/policy_rates.png`, `out/report.md`, `out/report.html` |
 
 Options, after the command:
 
 | Option | Commands | Default |
 |---|---|---|
-| `--config PATH` | all | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` |
+| `--config PATH` | all but `config schema` | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` |
 | `--data-dir PATH` | `fetch`, `transform`, `report`, `serve` | `$BIS_PRATES_DATA_DIR`, else `data` (`dataset.data_dir` in the configuration) |
 | `--debug` | all | off; shows the full traceback of an error |
-| `--countries "US,EA"` | `report` | required; codes are matched without regard to case and spaces, de-duplicated, and written as typed next to the code used |
+| `--countries "US,EA"` | `report` | required; letters, digits and `_ @ $ -` only; codes are matched without regard to case and spaces, de-duplicated, and written as typed next to the code used |
 | `--start YYYY-MM-DD` | `report` | the whole history; first date of the chart |
 | `--out DIR` | `report`, `serve` | `out`; for `serve`, where the `report` jobs write |
 | `--host ADDRESS` | `serve` | `127.0.0.1` |
-| `--port N` | `serve` | `8000` |
+| `--port N` | `serve` | `8000`; from 1 to 65535 |
 
 Exit codes:
 
@@ -254,12 +275,12 @@ Exit codes:
 |---|---|---|
 | 0 | success | - |
 | 1 | no requested country or area has a complete result (status `ok`); the outputs are still written | check the codes and the statuses in the summary |
-| 2 | invalid arguments, or `serve` without the `web` extra | fix the command line, or install the extra |
+| 2 | invalid arguments (a code with other characters, a port outside 1 to 65535), a port `serve` cannot listen on, or `serve` without the `web` extra | fix the command line, or install the extra |
 | 3 | an unexpected error, i.e. a bug; the traceback is logged | report it |
 | 4 | invalid configuration | fix the configuration file |
-| 5 | a step's input is missing | run the previous step (e.g. `transform` before `report`) |
-| 6 | source unavailable | retry later |
-| 7 | unexpected source format | check the BIS file; the configuration may need updating |
+| 5 | a step's input is missing, the staged data was built with another configuration, or a `transform` kept changing it while it was read | run the step the message names (e.g. `bis-prates transform`), or try again once the transform ends |
+| 6 | source unavailable: no connection, a timeout, or a temporary HTTP error (5xx, 408, 429), after the retries | retry later |
+| 7 | unexpected source format: a corrupt ZIP, a CSV that cannot be read, an invalid series, or an HTTP answer such as 404 | check the BIS file and its address; the configuration may need updating |
 | 8 | a file cannot be read or written | check the data and output folders |
 
 ### Using the package in a notebook
@@ -363,7 +384,7 @@ uv run tach check && \
 uv run ruff check && \
 uv run ruff format --check && \
 uv run deptry src/ tests/ && \
-uv run pyright src/ tests/ && \
+uv run pyright src/ tests/ diagnostics/ && \
 uv run pytest && \
 uv run mkdocs build --strict
 ```
@@ -397,13 +418,15 @@ OFFLINE=true uv run mkdocs build --strict   # the same site, into site/
 | `series_key` | string | the dimension codes joined with `.`, e.g. `D.US` |
 | `freq`, `ref_area` | string | the dimension codes (the code part of `US: United States`) |
 | `date` | date | the observation date |
-| `value` | decimal(15, 6) | the rate, exact, with the unit multiplier applied (value × 10^UNIT_MULT); empty when it is not a number |
+| `value` | decimal(15, 6) | the rate, exact, with the unit multiplier applied (value × 10^UNIT_MULT); empty when it is missing, not a plain number, or its `UNIT_MULT` is not a whole number |
 | `obs_status` | string | the BIS observation status code |
-| `is_valid` | bool | false for a missing or non-numeric value or the status `M` |
+| `is_valid` | bool | false for an empty value or the status `M` |
 
 `data/staged/series.json` holds one record per series: key, reference-area code and name, frequency, title,
 unit, decimals and the other series attributes (for example the compilation note and the
-publication source). `out/summary.csv` carries the metadata fields chosen in the configuration;
+publication source). `data/staged/release.json` is the release the staged data was built from
+(address, retrieval time, SHA-256), which the outputs report; it is written last.
+`out/summary.csv` carries the metadata fields chosen in the configuration;
 `out/summary.json` carries the full series record of each country or area and the source release.
 
 Each step validates its input: the configuration when it is loaded, the required columns when the
@@ -416,8 +439,10 @@ CSV is read, and the data-quality rules listed in the configuration when the dat
 
 - Only daily series (`FREQ = D`) are used. Each series keeps its own latest date: series are not
   forced to a common date.
-- An observation is valid when its value is a number and its status is not `M` (missing). Missing
-  values are kept in the data, marked invalid, and never filled in.
+- An observation is valid when its value is a plain number (ASCII digits, with an optional sign,
+  decimal point and exponent) that the stored type holds exactly, its `UNIT_MULT` is a whole
+  number, and its status is not `M` (missing). Missing values are kept in the data, marked
+  invalid, and never filled in; no value is ever rounded on the way in.
 - The prior rate is the most recent valid observation on or before the same calendar date 12
   months before the latest date (29 February → 28 February), so weekends, holidays and gaps fall
   back to the last published rate.
@@ -494,8 +519,9 @@ under a different name.
 - Some data-quality rules named in the configuration (more decimals than declared, plausible
   ranges, attributes constant within a series) are not implemented yet; `transform` logs them.
 - The chart is drawn from floating-point values; the tables and summary files carry exact values.
-- The chart has no full text alternative yet, and its colours are not chosen for colour-blind
-  readers; both are planned (#29).
+- The chart tells at most 24 lines apart: from the 25th, the pairs of colour and dash repeat
+  ([decision 0016](docs/adr/0016-accessible-charts.md)); the names at the line ends and the
+  summary table still tell them apart.
 - Planned extensions: a web front end over the HTTP API, and the validation of reference-area codes against
   the BIS SDMX metadata. The fast analytics for interactive use are in place (`analytics`, with
   Numba as the optional `fast` extra). See [docs/milestones.md](docs/milestones.md).
@@ -514,7 +540,9 @@ configs/
 src/policy_rate_monitor/
 ├── core/                   # Foundation layer
 │   ├── errors.py           # Typed errors, one per kind of failure
-│   └── models.py           # Domain models: SeriesMetadata, DataSnapshot, DataQualityIssue, SourceRelease
+│   ├── files.py            # write_files: temporary files, then renamed into place
+│   └── models.py           # Domain models: SeriesMetadata, DataSnapshot, DataQualityIssue, SourceRelease,
+│                           # TransformSummary
 ├── config/                 # Configuration contracts (depends only on core)
 │   ├── models.py           # The configuration of one dataset, frozen and validated
 │   ├── parsing.py          # The one parser every configuration source calls
@@ -587,20 +615,20 @@ What the tests cover:
 
 | File | Behaviour |
 |---|---|
-| `tests/test_transform.py` | missing values kept and marked invalid; exact and conflicting duplicates; the `FREQ = D` selection; the unit multiplier applied exactly; unparseable dates; the series metadata kept; missing columns and inputs named |
+| `tests/test_transform.py` | missing values kept and marked invalid; exact and conflicting duplicates, with `keep` applied when the rule is off; the `FREQ = D` selection; the unit multiplier applied exactly; only a plain ASCII number that converts exactly is a value; a bad `UNIT_MULT` or `DECIMALS` cell; one finding per non-numeric value; the `unexpected_column` and `unexpected_value` findings; unparseable dates; the series metadata kept; a corrupt ZIP, a malformed CSV, a CSV with no daily row and an invalid series row as an unexpected format; a date in digits of another script; missing columns and inputs named; the staged release written last; a failed write leaving the previous staged files |
 | `tests/test_analytics.py` | the search against the plain `bisect` method at every date of a fixture; the NumPy and plain-loop versions of the searches agree, with and without Numba; the target date 12 months back; the change history and the rate moves against exact values; the arrays are read-only |
 | `tests/test_snapshot.py` | the 12-month change exactly in basis points; a target date on a weekend; 29 February; negative rates; invalid observations skipped; a different latest date per country or area; unknown code, insufficient history and no valid data; the `EA` alias; messy requested codes; the stale flags |
-| `tests/test_fetch.py` | the cache; the fallback URL; a download that is not a ZIP or holds two CSV files; the network down with and without a cached copy |
-| `tests/test_report.py` | the five files written from hand-made inputs, with the expected CSV and JSON values; the PNG in the same line styles as the Plotly chart, with the line ends named, "No data to plot" when empty, and its text alternative in the PNG, `report.md` and `report.html`; `report.md` the same as before the templates; `report.html` with the same sections, its data escaped, nothing loaded from the network, and the PNG when Plotly is missing |
-| `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; `report` before `transform` gives a one-line error; `config validate` and `config schema`; a bad configuration says where its path came from; `serve` without the `web` extra, with a bad configuration, and with its options; the base commands load neither FastAPI nor Plotly |
-| `tests/test_service.py` | the steps the CLI and the API share: the codes with their aliases, the valid observations of one series exactly, the summary; summaries computed at once on several threads agree |
-| `tests/web/` | `/summary` against the `summary.json` of `bis-prates report` for every status; exact rates in `/timeseries`; the chart's lines; every error with the same body (`404`, `405`, `409`, `422`, a bug as `500` without its detail); the jobs from queued to succeeded or failed, one at a time, new data after a transform, a report job writing the five files |
-| `tests/chart/test_interactive.py` | the Plotly chart has the same lines and rows as the PNG, in request order, from the start date; the n-th line in the n-th style; the line ends named; "No data to plot" when empty; the text alternative; the hover with the series' decimals |
+| `tests/test_fetch.py` | the cache; the fallback URL, also when the discovery page fails; a download that is not a ZIP, is corrupt or encrypted, or holds two CSV files; the network down with and without a cached copy; the retries and their pauses; a 404 failing at once and a 503 retried; up to five redirects; an unreadable release record |
+| `tests/test_report.py` | the five files written from hand-made inputs, with the expected CSV and JSON values; a failed report leaving the previous files; the rates of the summary table padded, never rounded; the conflicting row kept, named even with the rule off; the PNG naming only the lines it draws; the PNG in the same line styles as the Plotly chart, with the line ends named, "No data to plot" when empty, and its text alternative in the PNG, `report.md` and `report.html`; `report.md` the same as before the templates; `report.html` with the same sections, its data escaped, nothing loaded from the network, and the PNG when Plotly is missing |
+| `tests/test_cli.py` | the help lists the commands and `--version`; errors map to their exit codes; a missing input gives a one-line error naming the step to run; what `fetch` prints; an output folder that is a file exits 8; a code outside the code pattern refused; `config validate` and `config schema`; a bad configuration says where its path came from; `serve` without the `web` extra, with a bad configuration, with its options, with a port outside 1 to 65535 and on a busy port; the base commands load neither the web extra nor the report steps |
+| `tests/test_service.py` | the steps the CLI and the API share: the codes with their aliases, the valid observations of one series exactly, the summary; summaries computed at once on several threads agree; the staged data held in tuples |
+| `tests/web/` | `/summary` against the `summary.json` of `bis-prates report` for every status; exact rates in `/timeseries`; the chart's lines; every error with the same body (`404`, `405`, `409`, `422`, a bug as `500` without its detail); a code outside the code pattern as `422`; `serve` on a busy port; the jobs from queued to succeeded or failed, one at a time, failed whatever ends them, at most 100 finished jobs kept, new data after a transform, a report job writing the five files |
+| `tests/chart/test_interactive.py` | the Plotly chart has the same lines and rows as the PNG, in request order, from the start date; the n-th line in the n-th style; the line ends named; "No data to plot" when empty, and no line named when the start is after all the data; the text alternative; the hover with the series' decimals |
 | `tests/chart/test_style.py` | every line colour at 3:1 and every label colour at 4.5:1 on white; the colours apart under simulated protanopia, deuteranopia and tritanopia; the first 24 lines all different; the labels kept apart in order; the text alternative |
-| `tests/test_vocabulary.py` | no name, configuration key or sentence uses the bare word for a country or economic area |
+| `tests/test_vocabulary.py` | no name, configuration key or sentence uses the bare word for a country or economic area, in the code, the docs, the decision records and the CHANGELOG |
 | `tests/test_settings.py` | the order of the layers (flag, environment variable, configuration or default) for the configuration file and the data directory; an empty variable counts as unset |
-| `tests/providers/` | the provider contract (canonical schema, one row per series and date, sorted dates, validity, metadata for every series), run on both providers; the row checks fail on tables built to break them; a provider missing a method cannot be created; the schema follows the configuration |
-| `tests/config/`, `tests/core/` | the configuration checks and the domain models |
+| `tests/providers/` | the provider contract (canonical schema, one row per series and date, sorted dates, validity, metadata for every series), run on both providers; the row checks fail on tables built to break them; a provider missing a method cannot be created; the schema follows the configuration; the bulk provider's release is the one staged, staged data of another configuration names `transform` as the step to run, `series.json` is read once per change, and `transform` returns the counts of the run |
+| `tests/config/`, `tests/core/` | the configuration checks, the rule parameters checked even with the rule off, the domain models, and `write_files` replacing nothing when a write fails |
 
 Docstring examples under `src/` run as part of the suite. The five headline figures were also
 checked against an independent calculation on the raw CSV.

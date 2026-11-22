@@ -53,3 +53,4 @@ nav:
       - adr/0014-http-api.md
       - adr/0015-report-templates-and-html.md
       - adr/0016-accessible-charts.md
+      - adr/0017-bad-input-failures-and-writes.md

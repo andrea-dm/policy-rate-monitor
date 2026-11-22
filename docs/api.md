@@ -24,13 +24,15 @@ bis-prates serve --host 0.0.0.0 --port 9000 --out results
 | Option | Default | Meaning |
 |---|---|---|
 | `--host ADDRESS` | `127.0.0.1` | the address to listen on |
-| `--port N` | `8000` | the port to listen on |
+| `--port N` | `8000` | the port to listen on, from 1 to 65535 |
 | `--out DIR` | `out` | where a `report` job writes its files |
 | `--config PATH` | `$BIS_PRATES_CONFIG`, else `configs/bis_cbpol.json` | the dataset configuration |
 | `--data-dir PATH` | `$BIS_PRATES_DATA_DIR`, else `dataset.data_dir` in the configuration | where `raw/` and `staged/` are |
 
 The configuration and the data directory are found as for every command: the flag, then the
 environment variable, then the default ([CLI reference](cli.md#where-the-options-come-from)).
+If the address and port cannot be used (the port is already in use, say), `serve` prints a message
+naming them and ends with exit code 2.
 
 FastAPI's interactive page is at <http://127.0.0.1:8000/docs>: it lists every endpoint with its
 parameters, its responses and the [error body](#errors), and sends requests from the browser. The
@@ -59,8 +61,10 @@ bis-prates fetch && bis-prates transform
 
 Codes are matched as in the CLI: without regard to case and spaces, and aliases such as `EA` for
 `XM` are applied. A blank code (`country=`, or `countries=` with only commas and spaces) gets
-`422`. `start` is a date, `YYYY-MM-DD`; without it the whole history is used. Every failure has the
-[same body](#errors).
+`422`, and so does a code with other characters than letters, digits and `_ @ $ -`, the code
+pattern of the configuration, so no spreadsheet function, link or HTML can reach the outputs (a
+leading `-` or `@` is allowed, as in the configuration's codes). `start` is a date,
+`YYYY-MM-DD`; without it the whole history is used. Every failure has the [same body](#errors).
 
 ### `GET /ref-areas`
 
@@ -82,8 +86,9 @@ curl 'http://127.0.0.1:8000/summary?countries=US,EA'
 ```
 
 It returns the same document as `out/summary.json` (see [Data model](data-model.md)): `generated_at`,
-`source`, `dataset` and `snapshots`, where `generated_at` is the time of the request. A code the data does not have is not an error:
-its snapshot has the status `unknown_ref_area`.
+`source`, `dataset` and `snapshots`, where `generated_at` is the time of the request and `source`
+the release the staged data was built from (`null` when it is unknown). A code the data does not
+have is not an error: its snapshot has the status `unknown_ref_area`.
 
 ```json
 {
@@ -145,14 +150,14 @@ curl 'http://127.0.0.1:8000/chart?countries=US,EA&start=2015-01-01'
 ```
 
 It returns a [Plotly](https://plotly.com/javascript/) figure in JSON, with one step line per
-charted series, in the order requested: the same series and rows as `out/policy_rates.png`. A
+charted series that has a valid observation from `start` on, in the order requested: the same series and rows as `out/policy_rates.png`. A
 browser draws it with `Plotly.newPlot(div, figure.data, figure.layout)`.
 
 The n-th line has the same colour and dash as in the PNG, from the colour-blind palette of
 [decision 0016](adr/0016-accessible-charts.md). Each line is named at its right end by an
 annotation, the legend is below the plot, and the hover shows the date and the rate with the
 series' decimals. `layout.meta.description` holds the chart's text alternative, for the page that
-shows it. With nothing to chart, the figure has no lines and one annotation, "No data to plot".
+shows it; the legend and the text alternative name only the lines drawn. With nothing to chart, the figure has no lines and one annotation, "No data to plot".
 
 ```json
 {
@@ -240,7 +245,10 @@ The rules:
   while a job is queued or running gets `409` with the kind `job_running`, naming the job to wait
   for.
 - **Jobs are kept in memory.** They are lost when the service stops, and their ids with them. The
-  files they wrote stay.
+  files they wrote stay. Only the last 100 finished jobs are kept: an older id gets `404`
+  `not_found`. A queued or running job is always kept.
+- **A job always ends.** Whatever stops it, even an error that is not a Python `Exception`, the
+  job is marked `failed`, so the next `POST` is accepted.
 - **A transform refreshes the read endpoints.** The staged data is read once and kept in memory. A
   `transform` job replaces it once the new files are written, so the endpoints serve the new data
   without a restart. A read during the transform gets the previous data. On a new install there is
@@ -282,14 +290,14 @@ CLI's [exit codes](cli.md#exit-codes):
 
 | Kind | Status | When | CLI exit code |
 |---|---|---|---|
-| `missing_input` | 409 | nothing is staged yet: run the `transform` job | 5 |
+| `missing_input` | 409 | nothing is staged yet, or the staged data was built with another configuration: the message names the job to run | 5 |
 | `not_found` | 404 | no series for the code, no job with the id, or an unknown path | - |
-| `invalid_request` | 422 | a missing or malformed parameter or body, or a blank or empty code | 2 |
+| `invalid_request` | 422 | a missing or malformed parameter or body, a blank or empty code, or a code outside the code pattern | 2 |
 | `job_running` | 409 | a job is queued or running; wait for it | - |
 | `shutting_down` | 503 | the service is stopping and accepts no new job | - |
 | `http_error` | other | any other HTTP error, e.g. `405` with an `Allow` header | - |
 | `source_unavailable` | 503 | the BIS site cannot be reached and nothing is cached: try again later | 6 |
-| `unexpected_format` | 500 | the source file is not what the configuration describes | 7 |
+| `unexpected_format` | 500 | the source file is not what the configuration describes, or the BIS site answers with a status such as 404 | 7 |
 | `file_error` | 500 | a file cannot be read or written | 8 |
 | `config_error` | 500 | the configuration is invalid | 4 |
 | `internal_error` | 500 | a bug; the message is only the name of its type, and the traceback goes to the log | 3 |
@@ -310,13 +318,14 @@ A job that fails ends with the status `failed`, and its `error` holds the same b
   "result": null,
   "error": {
     "error": "missing_input",
-    "message": "data/staged/observations.parquet does not exist: run `bis-prates transform` first"
+    "message": "data/staged/observations.parquet does not exist: run POST /jobs/transform first"
   }
 }
 ```
 
 The `GET /jobs/{id}` answer itself is `200`: the failure is the job's, not the request's. A
-`missing_input` message names the CLI command; over HTTP, the same step is `POST /jobs/transform`.
+`missing_input` message ends with the job to run first, `POST /jobs/fetch` or
+`POST /jobs/transform`; the command line names the same step as `bis-prates transform`.
 
 ## Same numbers as the CLI
 

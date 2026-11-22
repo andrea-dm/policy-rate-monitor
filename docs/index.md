@@ -2,8 +2,8 @@
 
 `bis-prates` downloads the central bank policy rates published by the Bank for International
 Settlements (BIS), stages them as an exact, validated dataset, and reports for a list of countries
-or economic areas the latest policy rate, the rate 12 months earlier and the change in basis points, with a
-chart and a short report.
+or economic areas the latest policy rate, the rate 12 months earlier and the change in basis
+points, with a chart and a short report, from the command line or over an HTTP API.
 
 ## Quick start
 
@@ -98,6 +98,7 @@ chart and a short report.
 | See how the code is organised | [Architecture](architecture.md) |
 | Know what is stored, in which file, and what the BIS data looks like | [Data model](data-model.md) |
 | Run the commands, with every option and exit code | [CLI reference](cli.md) |
+| Call the same steps over HTTP: the endpoints, the jobs and the errors | [HTTP API](api.md) |
 | Change or write a dataset configuration | [Configuration](configuration.md) |
 | Use the package from Python or a notebook | [API reference](reference.md#use-from-python) |
 | Look up a term | [Glossary](glossary.md) |

@@ -54,3 +54,7 @@ on a rounding rule rather than on the data.
 - 2026-11-20: the figure of 6 areas is reproduced by `diagnostics/check_record_figures.py`.
 - 2026-11-20: the faster analytics are built, on integers scaled by 10^6
   ([0013](0013-fast-analytics-numpy-numba.md)).
+- 2026-11-22 (#34): a value is read only as a plain ASCII number that converts to a `Decimal`
+  exactly, with rounding trapped, so a value with more digits than `Decimal` keeps (28) is no longer
+  rounded on the way in, and text such as `1_5` is not a number. The summary table pads a rate to
+  its series' `DECIMALS` but never rounds it ([0017](0017-bad-input-failures-and-writes.md)).

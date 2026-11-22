@@ -71,3 +71,11 @@ with the CLI reading through it.
   `test_validity_is_set_and_valid_rows_have_a_value`, …), run by `tests/providers/test_bulk.py` and
   `tests/providers/test_memory.py`; `tests/providers/test_contract.py` checks that each check fails on
   a table that breaks it, and that a provider missing a method cannot be created.
+
+## Updates
+
+- 2026-11-22: the table is converted to pandas once by `service.load_staged`, for the CLI and the
+  HTTP API ([0014](0014-http-api.md)). Since #34, `transform()` returns the counts of the run
+  (`TransformSummary`), and `source_release()` reads the release that was staged
+  (`staged/release.json`), not the record next to the cached ZIP
+  ([0017](0017-bad-input-failures-and-writes.md)).

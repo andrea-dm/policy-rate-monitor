@@ -17,6 +17,7 @@ flowchart LR
         OBS[observations.parquet]
         SER[series.json]
         DQ[data_quality.json]
+        SREL[release.json<br>the release staged]
     end
     subgraph out["out/ (report)"]
         CSV[summary.csv]
@@ -26,7 +27,8 @@ flowchart LR
         HTML[report.html]
     end
     ZIP --> PQ --> OBS & SER & DQ
-    OBS & SER & DQ & REL --> CSV & JSON & PNG & MD & HTML
+    REL --> SREL
+    OBS & SER & DQ & SREL --> CSV & JSON & PNG & MD & HTML
 ```
 
 Tables are stored as parquet, a compact file format for tables that keeps each column's type. The
@@ -51,9 +53,18 @@ reads, through the provider ([decision 0012](adr/0012-elt-raw-and-staged-layers.
 | `series_key` | string | the dimension codes joined with `.`, e.g. `D.US` |
 | `freq`, `ref_area` | string | the dimension codes (the code part of `US: United States`) |
 | `date` | `date32` | the observation date |
-| `value` | `decimal128(15, 6)` | the rate in per cent, exact, with the unit multiplier applied; empty when it is missing or not a number |
+| `value` | `decimal128(15, 6)` | the rate in per cent, exact, with the unit multiplier applied; empty when it is missing, not a plain number, or its `UNIT_MULT` is not a whole number |
 | `obs_status` | string | the BIS observation status code, e.g. `A` (normal), `M` (missing) |
-| `is_valid` | bool | true when the value is a number and the status is not an invalid one (`M`) |
+| `is_valid` | bool | true when there is a value and the status is not an invalid one (`M`) |
+
+A value is read only as a plain ASCII number: an optional sign, digits, an optional decimal point
+and exponent, with ASCII spaces around it ignored (`3.75`, `-0.5`, `1e-2`). It must convert to a
+decimal exactly and fit the configured precision and scale; it is never rounded. Anything else
+(`1_5`, digits of another script, `Infinity`, a non-breaking space around it, a value with more
+digits than the type holds) leaves
+the row with no value, not valid, and is reported as a `non_numeric_value` finding
+([decision 0017](adr/0017-bad-input-failures-and-writes.md)). So is a row whose `UNIT_MULT` is
+blank or not a whole number: without the multiplier the value cannot be computed.
 
 The column names of the dimensions and attributes come from the configuration; `series_key`,
 `date`, `value` and `is_valid` are fixed. The schema is built from the configuration by
@@ -68,6 +79,17 @@ attribute as published, for example `COMPILATION` (how the series is compiled) a
 `data_quality.json`, one record per finding (`DataQualityIssue`): the `rule`, its `severity`, the
 `series_key` (or none for a finding about the whole file), the number of rows (`count`) and a
 `detail` saying what was done.
+
+`release.json`, the release the staged data was built from (`SourceRelease`): a copy of the record
+next to the ZIP, made only when its SHA-256 is that of the ZIP `transform` read. The outputs read
+the release from here, so a later `fetch` cannot change the release a report names. It is absent
+when no record matches; the release is then unknown, never wrong.
+
+`transform` writes every file of a run to a temporary name first and renames them into place only
+once all are written, `release.json` last, so a run that fails while writing leaves the previous
+staged files as they were; `report` writes its five files the same way. With no release to stage,
+the old `release.json` is removed first, so the previous files are then of unknown release. A
+reader in another process can still pair files of two runs while the renames run.
 
 ### Outputs
 
@@ -109,7 +131,7 @@ for snapshot in summary["snapshots"]:
 | The euro area is `XM`; `EA` does not exist in the file | `EA` is an alias of `XM` in the configuration |
 | Series cover days differently: some include weekends, others publish business days only | Takes the last valid rate on or before the target date, never an exact date |
 | Series end on different dates; ten euro-area members stopped when they joined the euro, Argentina in July 2025 | Evaluates each series at its own latest date, and flags a stale one |
-| Each daily series has one `UNIT_MULT` (0), `DECIMALS` (4) and unit (per cent per year) | Stores them once per series; `DECIMALS` is used only to format the report |
+| Each daily series has one `UNIT_MULT` (0), `DECIMALS` (4) and unit (per cent per year) | Stores them once per series. `DECIMALS` is used only for display: the rates of the report's summary table are padded to it, never rounded, and the interactive chart's hover shows the rate with that many decimals. A blank, non-whole or negative `DECIMALS` leaves the decimals unknown, with a warning in the log |
 | `ACTION`, `OBS_CONF`, `OBS_PRE_BREAK` and `UNIT_MEASURE` hold the same value on every row | Checks the four against the expected values (`unexpected_value`), so a change in a future file is noticed. `ACTION` is checked too, although it is not kept in the staged data |
 | The current file has no duplicate (series, date) | Duplicate handling is still built and tested on hand-made files |
 
@@ -119,8 +141,9 @@ What each of these means for a reader of the report is in the README, under
 ## Assumptions
 
 - Only daily series are used, and each series keeps its own latest date.
-- An observation is valid when its value is a number and its status is not `M`. Missing values are
-  kept, marked invalid, and never filled in.
+- An observation is valid when its value is a plain number that the stored type holds exactly, its
+  `UNIT_MULT` is a whole number, and its status is not `M`. Missing values are kept, marked
+  invalid, and never filled in.
 - The prior rate is the most recent valid observation on or before the same calendar date 12
   months before the latest date; a date that does not exist (29 February) becomes the last day of
   the month.

@@ -112,3 +112,11 @@ muted is not made for colour vision deficiencies.
   three simulations; 24 distinct lines; the label positions; the text alternative.
 - `tests/chart/test_interactive.py` and `tests/test_report.py`: both charts draw the n-th line with
   `line_style(n)`, label the line ends, say `NO_DATA` when empty, and carry the text alternative.
+
+## Updates
+
+- 2026-11-22 (#34): both charts and the text alternative now take their lines from
+  `chart.lines.chart_lines`, the charted series that have a valid row from the chart's start on,
+  and number the line styles in the order drawn: a series with no row to draw gets no line, no
+  name in the legend and no mention in the text alternative, and with no line at all the PNG has
+  no legend ([0017](0017-bad-input-failures-and-writes.md)).
