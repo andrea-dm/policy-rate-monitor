@@ -1,7 +1,8 @@
 """The configuration of one dataset, as frozen and validated pydantic models.
 
 ``DatasetConfig`` is the top-level model, with one section per concern: the dataset's
-identity, where its file comes from, its SDMX structure, how that structure is written
+identity, where its file comes from, the SDMX reference its data is checked against,
+its SDMX structure, how that structure is written
 in the file, the data-quality rules, the snapshot thresholds, the output fields and
 the reference-area aliases. Nothing here names a real dataset: every fact comes from
 the configuration document.
@@ -34,7 +35,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime
 from io import BytesIO, TextIOWrapper
 from pathlib import Path  # noqa: TC003  (pydantic resolves the annotation at runtime)
-from typing import Annotated, Final, Literal, Self, TypeVar
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Self, TypeVar, override
 
 from pydantic import (
     AfterValidator,
@@ -72,12 +73,17 @@ from policy_rate_monitor.config._problems import (
     PATH_TILDE,
     REF_AREA_NOT_CODED,
     RULE_EXPECTED_UNKNOWN,
+    RULE_NEEDS_REFERENCE,
     RULE_PARAM_INVALID,
     RULE_TWICE,
     SCALE_ABOVE_PRECISION,
     SELECTION_MISSING,
     SELECTION_NOT_SELECTABLE,
     SELECTION_REF_AREA,
+    SUGGESTION_CHAIN,
+    SUGGESTION_IS_ALIAS,
+    SUGGESTION_NOT_UPPER_CASE,
+    SUGGESTION_TO_ITSELF,
     UNKNOWN_ENCODING,
     UNMAPPED_CASE_CLASH,
     UNMAPPED_IS_DECLARED,
@@ -89,9 +95,14 @@ from policy_rate_monitor.config._problems import (
 )
 from policy_rate_monitor.core.models import DataQualitySeverity, ReadOnlyAttributes
 
+if TYPE_CHECKING:
+    from policy_rate_monitor.config._problems import Template
+
 __all__ = [
     "CANONICAL_COLUMNS",
     "CODE_PATTERN",
+    "SDMX_RULES",
+    "ArtefactRef",
     "ColumnsSection",
     "Concept",
     "DatasetConfig",
@@ -103,6 +114,7 @@ __all__ = [
     "MetadataField",
     "ObservationAttribute",
     "OutputSection",
+    "ReferenceSection",
     "Role",
     "RuleSpec",
     "SnapshotSection",
@@ -117,6 +129,10 @@ CANONICAL_COLUMNS: Final = ("series_key", "date", "value", "is_valid")
 
 CODE_PATTERN: Final = r"^[A-Za-z0-9_@$-]+$"
 """A valid code, in the configuration or a request: letters, digits and ``_@$-``."""
+
+SDMX_RULES: Final = ("ref_area_not_in_code_list", "dataflow_mismatch")
+"""The data-quality rules that check the data against the SDMX reference. Listing
+one, on or off, needs the ``reference`` section."""
 
 
 def requested_codes(texts: Iterable[str]) -> list[str]:
@@ -251,20 +267,36 @@ def _plain_dict(value: Mapping[str, str]) -> dict[str, str]:
     return dict(value)
 
 
-def _check_aliases(aliases: Mapping[str, str]) -> Mapping[str, str]:
+def _code_map_problems(
+    codes: Mapping[str, str], not_upper: Template, to_itself: Template, chain: Template
+) -> list[Problem]:
+    """Checks a map from requested code to code: upper-case keys, no loop, no chain."""
     problems: list[Problem] = []
-    for code, target in aliases.items():
+    for code, target in codes.items():
         if code != code.upper():
-            problems.append(
-                Problem(ALIAS_NOT_UPPER_CASE, (code,), code, {"code": code})
-            )
+            problems.append(Problem(not_upper, (code,), code, {"code": code}))
         elif code == target:
-            problems.append(Problem(ALIAS_TO_ITSELF, (code,), target, {"code": code}))
-        elif target in aliases:
+            problems.append(Problem(to_itself, (code,), target, {"code": code}))
+        elif target in codes:
             context = {"code": code, "target": target}
-            problems.append(Problem(ALIAS_CHAIN, (code,), target, context))
+            problems.append(Problem(chain, (code,), target, context))
+    return problems
+
+
+def _check_aliases(aliases: Mapping[str, str]) -> Mapping[str, str]:
+    problems = _code_map_problems(
+        aliases, ALIAS_NOT_UPPER_CASE, ALIAS_TO_ITSELF, ALIAS_CHAIN
+    )
     raise_problems("ref_area_aliases", problems)
     return aliases
+
+
+def _check_suggestions(suggestions: Mapping[str, str]) -> Mapping[str, str]:
+    problems = _code_map_problems(
+        suggestions, SUGGESTION_NOT_UPPER_CASE, SUGGESTION_TO_ITSELF, SUGGESTION_CHAIN
+    )
+    raise_problems("ref_area_suggestions", problems)
+    return suggestions
 
 
 LocalPath = Annotated[Path, BeforeValidator(_check_local_path)]
@@ -274,6 +306,12 @@ Selection = Annotated[Mapping[ConceptId, Code], AfterValidator(_read_only), _AsD
 RefAreaAliases = Annotated[
     Mapping[Code, Code],
     AfterValidator(_check_aliases),
+    AfterValidator(_read_only),
+    _AsDict,
+]
+RefAreaSuggestions = Annotated[
+    Mapping[Code, Code],
+    AfterValidator(_check_suggestions),
     AfterValidator(_read_only),
     _AsDict,
 ]
@@ -348,6 +386,44 @@ class SourceSection(_ConfigModel):
             )
             raise_problems(type(self).__name__, [problem])
         return self
+
+
+class ArtefactRef(_ConfigModel):
+    """An SDMX artefact, named by its maintenance agency, id and version.
+
+    Examples:
+        >>> ref = ArtefactRef.model_validate_json(
+        ...     '{"agency": "ORG", "id": "FLOW", "version": "1.0"}'
+        ... )
+        >>> str(ref)
+        'ORG:FLOW(1.0)'
+    """
+
+    agency: Text
+    """Id of the agency that maintains the artefact."""
+    id: Text
+    """Id of the artefact."""
+    version: Text
+    """Version of the artefact, e.g. '1.0'."""
+
+    @override
+    def __str__(self) -> str:
+        """Returns the short SDMX form, ``agency:id(version)``."""
+        return f"{self.agency}:{self.id}({self.version})"
+
+
+class ReferenceSection(_ConfigModel):
+    """Where the SDMX structural metadata that the data is checked against is read."""
+
+    api_url: HttpUrl
+    """Base address of the SDMX REST API that serves the structural metadata."""
+    dataflow: ArtefactRef
+    """The dataflow of the data. The structure it points to is the one checked
+    against."""
+    ref_area_code_list: ArtefactRef
+    """The code list of the reference-area codes."""
+    timeout_seconds: PositiveFloat
+    """Time allowed for each request, in seconds."""
 
 
 class Concept(_ConfigModel):
@@ -706,6 +782,9 @@ class DatasetConfig(_ConfigModel):
     """Identity and defaults."""
     source: SourceSection
     """Download settings: discovery page, file name, fallback URL, cache, attempts."""
+    reference: ReferenceSection | None = None
+    """The SDMX reference the data is checked against; needed by the SDMX rules.
+    Null or absent when no SDMX rule is listed."""
     structure: StructureSection
     """The source's concepts and their roles."""
     columns: ColumnsSection
@@ -720,6 +799,14 @@ class DatasetConfig(_ConfigModel):
     ref_area_aliases: RefAreaAliases
     """Requested code to reference-area code. Keys are upper case; no alias maps to
     itself or to another alias."""
+    # validate_default: the default too is checked and made read-only.
+    ref_area_suggestions: RefAreaSuggestions = Field(
+        default_factory=dict[str, str], validate_default=True
+    )
+    """Requested code that is not in the SDMX reference-area code list to the code
+    to suggest instead, e.g. a three-letter code to the two-letter one. Offered,
+    never applied. Keys are upper case and not aliases; no suggestion leads to
+    itself or to another suggestion."""
 
     def required_columns(self) -> tuple[str, ...]:
         """Returns the columns the file must have: declared and not optional.
@@ -768,20 +855,43 @@ class DatasetConfig(_ConfigModel):
             *self._optional_problems(),
             *self._output_problems(),
             *self._rule_problems(),
+            *self._suggestion_problems(),
         ]
         raise_problems(type(self).__name__, problems)
         return self
 
     def _rule_problems(self) -> list[Problem]:
-        """Checks the parameters the implemented rules read."""
+        """Checks the parameters the implemented rules read, and that the SDMX
+        rules have a reference."""
         problems: list[Problem] = []
         for index, rule in enumerate(self.rules):
+            if rule.name in SDMX_RULES and self.reference is None:
+                problems.append(
+                    Problem(
+                        RULE_NEEDS_REFERENCE,
+                        ("rules", index, "name"),
+                        rule.name,
+                        {"name": rule.name},
+                    )
+                )
             loc: Loc = ("rules", index, "params")
             if rule.name == "conflicting_duplicate":
                 problems += _keep_problems(rule, loc)
             if rule.name == "unexpected_value":
                 problems += _expected_problems(rule, loc, self.known_columns())
         return problems
+
+    def _suggestion_problems(self) -> list[Problem]:
+        return [
+            Problem(
+                SUGGESTION_IS_ALIAS,
+                ("ref_area_suggestions", code),
+                code,
+                {"code": code},
+            )
+            for code in self.ref_area_suggestions
+            if code in self.ref_area_aliases
+        ]
 
     def _unmapped_problems(self) -> list[Problem]:
         declared = {concept_id for _loc, concept_id, _role in self.structure.concepts()}

@@ -9,6 +9,10 @@ ELT in two layers, both under the data directory:
   series), ``staged/data_quality.json`` (the ``DataQualityIssue`` findings) and
   ``staged/release.json`` (the ``SourceRelease`` of the ZIP they were built from).
 
+The SDMX rules also check the data against the SDMX reference, asked once per run
+through a ``reference.ReferenceSource``; when it cannot answer, each of them reports
+"not evaluated" as a finding.
+
 Every column name, code and rule comes from the configuration. All the files of a run
 are written with ``core.files.write_files``, ``release.json`` last: each file is
 replaced whole, and a run that fails while writing leaves the files of the last run.
@@ -36,7 +40,12 @@ from pandas.errors import EmptyDataError, ParserError
 from pyarrow import decimal128
 from pydantic import TypeAdapter, ValidationError
 
-from policy_rate_monitor.core.errors import MissingInputError, UnexpectedFormatError
+from policy_rate_monitor.config.models import SDMX_RULES
+from policy_rate_monitor.core.errors import (
+    MissingInputError,
+    ReferenceUnavailableError,
+    UnexpectedFormatError,
+)
 from policy_rate_monitor.core.files import write_files
 from policy_rate_monitor.core.models import (
     DataQualityIssue,
@@ -46,15 +55,18 @@ from policy_rate_monitor.core.models import (
     TransformSummary,
 )
 from policy_rate_monitor.fetch import cached_zip, read_release, read_zip_csv
+from policy_rate_monitor.reference import NO_REFERENCE
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from policy_rate_monitor.config.models import (
+        ArtefactRef,
         ColumnsSection,
         DatasetConfig,
         RuleSpec,
     )
+    from policy_rate_monitor.reference import DataflowStructure, ReferenceSource
 
 __all__ = [
     "TransformSummary",
@@ -75,6 +87,7 @@ IMPLEMENTED_RULES = (
     "exact_duplicate",
     "conflicting_duplicate",
     "unexpected_value",
+    *SDMX_RULES,
 )
 """The data-quality rules that have code. A configured rule not listed here is logged
 and skipped."""
@@ -87,12 +100,17 @@ _NUMBER = re.compile(r"[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?")
 _WHOLE_NUMBER = re.compile(r"[+-]?[0-9]+")
 
 
-def transform(config: DatasetConfig, data_dir: Path) -> TransformSummary:
+def transform(
+    config: DatasetConfig, data_dir: Path, reference: ReferenceSource = NO_REFERENCE
+) -> TransformSummary:
     """Builds the raw and staged layers from the cached ZIP.
 
     Args:
         config: The dataset configuration.
         data_dir: The data directory holding ``raw/<file_name>``.
+        reference: Where the SDMX rules read the reference. It is asked only when
+            one of them is enabled, after the file is read and its selection has
+            rows. With the default, an enabled SDMX rule reports "not evaluated".
 
     Returns:
         Row, series and issue counts of the run.
@@ -132,6 +150,7 @@ def transform(config: DatasetConfig, data_dir: Path) -> TransformSummary:
     keys = _series_keys(data, config)
     observations = _stage_observations(data, keys, config, rules, issues)
     series = _series_metadata(data, keys, observations, config)
+    _check_reference(data, keys, config, rules, reference, issues)
 
     staged = data_dir / "staged"
     files = {
@@ -604,6 +623,141 @@ def _check_expected_values(
             keys[values != code],
             f"observations whose {concept_id} is not {code!r}",
         )
+
+
+def _check_reference(
+    data: DataFrame,
+    keys: Series[str],
+    config: DatasetConfig,
+    rules: dict[str, RuleSpec],
+    reference: ReferenceSource,
+    issues: list[DataQualityIssue],
+) -> None:
+    """Runs the enabled SDMX rules; each asks the reference once."""
+    code_list = config.reference.ref_area_code_list if config.reference else None
+    not_evaluated: dict[str, list[str]] = {}
+    for name in SDMX_RULES:
+        rule = rules.get(name)
+        # The configuration refuses an SDMX rule without a reference section.
+        if rule is None or code_list is None:
+            continue
+        try:
+            if name == "ref_area_not_in_code_list":
+                codes = frozenset(reference.ref_area_names())
+                _check_ref_area_codes(data, keys, config, rule, codes, issues)
+            else:
+                definition = reference.structure()
+                _check_dataflow(config, rule, definition, code_list, issues)
+        except ReferenceUnavailableError as error:
+            not_evaluated.setdefault(error.reason, []).append(name)
+            issues.append(
+                DataQualityIssue(
+                    rule=name,
+                    severity=rule.severity,
+                    detail=f"not evaluated: {error.reason}",
+                    count=0,
+                )
+            )
+    for reason, names in not_evaluated.items():
+        logger.warning(
+            "data-quality rules not evaluated: %s: %s", ", ".join(names), reason
+        )
+
+
+def _check_ref_area_codes(
+    data: DataFrame,
+    keys: Series[str],
+    config: DatasetConfig,
+    rule: RuleSpec,
+    codes: frozenset[str],
+    issues: list[DataQualityIssue],
+) -> None:
+    """Counts the rows whose reference-area code is not in the code list."""
+    concept_id = config.structure.series_metadata.ref_area
+    ref_areas = _code(data[concept_id], config.columns)
+    _add_issues(
+        issues,
+        rule,
+        keys[~ref_areas.isin(codes)],
+        f"observations whose {concept_id} code is not in the code list",
+    )
+
+
+def _check_dataflow(
+    config: DatasetConfig,
+    rule: RuleSpec,
+    definition: DataflowStructure,
+    code_list: ArtefactRef,
+    issues: list[DataQualityIssue],
+) -> None:
+    """Compares the configured structure with the dataflow definition.
+
+    The time dimension is left out: ``pysdmx`` does not read it from every API.
+    """
+    structure = config.structure
+    time_id = structure.time_dimension.id
+    declared: dict[str, tuple[str, bool | None]] = {
+        dimension.id: ("dimension", dimension.coded)
+        for dimension in structure.dimensions
+    }
+    declared[structure.measure.id] = ("measure", None)
+    for attribute in [
+        *structure.observation_attributes,
+        *structure.series_attributes,
+    ]:
+        declared[attribute.id] = ("attribute", attribute.coded)
+    defined = {c.id: c for c in definition.components if c.id != time_id}
+
+    differences: list[str] = []
+    for concept_id, (role, coded) in declared.items():
+        component = defined.get(concept_id)
+        if component is None:
+            differences.append(f"{concept_id} is not in the definition")
+            continue
+        if component.role != role:
+            differences.append(
+                f"{concept_id} is {_a(component.role)} in the definition, "
+                f"{_a(role)} in the configuration"
+            )
+        elif coded is not None and component.coded != coded:
+            differences.append(
+                f"{concept_id} is {_coded(component.coded)} in the definition, "
+                f"{_coded(coded)} in the configuration"
+            )
+    differences += [
+        f"{concept_id} is in the definition, not in the configuration"
+        for concept_id in defined
+        if concept_id not in declared and concept_id not in config.columns.unmapped
+    ]
+    ref_area = defined.get(structure.series_metadata.ref_area)
+    if (
+        ref_area is not None
+        and ref_area.code_list is not None
+        and ref_area.code_list != code_list
+    ):
+        differences.append(
+            f"{ref_area.id} is coded by {ref_area.code_list} in the definition, "
+            f"not by the configured {code_list}"
+        )
+    if differences:
+        plural = "s" if len(differences) > 1 else ""
+        issues.append(
+            DataQualityIssue(
+                rule=rule.name,
+                severity=rule.severity,
+                detail=f"{len(differences)} difference{plural} from the definition "
+                f"{definition.structure}: {'; '.join(differences)}",
+                count=len(differences),
+            )
+        )
+
+
+def _a(role: str) -> str:
+    return f"an {role}" if role[0] in "aeiou" else f"a {role}"
+
+
+def _coded(coded: bool) -> str:  # noqa: FBT001 - a plain yes or no
+    return "coded" if coded else "not coded"
 
 
 def _add_issues(

@@ -21,6 +21,7 @@ from policy_rate_monitor.service import (
     summary,
     timeseries,
 )
+from tests.fake_reference import FakeReference
 
 CONFIG = Path(__file__).parents[1] / "configs" / "bis_cbpol.json"
 
@@ -148,3 +149,85 @@ def test_the_staged_series_and_findings_are_tuples(data: StagedData) -> None:
     # Shared across the API's threads, so nothing can be appended to them.
     assert isinstance(data.series, tuple)
     assert isinstance(data.issues, tuple)
+
+
+# The code list as a fake reference source gives it: the data's codes and two more.
+NAMES = {
+    "US": "United States",
+    "XM": "Euro area",
+    "GB": "United Kingdom",
+    "BG": "Bulgaria",
+}
+
+
+def checked(
+    config: DatasetConfig, data: StagedData, *codes: str
+) -> dict[str, tuple[SnapshotStatus, str | None, tuple[str, ...]]]:
+    snapshots = summary(config, data, codes, FakeReference(names=NAMES))
+    return {
+        item.requested_ref_area: (item.status, item.ref_area_name, item.suggestions)
+        for item in snapshots
+    }
+
+
+def test_a_code_with_a_series_is_not_changed_by_the_check(
+    config: DatasetConfig, data: StagedData
+) -> None:
+    reference = FakeReference(names=NAMES)
+
+    snapshots = summary(config, data, ["US", "EA"], reference)
+
+    assert snapshots == summary(config, data, ["US", "EA"])
+    # No code without a series: the code list is not asked for.
+    assert reference.calls == []
+
+
+def test_a_code_of_the_code_list_with_no_series_gets_its_name(
+    config: DatasetConfig, data: StagedData
+) -> None:
+    assert checked(config, data, "bg") == {
+        "bg": (SnapshotStatus.UNKNOWN_REF_AREA, "Bulgaria", ())
+    }
+
+
+@pytest.mark.parametrize(
+    ("code", "suggestions"),
+    [
+        ("GBR", ("GB",)),  # the configured suggestion
+        ("uk", ("GB",)),
+        ("Bulgaria", ("BG",)),  # the official name, case aside
+        ("ZZZ", ()),  # nothing matches
+        ("BEL", ()),  # suggested BE, which this code list does not have
+    ],
+)
+def test_a_code_not_in_the_code_list_gets_its_suggestions(
+    config: DatasetConfig,
+    data: StagedData,
+    code: str,
+    suggestions: tuple[str, ...],
+) -> None:
+    assert checked(config, data, code) == {
+        code: (SnapshotStatus.UNKNOWN_REF_AREA, None, suggestions)
+    }
+
+
+def test_without_the_code_list_the_codes_are_not_checked(
+    config: DatasetConfig, data: StagedData, caplog: pytest.LogCaptureFixture
+) -> None:
+    unchecked = summary(config, data, ["GBR", "BG"])
+    caplog.clear()
+    reference = FakeReference(reason="the SDMX API could not be reached")
+
+    snapshots = summary(config, data, ["GBR", "BG"], reference)
+
+    assert snapshots == unchecked
+    assert [(item.ref_area_name, item.suggestions) for item in snapshots] == [
+        (None, ()),
+        (None, ()),
+    ]
+    assert caplog.messages == [
+        (
+            "the requested codes were not checked against the code list: "
+            "the SDMX API could not be reached"
+        )
+    ]

@@ -81,7 +81,9 @@ attribute as published, for example `COMPILATION` (how the series is compiled) a
 (the publishing central bank).
 
 `data_quality.json`, one record per finding (`DataQualityIssue`): the `rule`, its `severity`, the
-`series_key` (or none for a finding about the whole file), the number of rows (`count`) and a
+`series_key` (or none for a finding about the whole file), the number of rows concerned (`count`;
+the number of columns or differences for the rules about the whole file, and 0 for an SDMX rule
+that was not evaluated) and a
 `detail` saying what was done ([Data quality](data-quality.md#2-what-a-finding-is)).
 
 `release.json`, the release the staged data was built from (`SourceRelease`): a copy of the record
@@ -109,7 +111,10 @@ reader in another process can still pair files of two runs while the renames run
 | `status`, `flags` | the outcome, and the warnings separated by `;` |
 
 `summary.json` holds the same snapshots with the full series record nested in each, the target
-date, the dataset, the source release and the generation time. Rates are JSON numbers, not
+date, the dataset, the source release and the generation time. A snapshot with the status
+`unknown_ref_area` also has `ref_area_name`, the official name of a code the SDMX code list has but
+the data does not, and `suggestions`, the codes of the list to offer for one it does not have;
+otherwise they are `null` and `[]`. `summary.csv` has neither. Rates are JSON numbers, not
 strings. Python's `json` reads them as floats, which brings back the rounding the tool avoids;
 read them as decimals instead:
 

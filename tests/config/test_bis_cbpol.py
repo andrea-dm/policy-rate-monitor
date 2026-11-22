@@ -13,7 +13,13 @@ from policy_rate_monitor.config import DatasetConfig, FileConfigSource
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG = REPO_ROOT / "configs" / "bis_cbpol.json"
-CONFIG_PACKAGE = REPO_ROOT / "src" / "policy_rate_monitor" / "config"
+PACKAGE = REPO_ROOT / "src" / "policy_rate_monitor"
+# Where no dataset fact may be written: the configuration, and the SDMX reference.
+GENERIC_CODE = [
+    *(PACKAGE / "config").rglob("*.py"),
+    PACKAGE / "reference.py",
+    PACKAGE / "sdmx.py",
+]
 
 
 @pytest.fixture(scope="module")
@@ -45,9 +51,13 @@ def test_config_package_holds_no_dataset_facts(
         document["source"]["fallback_url"],
         config.source.file_name,
         *concept_ids,
-        # TODO(andrea-dm): add the dataset id, the source host and the dataflow code.
+        # TODO(andrea-dm): add the dataset id and the source host.
         # https://github.com/andrea-dm/policy-rate-monitor/issues/8
         *config.columns.unmapped,
+        document["reference"]["api_url"],
+        document["reference"]["dataflow"]["agency"],
+        document["reference"]["dataflow"]["id"],
+        document["reference"]["ref_area_code_list"]["id"],
     ]
     patterns = {
         fact: re.compile(rf"(?<![A-Za-z0-9_]){re.escape(fact)}(?![A-Za-z0-9_])")
@@ -56,7 +66,7 @@ def test_config_package_holds_no_dataset_facts(
 
     found = [
         f"{path.relative_to(REPO_ROOT)}: {fact}"
-        for path in sorted(CONFIG_PACKAGE.rglob("*.py"))
+        for path in sorted(GENERIC_CODE)
         for fact, pattern in patterns.items()
         if pattern.search(path.read_text(encoding="utf-8"))
     ]

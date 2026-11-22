@@ -73,7 +73,7 @@ through, which the adapters report as a file error ([Failure modes](failure_mode
 
 [`transform`](../../reference.md#policy_rate_monitor.transform).
 
-- **Contract.** `transform(config, data_dir)` loads the CSV in the cached ZIP into
+- **Contract.** `transform(config, data_dir, reference=NO_REFERENCE)` loads the CSV in the cached ZIP into
   `data/raw/<stem>.parquet` (every column as text, as loaded), stages the daily series, and returns
   a `TransformSummary`. It writes `staged/observations.parquet`, `series.json`,
   `data_quality.json` and, when the record next to the ZIP has the checksum of the ZIP read,
@@ -81,7 +81,10 @@ through, which the adapters report as a file error ([Failure modes](failure_mode
   `MissingInputError` (step `transform`) when one is absent.
 - **Rules.** The rules that have code are listed in `IMPLEMENTED_RULES`: `unexpected_column`,
   `unparseable_date`, `non_numeric_value`, `status_value_mismatch`, `exact_duplicate`,
-  `conflicting_duplicate` and `unexpected_value`. The shipped configuration also lists
+  `conflicting_duplicate`, `unexpected_value`, and the two SDMX rules `ref_area_not_in_code_list`
+  and `dataflow_mismatch`, which ask `reference` once each, after the file is read and its
+  selection has rows; a `ReferenceUnavailableError` becomes a "not evaluated" finding. The shipped
+  configuration also lists
   `excess_decimals`, `series_attribute_not_constant` and `plausible_range`; `transform` logs
   "data-quality rule ... is not implemented yet" for each and skips it. A rule set to
   `enabled: false` produces no finding. The rules and their findings are explained in
@@ -91,7 +94,31 @@ through, which the adapters report as a file error ([Failure modes](failure_mode
 - **Raises.** `MissingInputError` (ZIP absent); `UnexpectedFormatError` (corrupt ZIP, a CSV that
   cannot be parsed or decoded or is empty, no row of the configured selection, a required column
   missing, a series row that is not valid metadata).
-- **Tests.** `tests/test_transform.py`.
+- **Tests.** `tests/test_transform.py`, `tests/test_transform_sdmx.py`.
+
+## `reference`
+
+[`reference`](../../reference.md#policy_rate_monitor.reference).
+
+- **Contract.** `ReferenceSource` answers `structure()` (the components of the structure the
+  configured dataflow points to, without the time dimension) and `ref_area_names()` (the codes, with their names, of
+  the configured code list). It raises `ReferenceUnavailableError` when it cannot answer, and
+  nothing else on purpose. `UnavailableReference(reason)` always raises with its reason;
+  `NO_REFERENCE` is the default. A source keeps nothing between calls.
+- **Reads and writes.** None in this module.
+- **Tests.** `tests/test_transform_sdmx.py`, with `tests/fake_reference.py`.
+
+## `sdmx`
+
+[`sdmx`](../../reference.md#policy_rate_monitor.sdmx).
+
+- **Contract.** `SdmxReference(reference_section)` asks the configured API with `pysdmx`'s
+  registry client: the dataflow, then the structure it names, then the code list, one attempt
+  each with the configured timeout. Every `pysdmx` error and an answer that cannot be decoded
+  become `ReferenceUnavailableError` with a plain reason. Needs the `sdmx` extra.
+- **Reads and writes.** The SDMX API; nothing on disk.
+- **Tests.** `tests/test_sdmx.py` (recorded answers in `tests/data/sdmx/`), and
+  `tests/integration/test_sdmx_api.py` against the live API (`pytest -m integration`).
 
 ## `providers`
 
@@ -116,7 +143,8 @@ through, which the adapters report as a file error ([Failure modes](failure_mode
 
 [`bulk`](../../reference.md#policy_rate_monitor.bulk).
 
-- **Contract.** `BulkFileProvider(config, data_dir)` is the provider over the bulk-download file:
+- **Contract.** `BulkFileProvider(config, data_dir, get=None, reference=NO_REFERENCE)` is the
+  provider over the bulk-download file:
   `fetch` and `transform` call the functions of the same name, and the query methods read
   `data/staged/`. `source_release` returns the release staged with the observations
   (`staged/release.json`), not the one next to the ZIP. `observations` casts the stored table to
@@ -246,5 +274,7 @@ through, which the adapters report as a file error ([Failure modes](failure_mode
   after `serve` is stopped with Ctrl+C (SIGTERM ends the process with status 143 instead;
   [Runtime behaviour](runtime_behavior.md#start-and-stop)). It sets up logging (INFO, to standard error), prints
   results to standard output and errors to standard error. `exit_code_for` maps an error to its
-  code by walking its parent classes; anything unmapped is `INTERNAL_ERROR`.
+  code by walking its parent classes; anything unmapped is `INTERNAL_ERROR`. `transform` and
+  `serve` give the provider an `SdmxReference` when an SDMX rule is enabled, or an
+  `UnavailableReference` naming the `sdmx` extra when `pysdmx` is not installed.
 - **Tests.** `tests/test_cli.py`.

@@ -443,5 +443,5 @@ Each milestone is a GitHub milestone. Its work is tracked in issues and done on 
 | M4 Reporting | Done, together with M3 |
 | M5 Core release | Done, released as `v0.1.0`; three data-quality rules left for a later release |
 | M6 HTTP API | Done, apart from the configuration follow-ups (#8): the fast analytics (#13), the `config` commands and options from the environment (#7), the HTTP API (#27), the HTML report (#12), the accessible charts (#29), the notebook over HTTP (#30) and the fixes found in the review before 0.3.0 (#34) |
-| M7 SDMX validation | Not started |
+| M7 SDMX validation | Done: the checks of the data (#37), and the requested codes checked against the code list, with suggestions (#41) |
 | M8 Web front end | Not started |

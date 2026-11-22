@@ -16,6 +16,12 @@
     "connect_timeout_seconds": 10,
     "read_timeout_seconds": 60
   },
+  "reference": {
+    "api_url": "https://stats.bis.org/api/v2",
+    "dataflow": { "agency": "BIS", "id": "WS_CBPOL", "version": "1.0" },
+    "ref_area_code_list": { "agency": "BIS", "id": "CL_BIS_GL_REF_AREA", "version": "1.0" },
+    "timeout_seconds": 10
+  },
   "structure": {
     "dimensions": [
       { "id": "FREQ", "coded": true, "column": "freq" },
@@ -69,7 +75,9 @@
       "name": "unexpected_value",
       "severity": "warning",
       "params": { "expected": { "ACTION": "I", "OBS_CONF": "F", "OBS_PRE_BREAK": "", "UNIT_MEASURE": "368" } }
-    }
+    },
+    { "name": "ref_area_not_in_code_list", "severity": "warning" },
+    { "name": "dataflow_mismatch", "severity": "warning" }
   ],
   "snapshot": {
     "lookback_months": 12,
@@ -79,5 +87,14 @@
   "output": {
     "metadata_fields": ["series_key", "ref_area_name", "title", "unit", "decimals"]
   },
-  "ref_area_aliases": { "EA": "XM" }
+  "ref_area_aliases": { "EA": "XM" },
+  "ref_area_suggestions": {
+    "ARG": "AR", "AUS": "AU", "AUT": "AT", "BEL": "BE", "BRA": "BR", "CAN": "CA", "CHE": "CH", "CHL": "CL",
+    "CHN": "CN", "COL": "CO", "CZE": "CZ", "DEU": "DE", "DNK": "DK", "EMU": "XM", "ESP": "ES", "EU": "XM",
+    "EZ": "XM", "FRA": "FR", "GBR": "GB", "GER": "DE", "GRC": "GR", "HKG": "HK", "HRV": "HR", "HUN": "HU",
+    "IDN": "ID", "IND": "IN", "ISL": "IS", "ISR": "IL", "ITA": "IT", "JPN": "JP", "KOR": "KR", "KWT": "KW",
+    "MAR": "MA", "MEX": "MX", "MKD": "MK", "MYS": "MY", "NLD": "NL", "NOR": "NO", "NZL": "NZ", "PER": "PE",
+    "PHL": "PH", "POL": "PL", "PRT": "PT", "ROU": "RO", "RUS": "RU", "SAU": "SA", "SRB": "RS", "SUI": "CH",
+    "SWE": "SE", "THA": "TH", "TUR": "TR", "UK": "GB", "USA": "US", "ZAF": "ZA"
+  }
 }

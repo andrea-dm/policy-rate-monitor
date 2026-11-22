@@ -22,7 +22,26 @@ depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
 
 [[modules]]
 path = "policy_rate_monitor.transform"
-depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core", "policy_rate_monitor.fetch"]
+depends_on = [
+    "policy_rate_monitor.config",
+    "policy_rate_monitor.core",
+    "policy_rate_monitor.fetch",
+    "policy_rate_monitor.reference",
+]
+
+# The interface the SDMX rules read the reference through.
+[[modules]]
+path = "policy_rate_monitor.reference"
+depends_on = ["policy_rate_monitor.config", "policy_rate_monitor.core"]
+
+# Needs the sdmx extra (pysdmx). cli imports it only when an SDMX rule is enabled.
+[[modules]]
+path = "policy_rate_monitor.sdmx"
+depends_on = [
+    "policy_rate_monitor.config",
+    "policy_rate_monitor.core",
+    "policy_rate_monitor.reference",
+]
 
 [[modules]]
 path = "policy_rate_monitor.analytics"
@@ -53,6 +72,7 @@ depends_on = [
     "policy_rate_monitor.core",
     "policy_rate_monitor.fetch",
     "policy_rate_monitor.providers",
+    "policy_rate_monitor.reference",
     "policy_rate_monitor.transform",
 ]
 
@@ -67,6 +87,7 @@ depends_on = [
     "policy_rate_monitor.config",
     "policy_rate_monitor.core",
     "policy_rate_monitor.providers",
+    "policy_rate_monitor.reference",
     "policy_rate_monitor.report",
     "policy_rate_monitor.snapshot",
 ]
@@ -80,17 +101,21 @@ depends_on = [
     "policy_rate_monitor.config",
     "policy_rate_monitor.core",
     "policy_rate_monitor.providers",
+    "policy_rate_monitor.reference",
     "policy_rate_monitor.report",
     "policy_rate_monitor.service",
 ]
 
-# cli imports web only inside `serve`, so the base install never loads it.
+# cli imports web only inside `serve`, and sdmx only when a command needs the SDMX
+# reference, so the base install never loads them.
 [[modules]]
 path = "policy_rate_monitor.cli"
 depends_on = [
     "policy_rate_monitor.bulk",
     "policy_rate_monitor.config",
     "policy_rate_monitor.core",
+    "policy_rate_monitor.reference",
+    "policy_rate_monitor.sdmx",
     "policy_rate_monitor.service",
     "policy_rate_monitor.settings",
     "policy_rate_monitor.web",

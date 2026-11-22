@@ -223,6 +223,11 @@ class DataSnapshot(_FrozenModel):
         change_bps: ``(latest_value - prior_value) * 100``, exactly.
         status: The outcome; see ``SnapshotStatus``.
         flags: Warnings, sorted and without duplicates.
+        ref_area_name: For ``UNKNOWN_REF_AREA`` only: the official name of a code
+            that the SDMX code list has but the data has no series for; ``None``
+            otherwise, or when the code list was not read.
+        suggestions: For ``UNKNOWN_REF_AREA`` only: codes of the code list to offer
+            instead of a code it does not have, e.g. ``("GB",)`` for ``GBR``.
 
     Examples:
         A 25 bp hike, exact (in floats, ``(4.10 - 3.85) * 100`` is 24.999999999999957):
@@ -276,6 +281,8 @@ class DataSnapshot(_FrozenModel):
     change_bps: BasisPoints | None = None
     status: SnapshotStatus
     flags: tuple[SnapshotFlag, ...] = ()
+    ref_area_name: NonEmptyStr | None = None
+    suggestions: tuple[NonEmptyStr, ...] = ()
 
     @field_validator("flags")
     @classmethod
@@ -293,7 +300,13 @@ class DataSnapshot(_FrozenModel):
             if self.flags:
                 msg = "an UNKNOWN_REF_AREA snapshot carries no flags"
                 raise ValueError(msg)
+            if self.ref_area_name is not None and self.suggestions:
+                msg = "a code with an official name needs no suggestions"
+                raise ValueError(msg)
             return self
+        if self.ref_area_name is not None or self.suggestions:
+            msg = f"a {self.status} snapshot has no ref_area_name or suggestions"
+            raise ValueError(msg)
         if self.series is None:
             msg = f"a {self.status} snapshot needs its series metadata"
             raise ValueError(msg)
@@ -393,8 +406,9 @@ class DataQualityIssue(_FrozenModel):
         severity: How serious the finding is.
         series_key: The affected series; ``None`` for a finding about the whole dataset.
         detail: Human-readable explanation, including what was done about it.
-        count: Number of affected observations. At least 1 today; 0 is kept for a
-            rule that could not be evaluated, which no rule reports yet.
+        count: Number of affected observations, or of columns or differences for the
+            rules about the whole dataset. 0 for an SDMX rule that could not be
+            evaluated.
 
     See also: [Data quality](data-quality.md#2-what-a-finding-is).
     """

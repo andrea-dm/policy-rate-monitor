@@ -118,5 +118,7 @@ them like any other:
   one; no second real provider exists (`InMemoryProvider` is for tests).
 - There is no front end. The API is built; the React front end is milestone M8
   ([Milestones](../../milestones.md)).
-- The validation of the file against the BIS structural metadata is planned (decision
-  [0009](../../adr/0009-sdmx-validation.md), M7) and not built.
+- The data is checked against the BIS structural metadata by two rules, which need the BIS SDMX
+  API at run time (decisions [0009](../../adr/0009-sdmx-validation.md) and
+  [0018](../../adr/0018-sdmx-reference-and-not-evaluated.md)). The check of the requested codes
+  against the same code list is not built yet (M7).

@@ -291,3 +291,34 @@ def test_source_release_checksum_is_64_lowercase_hex_digits(checksum: str) -> No
 
     with pytest.raises(ValidationError, match="pattern"):
         SourceRelease(location="f.zip", checksum_sha256=checksum, retrieved_at=now)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "fields",
+    [{"ref_area_name": "Bulgaria"}, {"suggestions": ("GB",)}],
+    ids=["name", "suggestions"],
+)
+def test_only_an_unknown_ref_area_has_a_name_or_suggestions(
+    fields: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match="has no ref_area_name or suggestions"):
+        DataSnapshot(
+            requested_ref_area="CH",
+            ref_area="CH",
+            series=_series(),
+            status=SnapshotStatus.NO_VALID_DATA,
+            **fields,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.unit
+def test_a_named_unknown_ref_area_has_no_suggestions() -> None:
+    with pytest.raises(ValidationError, match="needs no suggestions"):
+        DataSnapshot(
+            requested_ref_area="BG",
+            ref_area="BG",
+            status=SnapshotStatus.UNKNOWN_REF_AREA,
+            ref_area_name="Bulgaria",
+            suggestions=("BG",),
+        )

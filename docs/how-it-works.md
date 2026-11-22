@@ -184,15 +184,21 @@ two values.
 | An attribute holds another value than the configuration expects (for example the confidentiality status) | Records a finding: the source may have changed |
 | A date cannot be read in the configured format (digits of another script included) | Drops the row and records a finding |
 | A series row does not make valid series metadata (a blank country or area code, say) | Stops with exit code 7, naming the series: the file is not shaped as the configuration says |
+| A country or area code is not in BIS's official code list | Records a finding per series (`ref_area_not_in_code_list`); the rows are kept |
+| The configuration's `structure` disagrees with BIS's definition of the dataflow | Records one finding naming each difference (`dataflow_mismatch`) |
+| The BIS SDMX API cannot be reached, or the `sdmx` extra is not installed | Records "not evaluated", with a count of 0, for each of the two rules above, and logs a warning; never a pass, and `transform` still ends with exit code 0 |
 
 Every finding goes to `data_quality.json` and to the "Data quality" section of the report, with its
 rule, severity, series and count. Three more rules are configured but not built yet (more decimals
 than the series declares, a plausible range, attributes constant within a series); `transform`
-says so in its log ([decision 0011](adr/0011-data-quality-rules.md)). The rule parameters are
+says so in its log ([decision 0011](adr/0011-data-quality-rules.md)). The two checks against the
+BIS structural metadata ask the BIS SDMX API at each run, with no cache
+([decision 0009](adr/0009-sdmx-validation.md), [0018](adr/0018-sdmx-reference-and-not-evaluated.md)).
+The rule parameters are
 checked when the configuration is loaded: a `keep` other than `first` or `last`, or an
 `unexpected_value` with no `expected` object, a column under it that the configuration does not
-have (in `structure` or in `columns.unmapped`), or a code that is not a text, stops every command
-with exit code 4. The full account, with the severities, what happens to each row and what to do
+have (in `structure` or in `columns.unmapped`), a code that is not a text, or an SDMX rule without a
+`reference` section, stops every command with exit code 4. The full account, with the severities, what happens to each row and what to do
 with a finding, is in [Data quality](data-quality.md).
 
 ??? info "Checked by"
@@ -208,7 +214,9 @@ with a finding, is in [Data quality](data-quality.md).
     `test_unexpected_columns_are_reported`, `test_unexpected_values_are_reported_per_series`,
     `test_the_configured_keep_applies_whether_the_rule_is_on_or_not`,
     `test_a_series_row_with_no_ref_area_code_is_an_unexpected_format`;
-    `tests/config/test_models.py::test_rule_parameters_are_checked_even_when_the_rule_is_off`.
+    `tests/config/test_models.py::test_rule_parameters_are_checked_even_when_the_rule_is_off`;
+    the SDMX rules: `tests/test_transform_sdmx.py`, `tests/test_sdmx.py`, and
+    `tests/integration/test_sdmx_api.py` against the live API (`pytest -m integration`).
 
 ## 5. The latest rate of each country or area (§1.3)
 
@@ -295,11 +303,29 @@ in the configuration. For an unknown code, `report` prints a warning that lists 
 has, with its name. If no requested country or area is `ok`, the command still writes the outputs and ends
 with exit code 1.
 
+An unknown code is also checked against the BIS code list, from the BIS SDMX API, when the
+configuration has a `reference` section ([decision 0009](adr/0009-sdmx-validation.md)). A code the
+list has but the data does not, such as `BG`, is named: "no series for BG (Bulgaria)", in the
+warning and in the report's table. A code the list does not have gets a suggestion, from the
+configuration (`GBR` → `GB`) or from the official names (`switzerland` → `CH`): "GBR is not in the
+country or area code list; did you mean GB (United Kingdom)?". No similar-looking code is guessed:
+`GBR` is as close to Greece (`GR`) as to `GB`. The list is asked for only when a code has no
+series. When it cannot be obtained, the codes are not checked, no suggestion is made, and a
+warning in the log says why. `summary.json` and the API carry the name (`ref_area_name`) and the
+suggestions (`suggestions`) in the snapshot.
+
 ??? info "Checked by"
 
     `tests/test_snapshot.py::test_unknown_ref_area_insufficient_history_and_no_valid_data`,
     `test_stale_latest_and_stale_prior_are_flagged`;
-    `tests/test_cli.py::test_an_unknown_code_lists_the_codes_the_data_has`.
+    `tests/test_cli.py::test_an_unknown_code_lists_the_codes_the_data_has`,
+    `test_report_names_a_code_with_no_series_and_suggests_one_for_an_invalid_code`,
+    `test_report_without_the_code_list_warns_once_and_suggests_nothing`;
+    `tests/test_service.py`: `test_a_code_of_the_code_list_with_no_series_gets_its_name`,
+    `test_a_code_not_in_the_code_list_gets_its_suggestions`,
+    `test_without_the_code_list_the_codes_are_not_checked`;
+    `tests/integration/test_sdmx_api.py::test_every_configured_suggestion_is_a_code_of_the_bis_list`
+    (`pytest -m integration`).
 
 ## 9. Countries or areas named the way people name them (§1.3)
 

@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-22
+
+The data checked against the BIS structural metadata, and suggestions for a country or area
+code the BIS code list does not have.
+
+### Added
+
+- Two data-quality rules check the data against the BIS structural metadata:
+  `ref_area_not_in_code_list` (a country or area code that is not in the official code list, one
+  finding per series) and `dataflow_mismatch` (a difference between the configuration's
+  `structure` and the dataflow definition, one finding naming each). Both are enabled in
+  `configs/bis_cbpol.json`. They need the BIS SDMX API at run time, with no cache: when the
+  reference cannot be obtained, each reports "not evaluated" as a finding with a count of 0, and
+  `transform` still ends with exit code 0. See decision 0018 (#37).
+- A new optional configuration section, `reference`: the SDMX API's address, the dataflow, the
+  country or area code list and a timeout. Listing an SDMX rule without it stops the
+  configuration from loading (exit code 4) (#37).
+- A new optional extra, `sdmx`, which installs `pysdmx`. `transform` and `serve` load it only when
+  an SDMX rule is enabled; without it, the SDMX rules report "not evaluated" (#37).
+- A live test against the BIS SDMX API, in `tests/integration/`. A plain `pytest` leaves it out;
+  run it with `pytest -m integration` (#37).
+- A requested country or area code with no series is checked against the BIS code list, in
+  `bis-prates report` and the HTTP API. A code the list does not have gets suggestions ("GBR is
+  not in the country or area code list; did you mean GB (United Kingdom)?"), from the new
+  configuration map `ref_area_suggestions` and from the official names; a code the list has but
+  the data does not is named from it, also in the report's table. `summary.json` and the API gain
+  `ref_area_name` and `suggestions` in each snapshot; `summary.csv` does not change. When the code
+  list cannot be obtained, the codes are not checked and the log says why. See decision 0018
+  (#41).
+
+### Changed
+
+- `bis-prates` no longer logs a line for each HTTP request made through `pysdmx` (#41).
+
 ## [0.3.0] — 2026-11-22
 
 The HTTP API with `bis-prates serve`, an HTML report rendered from templates, charts that
@@ -229,7 +263,8 @@ The first release: the `bis-prates` command line, from the BIS bulk download to 
 - CI: ruff, pyright (strict), deptry, tach, the docs build, dependency audits and the package
   build on Python 3.12, and pytest with the docstring examples on Python 3.12, 3.13 and 3.14.
 
-[Unreleased]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/andrea-dm/policy-rate-monitor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/andrea-dm/policy-rate-monitor/releases/tag/v0.1.0

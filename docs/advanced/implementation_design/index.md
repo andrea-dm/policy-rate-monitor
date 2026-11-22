@@ -28,8 +28,7 @@ and `configs/config.schema.json`), the packaging (`pyproject.toml`), the checks 
 `diagnostics/README.md` and the decision records.
 
 Out of scope: the web front end (decision [0003](../../adr/0003-web-extension-stack.md), milestone M8,
-not built), the validation against BIS structural metadata (decision
-[0009](../../adr/0009-sdmx-validation.md), milestone M7, not built), and the
+not built), and the
 data-quality rules that the configuration lists but the code does not implement
 ([Components](components.md#transform)). The pipelines around the code (CI/CD, release) are in
 [Operations](../operations/index.md).

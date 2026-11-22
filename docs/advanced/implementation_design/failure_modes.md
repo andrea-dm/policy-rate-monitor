@@ -101,6 +101,7 @@ Bad data does not stop a run; it becomes a finding or a flag, and the output say
 | A blank, non-whole or negative `DECIMALS` | the decimals are unknown (`null`), with a warning in the log |
 | An optional column absent from the file | a warning in the log |
 | A rule named in the configuration that the code does not implement | an `info` line in the log; the rule is skipped |
+| The BIS SDMX API cannot be reached, has no such dataflow or code list, or answers with an error; or the `sdmx` extra is not installed | a "not evaluated" finding with a count of 0 for each enabled SDMX rule, and a warning in the log; `transform` ends with exit 0 (`ReferenceUnavailableError` never leaves `transform`) |
 | A latest or prior observation older than the thresholds | a `stale_latest` or `stale_prior` flag; the value is still reported |
 | A requested code the data does not have | status `unknown_ref_area`; the CLI prints a warning listing the codes available |
 

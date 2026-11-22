@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from policy_rate_monitor.core.models import ReadOnlyAttributes
 from tests.config.fixtures import changed, error_lines, load, minimal_document
 
 
@@ -224,3 +225,121 @@ def test_conflict_keep_applies_whether_the_rule_is_on_or_not(
     rules: list[dict[str, Any]], keep: str
 ) -> None:
     assert load(changed(minimal_document(), "rules", rules)).conflict_keep() == keep
+
+
+REFERENCE = {
+    "api_url": "https://example.org/sdmx",
+    "dataflow": {"agency": "ORG", "id": "FLOW", "version": "1.0"},
+    "ref_area_code_list": {"agency": "ORG", "id": "CL_GEO", "version": "1.0"},
+    "timeout_seconds": 5,
+}
+
+
+@pytest.mark.unit
+def test_a_configuration_without_a_reference_section_loads() -> None:
+    assert load(minimal_document()).reference is None
+
+
+@pytest.mark.unit
+def test_the_reference_section_is_read() -> None:
+    reference = load(changed(minimal_document(), "reference", REFERENCE)).reference
+
+    assert reference is not None
+    assert str(reference.dataflow) == "ORG:FLOW(1.0)"
+    assert str(reference.ref_area_code_list) == "ORG:CL_GEO(1.0)"
+    assert reference.timeout_seconds == 5
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("name", ["ref_area_not_in_code_list", "dataflow_mismatch"])
+@pytest.mark.parametrize("enabled", [True, False])
+def test_an_sdmx_rule_needs_the_reference_section_even_when_off(
+    name: str, *, enabled: bool
+) -> None:
+    rule = {"name": name, "severity": "warning", "enabled": enabled}
+    document = changed(minimal_document(), "rules", [rule])
+
+    assert error_lines(document) == [
+        (
+            f"rules[0] (\"{name}\").name: rule '{name}' checks the data against"
+            " the SDMX reference: add a reference section"
+        )
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("path", "value", "expected"),
+    [
+        (
+            "reference.dataflow.id",
+            "",
+            'reference.dataflow.id: String should have at least 1 character (got "")',
+        ),
+        (
+            "reference.timeout_seconds",
+            0,
+            "reference.timeout_seconds: Input should be greater than 0 (got 0)",
+        ),
+        (
+            "reference.ref_area_code_list.agency",
+            "",
+            (
+                "reference.ref_area_code_list.agency: String should have at least 1"
+                ' character (got "")'
+            ),
+        ),
+    ],
+    ids=["empty_id", "zero_timeout", "empty_agency"],
+)
+def test_a_bad_reference_field_is_rejected(
+    path: str, value: object, expected: str
+) -> None:
+    document = changed(changed(minimal_document(), "reference", REFERENCE), path, value)
+
+    assert error_lines(document) == [expected]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("suggestions", "expected"),
+    [
+        (
+            {"gbr": "GB"},
+            (
+                "ref_area_suggestions.gbr: 'gbr' is not upper case; requested codes are"
+                " upper-cased before suggestions are looked up, so it would never match"
+            ),
+        ),
+        ({"GB": "GB"}, "ref_area_suggestions.GB: 'GB' suggests itself"),
+        (
+            {"UK": "GBR", "GBR": "GB"},
+            (
+                "ref_area_suggestions.UK: 'UK' suggests 'GBR', which itself has a"
+                " suggestion: suggest the final code"
+            ),
+        ),
+        (
+            {"Q1": "GB"},
+            (
+                "ref_area_suggestions.Q1: 'Q1' is also in ref_area_aliases: an alias is"
+                " applied first, so this suggestion would never be offered"
+            ),
+        ),
+    ],
+    ids=["lower_case", "to_itself", "chain", "alias"],
+)
+def test_a_suggestion_must_lead_to_a_final_code(
+    suggestions: dict[str, str], expected: str
+) -> None:
+    document = changed(minimal_document(), "ref_area_suggestions", suggestions)
+
+    assert error_lines(document) == [expected]
+
+
+@pytest.mark.unit
+def test_a_configuration_without_suggestions_loads_read_only() -> None:
+    suggestions = load(minimal_document()).ref_area_suggestions
+
+    assert suggestions == {}
+    assert isinstance(suggestions, ReadOnlyAttributes)
