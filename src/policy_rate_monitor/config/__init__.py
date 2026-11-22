@@ -8,6 +8,8 @@ from __future__ import annotations
 from policy_rate_monitor.config.models import (
     CANONICAL_COLUMNS,
     CODE_PATTERN,
+    SDMX_RULES,
+    ArtefactRef,
     ColumnsSection,
     Concept,
     DatasetConfig,
@@ -19,6 +21,7 @@ from policy_rate_monitor.config.models import (
     MetadataField,
     ObservationAttribute,
     OutputSection,
+    ReferenceSection,
     Role,
     RuleSpec,
     SnapshotSection,
@@ -33,6 +36,8 @@ from policy_rate_monitor.config.source import ConfigSource, FileConfigSource
 __all__ = [
     "CANONICAL_COLUMNS",
     "CODE_PATTERN",
+    "SDMX_RULES",
+    "ArtefactRef",
     "ColumnsSection",
     "Concept",
     "ConfigSource",
@@ -46,6 +51,7 @@ __all__ = [
     "MetadataField",
     "ObservationAttribute",
     "OutputSection",
+    "ReferenceSection",
     "Role",
     "RuleSpec",
     "SnapshotSection",

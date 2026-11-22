@@ -266,6 +266,10 @@ RULE_PARAM_INVALID: Final = Template(
 RULE_EXPECTED_UNKNOWN: Final = Template(
     "rule_expected_unknown", "'{id}' is not a column of the configuration{hint}"
 )
+RULE_NEEDS_REFERENCE: Final = Template(
+    "rule_needs_reference",
+    "rule '{name}' checks the data against the SDMX reference: add a reference section",
+)
 
 TEMPLATES: Final = (
     ALIAS_NOT_UPPER_CASE,
@@ -300,6 +304,7 @@ TEMPLATES: Final = (
     OUTPUT_FIELD_UNBOUND,
     RULE_PARAM_INVALID,
     RULE_EXPECTED_UNKNOWN,
+    RULE_NEEDS_REFERENCE,
 )
 """Every template, so the parser can tell this package's errors from pydantic's."""
 

@@ -52,14 +52,14 @@ def source_zip(rows: list[str] = ROWS) -> bytes:
     return buffer.getvalue()
 
 
-def mock_web(url: str) -> bytes:
+def fake_web(url: str) -> bytes:
     pages = {PAGE_URL: b'<a href="/rates.zip">rates</a>', ZIP_URL: source_zip()}
     return pages[url]
 
 
 @pytest.fixture
 def provider(tmp_path: Path) -> BulkFileProvider:
-    provider = BulkFileProvider(CONFIG, tmp_path, get=mock_web)
+    provider = BulkFileProvider(CONFIG, tmp_path, get=fake_web)
     provider.fetch()
     provider.transform()
     return provider
@@ -75,7 +75,7 @@ class TestBulkFileProvider(ProviderContract):
 
 
 def test_queries_before_transform_say_which_step_to_run(tmp_path: Path) -> None:
-    provider = BulkFileProvider(CONFIG, tmp_path, get=mock_web)
+    provider = BulkFileProvider(CONFIG, tmp_path, get=fake_web)
 
     assert provider.source_release() is None
     for query in (provider.observations, provider.list_series):
@@ -87,7 +87,7 @@ def test_queries_before_transform_say_which_step_to_run(tmp_path: Path) -> None:
 def test_the_release_is_the_one_staged_not_the_one_fetched_last(
     tmp_path: Path,
 ) -> None:
-    provider = BulkFileProvider(CONFIG, tmp_path, get=mock_web)
+    provider = BulkFileProvider(CONFIG, tmp_path, get=fake_web)
     staged = provider.fetch()
     provider.transform()
 
@@ -110,7 +110,7 @@ def test_the_release_is_the_one_staged_not_the_one_fetched_last(
 def test_staged_data_of_another_configuration_says_to_transform_again(
     tmp_path: Path,
 ) -> None:
-    BulkFileProvider(CONFIG, tmp_path, get=mock_web).fetch()
+    BulkFileProvider(CONFIG, tmp_path, get=fake_web).fetch()
     BulkFileProvider(CONFIG, tmp_path).transform()
     # The status kept under another name: the staged table lacks that column.
     structure = json.loads(json.dumps(CONFIG_DOCUMENT["structure"]))
@@ -128,7 +128,7 @@ def test_staged_data_of_another_configuration_says_to_transform_again(
 def test_series_json_is_read_once_per_change_of_the_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    provider = BulkFileProvider(CONFIG, tmp_path, get=mock_web)
+    provider = BulkFileProvider(CONFIG, tmp_path, get=fake_web)
     provider.fetch()
     provider.transform()
     reads: list[Path] = []
@@ -152,7 +152,7 @@ def test_series_json_is_read_once_per_change_of_the_file(
 
 
 def test_transform_returns_the_counts_of_the_run(tmp_path: Path) -> None:
-    provider = BulkFileProvider(CONFIG, tmp_path, get=mock_web)
+    provider = BulkFileProvider(CONFIG, tmp_path, get=fake_web)
     provider.fetch()
 
     summary = provider.transform()

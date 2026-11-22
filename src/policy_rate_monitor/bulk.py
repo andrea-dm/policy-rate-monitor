@@ -22,6 +22,7 @@ from policy_rate_monitor.providers import (
     observation_schema,
     select_series,
 )
+from policy_rate_monitor.reference import NO_REFERENCE
 from policy_rate_monitor.transform import (
     load_data_quality,
     load_observations,
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
         SourceRelease,
         TransformSummary,
     )
+    from policy_rate_monitor.reference import ReferenceSource
 
 __all__ = ["BulkFileProvider"]
 
@@ -53,6 +55,7 @@ class BulkFileProvider(DataProvider):
         config: DatasetConfig,
         data_dir: Path,
         get: Callable[[str], bytes] | None = None,
+        reference: ReferenceSource = NO_REFERENCE,
     ) -> None:
         """Sets where the source is and where the files go.
 
@@ -61,11 +64,14 @@ class BulkFileProvider(DataProvider):
             data_dir: The data directory: ``raw/`` and ``staged/`` go under it.
             get: Downloads one URL and returns the body; ``None`` uses HTTP(S) with
                 the configured timeouts. Tests pass a stand-in.
+            reference: Where ``transform``'s SDMX rules read the reference; the
+                default has none, so an enabled SDMX rule reports "not evaluated".
         """
         super().__init__()
         self._config = config
         self._data_dir = data_dir
         self._get = get
+        self._reference = reference
         self._schema = observation_schema(config.structure)
         # series.json as last read, and the (mtime, size) of the file it was read from.
         self._series: tuple[tuple[int, int], dict[str, SeriesMetadata]] | None = None
@@ -78,7 +84,7 @@ class BulkFileProvider(DataProvider):
     @override
     def transform(self) -> TransformSummary:
         """Builds the raw and staged layers from the cached ZIP (``transform``)."""
-        return transform(self._config, self._data_dir)
+        return transform(self._config, self._data_dir, self._reference)
 
     @override
     def list_series(self) -> list[str]:

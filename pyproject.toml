@@ -35,6 +35,10 @@ fast = [
 interactive = [
     "plotly>=7.1.0",
 ]
+sdmx = [
+    "msgspec>=0.22.0",
+    "pysdmx>=1.22.0",
+]
 web = [
     "fastapi>=0.165.0",
     "starlette>=1.10.0",
@@ -349,7 +353,8 @@ diagnostics = [
 # tests/conftest.py, which also marks doctests `unit`.
 testpaths = ["tests", "src"]
 pythonpath = ["."]
-addopts = ["--doctest-modules"]
+# The integration tests talk to real services: run them with `pytest -m integration`.
+addopts = ["--doctest-modules", "-m", "not integration"]
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 markers = [
     "unit: Quick tests, no I/O, no external dependencies.",

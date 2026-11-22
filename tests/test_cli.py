@@ -16,7 +16,7 @@ from policy_rate_monitor import __version__
 from policy_rate_monitor.bulk import BulkFileProvider
 from policy_rate_monitor.cli.exit_codes import ExitCode, exit_code_for
 from policy_rate_monitor.cli.main import main
-from policy_rate_monitor.config import FileConfigSource
+from policy_rate_monitor.config import SDMX_RULES, FileConfigSource
 from policy_rate_monitor.core.errors import (
     MissingInputError,
     PolicyRateMonitorError,
@@ -29,6 +29,8 @@ from policy_rate_monitor.core.models import (
 )
 from policy_rate_monitor.providers import InMemoryProvider
 from policy_rate_monitor.settings import CONFIG_VARIABLE, DATA_DIR_VARIABLE
+from policy_rate_monitor.transform import load_data_quality
+from tests.bis_zip import write_bis_zip
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -57,7 +59,7 @@ class NothingStaged(InMemoryProvider):
 def use_provider(monkeypatch: pytest.MonkeyPatch, provider: InMemoryProvider) -> None:
     """Makes the commands use *provider* in place of the bulk-file one."""
 
-    def make(*_args: object) -> InMemoryProvider:
+    def make(*_args: object, **_kwargs: object) -> InMemoryProvider:
         return provider
 
     monkeypatch.setattr("policy_rate_monitor.cli.main.BulkFileProvider", make)
@@ -441,14 +443,33 @@ def test_serve_on_a_busy_port_exits_2_naming_the_host_and_port(
     assert len(err.splitlines()) == 1
 
 
+def without_sdmx_rules(directory: Path) -> Path:
+    """Writes the committed configuration with its SDMX rules off; returns its path."""
+    document = json.loads(CONFIG.read_text(encoding="utf-8"))
+    for rule in document["rules"]:
+        if rule["name"] in SDMX_RULES:
+            rule["enabled"] = False
+    path = directory / "no_sdmx.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return path
+
+
 @pytest.mark.contract
 # With nothing fetched, transform ends at once with exit 5: no network is needed.
 @pytest.mark.parametrize(
-    "argv", [["--version"], ["transform", "--config", str(CONFIG)]]
+    ("argv", "loaded"),
+    [
+        (["--version"], []),
+        (["config", "validate", "--config", str(CONFIG)], []),
+        (["transform", "--config", "SDMX_OFF"], []),
+        (["transform", "--config", str(CONFIG)], ["pysdmx"]),
+    ],
+    ids=["version", "validate", "transform_sdmx_off", "transform_sdmx_on"],
 )
 def test_the_base_commands_load_neither_the_web_extra_nor_the_report_steps(
-    tmp_path: Path, argv: list[str]
+    tmp_path: Path, argv: list[str], loaded: list[str]
 ) -> None:
+    argv = [str(without_sdmx_rules(tmp_path)) if a == "SDMX_OFF" else a for a in argv]
     # A fresh interpreter, as the modules this test suite imported stay loaded.
     code = (
         "import sys\n"
@@ -458,7 +479,8 @@ def test_the_base_commands_load_neither_the_web_extra_nor_the_report_steps(
         "except SystemExit:\n"
         "    pass\n"
         "print(sorted({name.split('.')[0] for name in sys.modules} & "
-        "{'fastapi', 'plotly', 'starlette', 'uvicorn', 'matplotlib', 'jinja2'}))\n"
+        "{'fastapi', 'plotly', 'starlette', 'uvicorn', 'matplotlib', 'jinja2', "
+        "'pysdmx'}))\n"
     )
     environ = {**os.environ, DATA_DIR_VARIABLE: str(tmp_path)}
 
@@ -470,4 +492,46 @@ def test_the_base_commands_load_neither_the_web_extra_nor_the_report_steps(
         env=environ,
     )
 
-    assert result.stdout.splitlines()[-1] == "[]"
+    assert result.stdout.splitlines()[-1] == str(loaded)
+
+
+@pytest.mark.contract
+def test_transform_without_the_sdmx_extra_reports_not_evaluated_and_exits_0(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # As if pysdmx were not installed: the sdmx module must be imported afresh.
+    monkeypatch.delitem(sys.modules, "policy_rate_monitor.sdmx", raising=False)
+    # Its submodules too: an import finds a loaded submodule without its parent.
+    for name in ["pysdmx", *(n for n in sys.modules if n.startswith("pysdmx."))]:
+        monkeypatch.setitem(sys.modules, name, None)
+    write_bis_zip(tmp_path, FileConfigSource(CONFIG).load().source.file_name)
+
+    code = main(
+        ["transform", "--config", str(CONFIG)], {DATA_DIR_VARIABLE: str(tmp_path)}
+    )
+
+    assert code == ExitCode.OK
+    details = {
+        issue.rule: issue.detail
+        for issue in load_data_quality(tmp_path)
+        if issue.rule in SDMX_RULES
+    }
+    assert details == dict.fromkeys(
+        SDMX_RULES,
+        "not evaluated: the sdmx extra is not installed: "
+        "install policy-rate-monitor[sdmx]",
+    )
+
+
+@pytest.mark.contract
+def test_an_sdmx_rule_without_a_reference_section_fails_validation_with_exit_4(
+    tmp_path: Path,
+) -> None:
+    document = json.loads(CONFIG.read_text(encoding="utf-8"))
+    del document["reference"]
+    path = tmp_path / "no_reference.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    code = main(["config", "validate", "--config", str(path)])
+
+    assert code == ExitCode.CONFIG_ERROR

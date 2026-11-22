@@ -1,6 +1,37 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
+    "ArtefactRef": {
+      "additionalProperties": false,
+      "description": "An SDMX artefact, named by its maintenance agency, id and version.\n\nExamples:\n    >>> ref = ArtefactRef.model_validate_json(\n    ...     '{\"agency\": \"ORG\", \"id\": \"FLOW\", \"version\": \"1.0\"}'\n    ... )\n    >>> str(ref)\n    'ORG:FLOW(1.0)'",
+      "properties": {
+        "agency": {
+          "description": "Id of the agency that maintains the artefact.",
+          "minLength": 1,
+          "title": "Agency",
+          "type": "string"
+        },
+        "id": {
+          "description": "Id of the artefact.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "version": {
+          "description": "Version of the artefact, e.g. '1.0'.",
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agency",
+        "id",
+        "version"
+      ],
+      "title": "ArtefactRef",
+      "type": "object"
+    },
     "ColumnsSection": {
       "additionalProperties": false,
       "description": "How the concepts are written in the source file.",
@@ -371,6 +402,42 @@
       "title": "OutputSection",
       "type": "object"
     },
+    "ReferenceSection": {
+      "additionalProperties": false,
+      "description": "Where the SDMX structural metadata that the data is checked against is read.",
+      "properties": {
+        "api_url": {
+          "description": "Base address of the SDMX REST API that serves the structural metadata.",
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Api Url",
+          "type": "string"
+        },
+        "dataflow": {
+          "$ref": "#/$defs/ArtefactRef",
+          "description": "The dataflow of the data. The structure it points to is the one checked\nagainst."
+        },
+        "ref_area_code_list": {
+          "$ref": "#/$defs/ArtefactRef",
+          "description": "The code list of the reference-area codes."
+        },
+        "timeout_seconds": {
+          "description": "Time allowed for each request, in seconds.",
+          "exclusiveMinimum": 0,
+          "title": "Timeout Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "api_url",
+        "dataflow",
+        "ref_area_code_list",
+        "timeout_seconds"
+      ],
+      "title": "ReferenceSection",
+      "type": "object"
+    },
     "RuleSpec": {
       "additionalProperties": false,
       "description": "One data-quality rule to run: which one, how serious, with what parameters.",
@@ -613,6 +680,18 @@
     "source": {
       "$ref": "#/$defs/SourceSection",
       "description": "Download settings: discovery page, file name, fallback URL, cache, attempts."
+    },
+    "reference": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The SDMX reference the data is checked against; needed by the SDMX rules.\nNull or absent when no SDMX rule is listed."
     },
     "structure": {
       "$ref": "#/$defs/StructureSection",

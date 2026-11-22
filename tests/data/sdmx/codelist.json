@@ -1,0 +1,130 @@
+{
+ "meta": {
+  "id": "IDREF31ff2a6d-8555-458d-88d3-d41dc0b80ec4",
+  "test": false,
+  "schema": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+  "prepared": "2026-11-22T12:22:09Z",
+  "contentLanguages": [
+   "en"
+  ],
+  "sender": {
+   "id": "UNKNOWN"
+  }
+ },
+ "data": {
+  "codelists": [
+   {
+    "links": [
+     {
+      "rel": "self",
+      "type": "codelist",
+      "uri": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+      "urn": "urn:sdmx:org.sdmx.infomodel.codelist.Codelist=BIS:CL_BIS_GL_REF_AREA(1.0)"
+     }
+    ],
+    "id": "CL_BIS_GL_REF_AREA",
+    "name": "Reference Area Code for BIS General Economics and Block L",
+    "names": {
+     "en": "Reference Area Code for BIS General Economics and Block L"
+    },
+    "version": "1.0",
+    "agencyID": "BIS",
+    "isExternalReference": false,
+    "isFinal": false,
+    "isPartial": false,
+    "codes": [
+     {
+      "links": [
+       {
+        "rel": "self",
+        "type": "code",
+        "uri": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+        "urn": "urn:sdmx:org.sdmx.infomodel.codelist.Code=BIS:CL_BIS_GL_REF_AREA(1.0).00"
+       }
+      ],
+      "id": "00",
+      "name": "Others",
+      "names": {
+       "en": "Others"
+      }
+     },
+     {
+      "links": [
+       {
+        "rel": "self",
+        "type": "code",
+        "uri": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+        "urn": "urn:sdmx:org.sdmx.infomodel.codelist.Code=BIS:CL_BIS_GL_REF_AREA(1.0).CH"
+       }
+      ],
+      "id": "CH",
+      "name": "Switzerland",
+      "names": {
+       "en": "Switzerland"
+      }
+     },
+     {
+      "links": [
+       {
+        "rel": "self",
+        "type": "code",
+        "uri": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+        "urn": "urn:sdmx:org.sdmx.infomodel.codelist.Code=BIS:CL_BIS_GL_REF_AREA(1.0).GB"
+       }
+      ],
+      "id": "GB",
+      "name": "United Kingdom",
+      "names": {
+       "en": "United Kingdom"
+      }
+     },
+     {
+      "links": [
+       {
+        "rel": "self",
+        "type": "code",
+        "uri": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+        "urn": "urn:sdmx:org.sdmx.infomodel.codelist.Code=BIS:CL_BIS_GL_REF_AREA(1.0).JP"
+       }
+      ],
+      "id": "JP",
+      "name": "Japan",
+      "names": {
+       "en": "Japan"
+      }
+     },
+     {
+      "links": [
+       {
+        "rel": "self",
+        "type": "code",
+        "uri": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+        "urn": "urn:sdmx:org.sdmx.infomodel.codelist.Code=BIS:CL_BIS_GL_REF_AREA(1.0).US"
+       }
+      ],
+      "id": "US",
+      "name": "United States",
+      "names": {
+       "en": "United States"
+      }
+     },
+     {
+      "links": [
+       {
+        "rel": "self",
+        "type": "code",
+        "uri": "https://raw.githubusercontent.com/sdmx-twg/sdmx-json/develop/structure-message/tools/schemas/2.0.0/sdmx-json-structure-schema.json",
+        "urn": "urn:sdmx:org.sdmx.infomodel.codelist.Code=BIS:CL_BIS_GL_REF_AREA(1.0).XM"
+       }
+      ],
+      "id": "XM",
+      "name": "Euro area",
+      "names": {
+       "en": "Euro area"
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

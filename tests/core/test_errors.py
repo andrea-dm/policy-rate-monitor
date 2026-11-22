@@ -12,6 +12,7 @@ DOMAIN_ERRORS = [
     errors.SourceUnavailableError,
     errors.UnexpectedFormatError,
     errors.MissingInputError,
+    errors.ReferenceUnavailableError,
 ]
 
 
@@ -27,6 +28,7 @@ def test_every_domain_error_is_a_policy_rate_monitor_error(
 @pytest.mark.unit
 def test_the_public_errors_are_exactly_the_documented_ones() -> None:
     # A new error needs an exit code in cli.exit_codes: this test is the reminder.
+    # ReferenceUnavailableError has none: transform turns it into a finding.
     assert set(errors.__all__) == {
         "PolicyRateMonitorError",
         *(error_type.__name__ for error_type in DOMAIN_ERRORS),

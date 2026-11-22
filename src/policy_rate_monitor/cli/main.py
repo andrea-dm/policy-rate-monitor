@@ -8,7 +8,8 @@ bug: it is logged with its traceback and ends the command with ``INTERNAL_ERROR`
 
 The report steps (``service``, and with it matplotlib and Jinja) are imported
 only by ``report`` and ``serve``, so ``--version``, ``fetch`` and ``transform``
-start without them.
+start without them. ``pysdmx`` (the ``sdmx`` extra) is imported only by
+``transform`` and ``serve``, and only when an SDMX rule is enabled.
 
 See also: [CLI reference](cli.md) and [the command
 line](advanced/operations/workflows.md#the-command-line).
@@ -27,7 +28,7 @@ from typing import TYPE_CHECKING
 from policy_rate_monitor import __version__
 from policy_rate_monitor.bulk import BulkFileProvider
 from policy_rate_monitor.cli.exit_codes import ExitCode, exit_code_for
-from policy_rate_monitor.config import FileConfigSource, requested_codes
+from policy_rate_monitor.config import SDMX_RULES, FileConfigSource, requested_codes
 from policy_rate_monitor.config.schema import render_json_schema
 from policy_rate_monitor.core.errors import (
     ConfigError,
@@ -35,6 +36,7 @@ from policy_rate_monitor.core.errors import (
     PolicyRateMonitorError,
 )
 from policy_rate_monitor.core.models import SnapshotStatus
+from policy_rate_monitor.reference import NO_REFERENCE, UnavailableReference
 from policy_rate_monitor.settings import (
     CONFIG_VARIABLE,
     DATA_DIR_VARIABLE,
@@ -50,11 +52,13 @@ if TYPE_CHECKING:
 
     from policy_rate_monitor.config import DatasetConfig
     from policy_rate_monitor.core.models import DataSnapshot, SeriesMetadata
+    from policy_rate_monitor.reference import ReferenceSource
 
 __all__ = ["main"]
 
 # The packages of the web extra: an ImportError naming one means the extra is missing.
 _WEB_PACKAGES = frozenset({"fastapi", "plotly", "starlette", "uvicorn"})
+_NO_SDMX_EXTRA = "the sdmx extra is not installed: install policy-rate-monitor[sdmx]"
 _LAST_PORT = 65535
 
 logger = logging.getLogger(__name__)
@@ -250,11 +254,34 @@ def _where(path: Setting) -> str:
 
 
 def _open(
-    args: Namespace, environ: Mapping[str, str]
+    args: Namespace, environ: Mapping[str, str], *, transforms: bool = False
 ) -> tuple[DatasetConfig, BulkFileProvider]:
+    """Loads the configuration and opens its provider.
+
+    *transforms* says that the command can run ``transform``: only then does the
+    provider get an SDMX reference source.
+    """
     config = _load(config_path(args.config, environ))
     directory = data_dir(args.data_dir, environ, config)
-    return config, BulkFileProvider(config, directory.value)
+    reference = _reference(config) if transforms else NO_REFERENCE
+    return config, BulkFileProvider(config, directory.value, reference=reference)
+
+
+def _reference(config: DatasetConfig) -> ReferenceSource:
+    """The SDMX reference source, if an SDMX rule is enabled; ``pysdmx`` is loaded
+    only then."""
+    enabled = any(rule.enabled and rule.name in SDMX_RULES for rule in config.rules)
+    if not enabled or config.reference is None:
+        return NO_REFERENCE
+    try:
+        from policy_rate_monitor.sdmx import (  # noqa: PLC0415 - an optional extra
+            SdmxReference,
+        )
+    except ImportError as error:
+        if (error.name or "").partition(".")[0] != "pysdmx":
+            raise
+        return UnavailableReference(_NO_SDMX_EXTRA)
+    return SdmxReference(config.reference)
 
 
 def _fetch(args: Namespace, environ: Mapping[str, str]) -> int:
@@ -265,7 +292,7 @@ def _fetch(args: Namespace, environ: Mapping[str, str]) -> int:
 
 
 def _transform(args: Namespace, environ: Mapping[str, str]) -> int:
-    _config, provider = _open(args, environ)
+    _config, provider = _open(args, environ, transforms=True)
     counts = provider.transform()
     sys.stdout.write(
         f"{counts.observations} observations of {counts.series} series kept, "
@@ -313,7 +340,8 @@ def _serve(args: Namespace, environ: Mapping[str, str]) -> int:
             "install policy-rate-monitor[web]\n"
         )
         return ExitCode.USAGE_ERROR
-    config, provider = _open(args, environ)
+    # The API's transform job runs the SDMX rules too.
+    config, provider = _open(args, environ, transforms=True)
     try:
         serve(config, provider, host=args.host, port=args.port, out_dir=args.out)
     except ListenError as error:
