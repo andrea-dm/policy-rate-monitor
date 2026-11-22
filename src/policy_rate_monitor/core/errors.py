@@ -10,10 +10,10 @@ Examples:
     Callers catch the base class to tell an error raised on purpose from a bug:
 
     >>> try:
-    ...     raise MissingInputError("no cached ZIP: run `bis-prates fetch` first")
+    ...     raise MissingInputError("data/raw/rates.zip does not exist", step="fetch")
     ... except PolicyRateMonitorError as error:
-    ...     print(type(error).__name__, "-", error)
-    MissingInputError - no cached ZIP: run `bis-prates fetch` first
+    ...     print(type(error).__name__, "-", error, "- run", error.step)
+    MissingInputError - data/raw/rates.zip does not exist - run fetch
 """
 
 from __future__ import annotations
@@ -50,4 +50,23 @@ class UnexpectedFormatError(PolicyRateMonitorError):
 
 
 class MissingInputError(PolicyRateMonitorError):
-    """The input of a step is absent, e.g. ``transform`` before ``fetch``."""
+    """The input of a step is absent, e.g. ``transform`` before ``fetch``.
+
+    The message says what is missing; ``step`` names the step that makes it, and each
+    adapter words the hint its own way: ``bis-prates transform`` on the command line,
+    ``POST /jobs/transform`` over HTTP.
+
+    Attributes:
+        step: The step to run first, or ``None``.
+    """
+
+    def __init__(self, message: str, *, step: str | None = None) -> None:
+        """Records what is missing and the step that makes it.
+
+        Args:
+            message: What is missing, e.g. the path of the absent file.
+            step: The step to run first (``fetch``, ``transform``), or ``None`` when
+                no step makes the input.
+        """
+        super().__init__(message)
+        self.step = step

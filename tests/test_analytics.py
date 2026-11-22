@@ -137,6 +137,20 @@ def test_the_history_cannot_be_changed() -> None:
         history.values[0] = 0
 
 
+def test_histories_compare_by_identity() -> None:
+    # A generated __eq__ would compare the arrays and fail.
+    history = rate_history(_observations(ROWS))
+    same_rows = rate_history(_observations(ROWS))
+
+    assert history == history  # noqa: PLR0124
+    assert history != same_rows
+    assert change_history(history, MONTHS) != change_history(history, MONTHS)
+    assert rate_moves(history) != rate_moves(history)
+    arrays = snapshot_at(history, day_number(date(2024, 3, 4)), MONTHS)
+    assert arrays != snapshot_at(history, day_number(date(2024, 3, 4)), MONTHS)
+
+
+@pytest.mark.whitebox
 def test_numpy_and_loop_kernels_give_the_same_arrays() -> None:
     rng = np.random.default_rng(7)
     lengths = [0, 1, 50, 400, 3]
@@ -219,6 +233,7 @@ def test_rate_moves_skip_invalid_rows_and_series_starts() -> None:
 
 
 @pytest.mark.contract
+@pytest.mark.whitebox
 def test_without_numba_the_numpy_kernels_are_used() -> None:
     code = (
         "import sys; sys.modules['numba'] = None\n"

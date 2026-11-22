@@ -6,9 +6,14 @@ ELT in two layers, both under the data directory:
   ``raw/<zip stem>.parquet``;
 - staged: ``staged/observations.parquet`` (one row per series and date, with typed
   dates and exact decimal values), ``staged/series.json`` (one ``SeriesMetadata`` per
-  series) and ``staged/data_quality.json`` (the ``DataQualityIssue`` findings).
+  series), ``staged/data_quality.json`` (the ``DataQualityIssue`` findings) and
+  ``staged/release.json`` (the ``SourceRelease`` of the ZIP they were built from).
 
-Every column name, code and rule comes from the configuration.
+Every column name, code and rule comes from the configuration. All the files of a run
+are written with ``core.files.write_files``, ``release.json`` last: each file is
+replaced whole, and a run that fails while writing leaves the files of the last run.
+A reader in another process can still, for a moment, pair files of two runs
+(decision 0017).
 
 See also: [How it works](how-it-works.md), sections 3 and 4, [Data
 model](data-model.md), [decision 0011](adr/0011-data-quality-rules.md) and [decision
@@ -17,26 +22,30 @@ model](data-model.md), [decision 0011](adr/0011-data-quality-rules.md) and [deci
 
 from __future__ import annotations
 
+import hashlib
+import io
 import logging
-import zipfile
-from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+import re
+from decimal import Decimal, DecimalException, Inexact, Rounded, localcontext
 from typing import TYPE_CHECKING, Literal
 
 from pandas import ArrowDtype, DataFrame, Series, read_csv, read_parquet, to_datetime
+from pandas.errors import EmptyDataError, ParserError
 from pyarrow import decimal128
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from policy_rate_monitor.core.errors import MissingInputError, UnexpectedFormatError
+from policy_rate_monitor.core.files import write_files
 from policy_rate_monitor.core.models import (
     DataQualityIssue,
     DataQualitySeverity,
     SeriesMetadata,
+    SourceRelease,
+    TransformSummary,
 )
-from policy_rate_monitor.fetch import cached_zip
+from policy_rate_monitor.fetch import cached_zip, read_release, read_zip_csv
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
     from pathlib import Path
 
     from policy_rate_monitor.config.models import (
@@ -49,6 +58,7 @@ __all__ = [
     "TransformSummary",
     "load_data_quality",
     "load_observations",
+    "load_release",
     "load_series",
     "transform",
 ]
@@ -70,23 +80,9 @@ and skipped."""
 _SERIES_LIST = TypeAdapter(list[SeriesMetadata])
 _ISSUE_LIST = TypeAdapter(list[DataQualityIssue])
 
-
-@dataclass(frozen=True)
-class TransformSummary:
-    """What one transform run produced: returned by ``transform``, and the same
-    counts are written to the log.
-
-    Attributes:
-        rows_read: Rows in the source CSV.
-        observations: Rows written to ``observations.parquet``.
-        series: Series written to ``series.json``.
-        issues: Findings written to ``data_quality.json``.
-    """
-
-    rows_read: int
-    observations: int
-    series: int
-    issues: int
+# ASCII only: [0-9], not \d, which also matches the digits of other scripts.
+_NUMBER = re.compile(r"[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?")
+_WHOLE_NUMBER = re.compile(r"[+-]?[0-9]+")
 
 
 def transform(config: DatasetConfig, data_dir: Path) -> TransformSummary:
@@ -101,12 +97,20 @@ def transform(config: DatasetConfig, data_dir: Path) -> TransformSummary:
 
     Raises:
         MissingInputError: The cached ZIP is absent.
-        UnexpectedFormatError: A required column is missing, or a series attribute
-            that must be a whole number is not.
+        UnexpectedFormatError: The ZIP is corrupt, its CSV cannot be parsed or
+            decoded or has no row of the configured selection, a required column is
+            missing, or a series row does not make valid series metadata.
+        OSError: A file cannot be written; the staged files of the previous run are
+            left as they were. Or a file cannot be renamed into place; the staged
+            files are removed.
     """
     zip_path = cached_zip(config.source, data_dir)
-    raw = _read_csv(zip_path, config.columns)
-    raw.to_parquet(zip_path.with_suffix(".parquet"), index=False)
+    if not zip_path.is_file():
+        msg = f"{zip_path} does not exist"
+        raise MissingInputError(msg, step="fetch")
+    content = zip_path.read_bytes()
+    release = _release_of(content, config, data_dir)
+    raw = _read_csv(content, zip_path, config.columns)
 
     rules = {rule.name: rule for rule in config.rules if rule.enabled}
     for name in rules:
@@ -116,15 +120,30 @@ def transform(config: DatasetConfig, data_dir: Path) -> TransformSummary:
     issues: list[DataQualityIssue] = []
     data = _rename_columns(raw, config, rules, issues)
     data = _select(data, config)
+    if data.empty:
+        selection = ", ".join(
+            f"{k} = {v}" for k, v in config.structure.selection.items()
+        )
+        msg = f"{zip_path} has no rows with {selection}"
+        raise UnexpectedFormatError(msg)
     keys = _series_keys(data, config)
     observations = _stage_observations(data, keys, config, rules, issues)
     series = _series_metadata(data, keys, observations, config)
 
     staged = data_dir / "staged"
-    staged.mkdir(parents=True, exist_ok=True)
-    observations.to_parquet(staged / "observations.parquet", index=False)
-    (staged / "series.json").write_bytes(_SERIES_LIST.dump_json(series, indent=2))
-    (staged / "data_quality.json").write_bytes(_ISSUE_LIST.dump_json(issues, indent=2))
+    files = {
+        zip_path.with_suffix(".parquet"): _parquet(raw),
+        staged / "observations.parquet": _parquet(observations),
+        staged / "series.json": _SERIES_LIST.dump_json(series, indent=2),
+        staged / "data_quality.json": _ISSUE_LIST.dump_json(issues, indent=2),
+    }
+    if release is None:
+        # Removed before the writes: staged files with no release record have an
+        # unknown provenance, never a wrong one.
+        (staged / "release.json").unlink(missing_ok=True)
+    else:
+        files[staged / "release.json"] = release.model_dump_json(indent=2).encode()
+    write_files(files)
 
     summary = TransformSummary(
         rows_read=len(raw),
@@ -152,10 +171,12 @@ def load_observations(data_dir: Path) -> DataFrame:
         The staged observations, values as Arrow decimals.
 
     Raises:
-        MissingInputError: The file is absent.
+        MissingInputError: The file is absent (``step`` is ``"transform"``).
     """
     path = _staged_file(data_dir, "observations.parquet")
-    return read_parquet(path, dtype_backend="pyarrow")
+    # Read once: read_parquet opens a path twice, and a rename in between would pair
+    # the footer of one file with the pages of another.
+    return read_parquet(io.BytesIO(path.read_bytes()), dtype_backend="pyarrow")
 
 
 def load_series(data_dir: Path) -> list[SeriesMetadata]:
@@ -168,7 +189,7 @@ def load_series(data_dir: Path) -> list[SeriesMetadata]:
         The metadata of every staged series.
 
     Raises:
-        MissingInputError: The file is absent.
+        MissingInputError: The file is absent (``step`` is ``"transform"``).
     """
     path = _staged_file(data_dir, "series.json")
     return _SERIES_LIST.validate_json(path.read_bytes())
@@ -184,18 +205,63 @@ def load_data_quality(data_dir: Path) -> list[DataQualityIssue]:
         The data-quality findings of the last transform run.
 
     Raises:
-        MissingInputError: The file is absent.
+        MissingInputError: The file is absent (``step`` is ``"transform"``).
     """
     path = _staged_file(data_dir, "data_quality.json")
     return _ISSUE_LIST.validate_json(path.read_bytes())
 
 
+def load_release(data_dir: Path) -> SourceRelease | None:
+    """Reads ``staged/release.json``: the release the staged data was built from.
+
+    Args:
+        data_dir: The data directory holding ``staged/``.
+
+    Returns:
+        The release; ``None`` when the file is absent or cannot be read.
+    """
+    path = data_dir / "staged" / "release.json"
+    if not path.is_file():
+        return None
+    try:
+        return SourceRelease.model_validate_json(path.read_text(encoding="utf-8"))
+    except (ValidationError, UnicodeDecodeError):
+        logger.warning("%s is unreadable; the source release is unknown", path)
+        return None
+
+
 def _staged_file(data_dir: Path, name: str) -> Path:
     path = data_dir / "staged" / name
     if not path.is_file():
-        msg = f"{path} does not exist: run `bis-prates transform` first"
-        raise MissingInputError(msg)
+        msg = f"{path} does not exist"
+        raise MissingInputError(msg, step="transform")
     return path
+
+
+def _parquet(frame: DataFrame) -> bytes:
+    buffer = io.BytesIO()
+    frame.to_parquet(buffer, index=False)
+    return buffer.getvalue()
+
+
+def _release_of(
+    content: bytes, config: DatasetConfig, data_dir: Path
+) -> SourceRelease | None:
+    """The release recorded next to the ZIP, if its checksum is that of *content*.
+
+    A ``fetch`` running at the same time may have replaced the record since the ZIP
+    was read; the checksum tells. A record with no checksum is not staged either.
+    """
+    release = read_release(config.source, data_dir)
+    if release is None:
+        logger.warning(
+            "no valid release record next to the ZIP; the release is unknown"
+        )
+        return None
+    if release.checksum_sha256 != hashlib.sha256(content).hexdigest():
+        logger.warning("the release record is not that of the ZIP read; not staged")
+        return None
+    return release
 
 
 # ──────────────────────────────────────────────────────────────────────────────────── #
@@ -203,25 +269,28 @@ def _staged_file(data_dir: Path, name: str) -> Path:
 # ──────────────────────────────────────────────────────────────────────────────────── #
 
 
-def _read_csv(zip_path: Path, columns: ColumnsSection) -> DataFrame:
-    if not zip_path.is_file():
-        msg = f"{zip_path} does not exist: run `bis-prates fetch` first"
-        raise MissingInputError(msg)
-    with zipfile.ZipFile(zip_path) as archive:
-        names = archive.namelist()
-        csv_names = [name for name in names if name.lower().endswith(".csv")]
-        if len(csv_names) != 1:
-            msg = f"{zip_path} should hold exactly one CSV file, found {len(csv_names)}"
-            raise UnexpectedFormatError(msg)
-        with archive.open(csv_names[0]) as csv_file:
-            return read_csv(
-                csv_file,
-                sep=columns.delimiter,
-                encoding=columns.encoding,
-                dtype=str,
-                keep_default_na=False,
-                engine="pyarrow",
-            )
+def _read_csv(content: bytes, zip_path: Path, columns: ColumnsSection) -> DataFrame:
+    # Read whole before parsing: a CRC error raised inside Arrow's reader threads
+    # could abort the process.
+    csv_content = read_zip_csv(content, str(zip_path))
+    try:
+        raw = read_csv(
+            io.BytesIO(csv_content),
+            sep=columns.delimiter,
+            encoding=columns.encoding,
+            dtype=str,
+            keep_default_na=False,
+            engine="pyarrow",
+        )
+    # A CSV that cannot be parsed raises the first two; one that is not in the
+    # configured encoding, UnicodeError.
+    except (ParserError, EmptyDataError, UnicodeError) as error:
+        msg = f"{zip_path} cannot be read: {error}"
+        raise UnexpectedFormatError(msg) from error
+    if raw.empty:
+        msg = f"{zip_path} holds no rows"
+        raise UnexpectedFormatError(msg)
+    return raw
 
 
 # ──────────────────────────────────────────────────────────────────────────────────── #
@@ -306,13 +375,16 @@ def _stage_observations(
     staged = DataFrame({"series_key": keys})
     for dimension in structure.dimensions:
         staged[dimension.column] = _code(data[dimension.id], columns)
+    times = data[structure.time_dimension.id]
+    # to_datetime also reads digits of other scripts; such a date is not in the format.
     dates = to_datetime(
-        data[structure.time_dimension.id],
+        times.where(times.str.isascii()),
         format=structure.time_dimension.date_format,
         errors="coerce",
     )
     staged["date"] = dates.astype("date32[pyarrow]")
-    staged["value"] = _values(data, config)
+    multipliers = _unit_multipliers(data, config)
+    staged["value"] = _values(data, multipliers, config)
     for attribute in structure.observation_attributes:
         if attribute.keep_as is not None and attribute.id in data.columns:
             attribute_values = data[attribute.id]
@@ -326,6 +398,7 @@ def _stage_observations(
 
     no_date = staged.date.isna()
     is_missing = data[measure.id].isin(["", *columns.missing_values])
+    no_multiplier = multipliers.isna()
     _add_issues(
         issues,
         rules.get("unparseable_date"),
@@ -335,9 +408,16 @@ def _stage_observations(
     _add_issues(
         issues,
         rules.get("non_numeric_value"),
-        keys[~is_missing & ~has_value],
+        keys[~is_missing & ~has_value & ~no_multiplier],
         f"values that are not numbers with at most {measure.scale} decimals and "
         f"{measure.precision} digits; kept as invalid with no value",
+    )
+    _add_issues(
+        issues,
+        rules.get("non_numeric_value"),
+        keys[~is_missing & no_multiplier],
+        f"observations whose {measure.unit_multiplier} is blank or not a whole "
+        "number; kept as invalid with no value",
     )
     _add_issues(
         issues,
@@ -345,11 +425,12 @@ def _stage_observations(
         keys[invalid_status & has_value],
         "observations with an invalid status but a value; kept as invalid",
     )
+    # A value that is there but not a number is non_numeric_value's finding alone.
     _add_issues(
         issues,
         rules.get("status_value_mismatch"),
-        keys[~invalid_status & ~has_value],
-        "observations with a valid status but no value; kept as invalid",
+        keys[~invalid_status & is_missing],
+        "observations with a valid status but a missing value; kept as invalid",
     )
     _check_expected_values(data, keys, config, rules.get("unexpected_value"), issues)
 
@@ -371,26 +452,31 @@ def _stage_observations(
     )
 
 
-def _values(data: DataFrame, config: DatasetConfig) -> Series:
+def _unit_multipliers(data: DataFrame, config: DatasetConfig) -> Series:
+    """The unit multiplier of each row as an int; None where it is blank or not a
+    whole number. 0 for every row when no multiplier is configured."""
+    concept_id = config.structure.measure.unit_multiplier
+    if concept_id is None:
+        return Series(0, index=data.index, dtype=object)
+    codes = _code(data[concept_id], config.columns)
+    numbers = {code: _whole_number(code) for code in codes.unique()}
+    # object, not int: pandas would turn the ints into floats next to a None.
+    return Series([numbers[code] for code in codes], index=data.index, dtype=object)
+
+
+def _values(data: DataFrame, multipliers: Series, config: DatasetConfig) -> Series:
     """Parses the measure into exact decimals times 10**unit multiplier.
 
-    A missing value, or one that is not a number fitting the configured precision
-    and scale, becomes null.
+    A missing value, one with no unit multiplier, or one that is not a number fitting
+    the configured precision and scale, becomes null.
 
     Plain numbers that surely fit (a sign, at most ``precision - scale`` digits, a
-    point and at most ``scale`` digits) with no unit multiplier are cast by Arrow
+    point and at most ``scale`` digits) with a unit multiplier of 0 are cast by Arrow
     in one go. Every other value goes through ``_to_decimal`` one by one, so the
-    result is the same as parsing every value with ``Decimal``.
+    result is the same as parsing every value with ``_to_decimal``.
     """
     measure = config.structure.measure
     text = data[measure.id]
-    if measure.unit_multiplier is None:
-        multipliers = Series(0, index=data.index)
-    else:
-        codes = _code(data[measure.unit_multiplier], config.columns)
-        unique = [str(code) for code in codes.unique()]
-        numbers = _whole_numbers(unique, measure.unit_multiplier)
-        multipliers = codes.map(dict(zip(unique, numbers, strict=True)))
 
     whole_digits = measure.precision - measure.scale
     # [0-9], not \d: \d also matches digits of other scripts, which Arrow rejects.
@@ -403,6 +489,7 @@ def _values(data: DataFrame, config: DatasetConfig) -> Series:
     values = text.where(fast).astype(value_type)
 
     slow = ~fast & ~text.isin(["", *config.columns.missing_values])
+    slow &= multipliers.notna()
     values[slow] = [
         _to_decimal(value, multiplier, measure.precision, measure.scale)
         for value, multiplier in zip(text[slow], multipliers[slow], strict=True)
@@ -440,32 +527,40 @@ def _drop_conflicting(
     return staged[~conflicting]
 
 
-def _whole_numbers(codes: Iterable[str], concept_id: str) -> list[int]:
-    numbers: list[int] = []
-    for code in codes:
-        try:
-            numbers.append(int(code))
-        except ValueError:
-            msg = f"{concept_id} should be a whole number, got {code!r}"
-            raise UnexpectedFormatError(msg) from None
-    return numbers
+def _whole_number(text: str) -> int | None:
+    """The whole number *text* spells in ASCII digits, spaces around it ignored, or
+    None ("", "1.5", "1_0", a non-breaking space)."""
+    text = text.strip(" ")
+    if not _WHOLE_NUMBER.fullmatch(text):
+        return None
+    return int(text)
 
 
 def _to_decimal(
     text: str, multiplier: int, precision: int, scale: int
 ) -> Decimal | None:
     """Returns the exact value times 10**multiplier, or None if it is not a number
-    that fits the configured precision and scale."""
+    that fits the configured precision and scale.
+
+    Only a plain ASCII number is read (a sign, digits, a point, an exponent; ASCII
+    spaces around it ignored): ``Decimal`` alone would also read "1_5", other scripts'
+    digits and "Infinity". Rounding is trapped, so a value with more digits than
+    ``Decimal`` keeps (28) is not a number rather than a rounded one.
+    """
+    text = text.strip(" ")
+    if not _NUMBER.fullmatch(text):
+        return None
     try:
-        value = Decimal(text).scaleb(multiplier)
+        with localcontext() as context:
+            context.traps[Inexact] = True
+            context.traps[Rounded] = True
+            value = Decimal(text).scaleb(multiplier)
         rounded = value.quantize(Decimal(1).scaleb(-scale))
-    except InvalidOperation:
+    except DecimalException:
         return None
-    if not value.is_finite() or rounded != value:
+    if rounded != value or len(rounded.as_tuple().digits) > precision:
         return None
-    if len(rounded.as_tuple().digits) > precision:
-        return None
-    return value
+    return rounded
 
 
 def _check_expected_values(
@@ -498,7 +593,7 @@ def _check_expected_values(
         _add_issues(
             issues,
             rule,
-            keys[values != str(code)],
+            keys[values != code],
             f"observations whose {concept_id} is not {code!r}",
         )
 
@@ -541,7 +636,11 @@ def _series_metadata(
     for series_key, record in zip(last_rows, records, strict=True):
         if series_key in kept:
             row = {str(name): str(value) for name, value in record.items()}
-            series.append(_one_series(series_key, row, config))
+            try:
+                series.append(_one_series(series_key, row, config))
+            except ValidationError as error:
+                msg = f"series {series_key} has invalid metadata: {error}"
+                raise UnexpectedFormatError(msg) from error
     return series
 
 
@@ -571,7 +670,7 @@ def _one_series(
         frequency=frequency,
         title=cell(bound.title) or series_key,
         unit=_unit(row, bound.unit, separator, coded=bound.unit in coded),
-        decimals=_decimals(cell(bound.decimals), bound.decimals),
+        decimals=_decimals(cell(bound.decimals), bound.decimals, series_key),
         attributes={
             key: value
             for key, value in values.items()
@@ -591,10 +690,21 @@ def _unit(
     return unit or None
 
 
-def _decimals(text: str, concept_id: str | None) -> int | None:
-    if not text:
+def _decimals(text: str, concept_id: str | None, series_key: str) -> int | None:
+    """The display precision, or None (with a warning) if it is not a whole number."""
+    if concept_id is None:
         return None
-    return _whole_numbers([text], concept_id or "")[0]
+    decimals = _whole_number(text)
+    if decimals is None or decimals < 0:
+        logger.warning(
+            "%s of series %s is %r, not a whole number of 0 or more; "
+            "its decimals are unknown",
+            concept_id,
+            series_key,
+            text,
+        )
+        return None
+    return decimals
 
 
 def _split(value: str, separator: str | None) -> tuple[str, str]:

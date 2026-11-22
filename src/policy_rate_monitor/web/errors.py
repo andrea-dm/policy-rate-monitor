@@ -86,7 +86,7 @@ def error_body(error: BaseException) -> ErrorBody:
     """Describes an error for a response or a job, without its traceback.
 
     An error not raised on purpose is a bug: its traceback is logged, and the body
-    names only its type.
+    names only its type. A missing input names the job that makes it.
 
     Args:
         error: The error.
@@ -95,8 +95,9 @@ def error_body(error: BaseException) -> ErrorBody:
         The kind and the message.
 
     Examples:
-        >>> error_body(MissingInputError("run transform first"))
-        ErrorBody(error='missing_input', message='run transform first')
+        >>> body = error_body(MissingInputError("no staged data", step="transform"))
+        >>> body.error, body.message
+        ('missing_input', 'no staged data: run POST /jobs/transform first')
     """
     if isinstance(error, ApiError):
         return error.body
@@ -104,7 +105,10 @@ def error_body(error: BaseException) -> ErrorBody:
     if found is None:
         logger.error("unexpected error, please report it", exc_info=error)
         return ErrorBody(error="internal_error", message=type(error).__name__)
-    return ErrorBody(error=found[0], message=str(error))
+    message = str(error)
+    if isinstance(error, MissingInputError) and error.step is not None:
+        message += f": run POST /jobs/{error.step} first"
+    return ErrorBody(error=found[0], message=message)
 
 
 def status_for(error: BaseException) -> HTTPStatus:
@@ -117,7 +121,7 @@ def status_for(error: BaseException) -> HTTPStatus:
         The status of an ``ApiError`` or of a typed error, else 500.
 
     Examples:
-        >>> status_for(MissingInputError("run transform first"))
+        >>> status_for(MissingInputError("no staged data", step="transform"))
         <HTTPStatus.CONFLICT: 409>
         >>> status_for(KeyError("x"))
         <HTTPStatus.INTERNAL_SERVER_ERROR: 500>

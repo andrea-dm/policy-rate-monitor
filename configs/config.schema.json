@@ -395,7 +395,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/JsonValue"
           },
-          "description": "The rule's parameters. Those of the built rules are checked on loading:\n``keep`` is ``first`` or ``last``, and the columns in ``expected`` are declared.",
+          "description": "The rule's parameters. Those of the built rules are checked on loading: keep is\nfirst or last, and expected maps columns of the configuration to codes.",
           "title": "Params",
           "type": "object"
         }

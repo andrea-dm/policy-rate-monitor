@@ -1,12 +1,12 @@
 """Domain models exchanged between the layers.
 
 ``fetch`` produces ``SourceRelease``; ``transform`` produces ``SeriesMetadata`` and
-``DataQualityIssue``; ``snapshot`` produces ``DataSnapshot``; providers serve them, and
-the report serialises them. All models are frozen pydantic models whose invariants are
-checked whenever they are built through the constructor or
-``model_validate``/``model_validate_json``. pydantic's ``model_copy(update=...)`` and
-``model_construct`` skip validation by design: derive a changed object with
-``Model.model_validate({**obj.model_dump(), "field": value})``.
+``DataQualityIssue`` and returns a ``TransformSummary``; ``snapshot`` produces
+``DataSnapshot``; providers serve them, and the report serialises them. All models
+are frozen pydantic models whose invariants are checked whenever they are built
+through the constructor or ``model_validate``/``model_validate_json``. pydantic's
+``model_copy(update=...)`` and ``model_construct`` skip validation by design: derive
+a changed object with ``Model.model_validate({**obj.model_dump(), "field": value})``.
 
 Rates are ``Decimal`` end to end. In JSON they are written as numbers, not as strings
 (pydantic's default for ``Decimal``), so ``summary.json`` and the API stay numeric. A
@@ -48,6 +48,7 @@ __all__ = [
     "SnapshotFlag",
     "SnapshotStatus",
     "SourceRelease",
+    "TransformSummary",
 ]
 
 BASIS_POINTS_PER_PERCENT = Decimal(100)
@@ -418,3 +419,20 @@ class SourceRelease(_FrozenModel):
     version_id: NonEmptyStr | None = None
     checksum_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
     retrieved_at: AwareDatetime
+
+
+class TransformSummary(_FrozenModel):
+    """What one transform run produced: returned by ``DataProvider.transform``, and
+    the same counts are written to the log.
+
+    Attributes:
+        rows_read: Rows in the source data.
+        observations: Observations staged.
+        series: Series staged.
+        issues: Data-quality findings staged.
+    """
+
+    rows_read: Annotated[int, Field(ge=0)]
+    observations: Annotated[int, Field(ge=0)]
+    series: Annotated[int, Field(ge=0)]
+    issues: Annotated[int, Field(ge=0)]

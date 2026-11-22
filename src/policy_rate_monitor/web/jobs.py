@@ -2,7 +2,7 @@
 
 The jobs write the same files, so a single worker thread runs them, and a new job is
 refused while one is queued or running. Jobs live in memory: they are lost when the
-service stops.
+service stops, and only the last ``KEEP_FINISHED`` finished jobs are kept.
 
 See also: [HTTP API](api.md#jobs) and [decision
 0014](adr/0014-http-api.md).
@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from enum import StrEnum
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from uuid import uuid4
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict
@@ -25,7 +25,10 @@ from policy_rate_monitor.web.errors import ApiError, ErrorBody, error_body
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-__all__ = ["Job", "JobRunner", "JobStatus"]
+__all__ = ["KEEP_FINISHED", "Job", "JobRunner", "JobStatus"]
+
+KEEP_FINISHED: Final = 100
+"""How many finished jobs the runner remembers; the oldest are forgotten first."""
 
 
 class JobStatus(StrEnum):
@@ -124,7 +127,8 @@ class JobRunner:
             job_id: The job's id.
 
         Returns:
-            The job, or ``None`` if there is no job with that id.
+            The job, or ``None`` if there is no job with that id, or it is one of
+            the finished jobs no longer kept.
         """
         with self._changed:
             return self._jobs.get(job_id)
@@ -160,20 +164,34 @@ class JobRunner:
         self._update(job_id, status=JobStatus.RUNNING, started_at=_now())
         try:
             result = work()
-        except Exception as error:  # a failed job is a result, not a crash # noqa: BLE001
-            self._update(
-                job_id,
-                status=JobStatus.FAILED,
-                finished_at=_now(),
-                error=error_body(error),
-            )
-        else:
             self._update(
                 job_id, status=JobStatus.SUCCEEDED, finished_at=_now(), result=result
+            )
+        # A failed job is a result, not a crash. Whatever stops the work or the record
+        # of its result, KeyboardInterrupt included, ends the job, or every later job
+        # would be refused. Raising it again would stop nothing: the executor keeps it
+        # on a future nobody reads.
+        except BaseException as error:  # noqa: BLE001  (see above)
+            self._update(
+                job_id, status=JobStatus.FAILED, finished_at=_now(), error=_body(error)
             )
 
     def _update(self, job_id: str, **changes: object) -> None:
         with self._changed:
             job = self._jobs[job_id]
             self._jobs[job_id] = Job.model_validate({**job.model_dump(), **changes})
+            # The jobs are in the order they were created; one runs at a time.
+            finished = [
+                key for key, item in self._jobs.items() if item.status not in _ACTIVE
+            ]
+            for key in finished[:-KEEP_FINISHED]:
+                del self._jobs[key]
             self._changed.notify_all()
+
+
+def _body(error: BaseException) -> ErrorBody:
+    """``error_body``, or the type alone for an error whose text cannot be read."""
+    try:
+        return error_body(error)
+    except BaseException:  # noqa: BLE001  (the job must still be marked failed)
+        return ErrorBody(error="internal_error", message=type(error).__name__)

@@ -177,8 +177,20 @@ def test_models_are_frozen() -> None:
                 " a column of the configuration; did you mean 'TTL'?"
             ),
         ),
+        (
+            {
+                "name": "unexpected_value",
+                "severity": "warning",
+                "params": {"expected": {"TTL": ["A", "B"]}},
+            },
+            (
+                'rules[0] ("unexpected_value").params.expected.TTL: rule'
+                " 'unexpected_value' needs params.expected.TTL to be a text, not"
+                ' ["A", "B"]'
+            ),
+        ),
     ],
-    ids=["keep", "expected_missing", "expected_unknown_id"],
+    ids=["keep", "expected_missing", "expected_unknown_id", "expected_not_a_code"],
 )
 def test_rule_parameters_are_checked_even_when_the_rule_is_off(
     rule: dict[str, Any], expected: str

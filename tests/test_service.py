@@ -142,3 +142,9 @@ def test_summaries_computed_at_once_from_the_same_data_agree(
         results = list(pool.map(one, range(64)))
 
     assert all(result == expected for result in results)
+
+
+def test_the_staged_series_and_findings_are_tuples(data: StagedData) -> None:
+    # Shared across the API's threads, so nothing can be appended to them.
+    assert isinstance(data.series, tuple)
+    assert isinstance(data.issues, tuple)

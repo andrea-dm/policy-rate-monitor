@@ -15,7 +15,11 @@ from pyarrow import Table
 
 from policy_rate_monitor.config import DatasetConfig, FileConfigSource
 from policy_rate_monitor.core.errors import MissingInputError
-from policy_rate_monitor.core.models import SeriesMetadata, SourceRelease
+from policy_rate_monitor.core.models import (
+    SeriesMetadata,
+    SourceRelease,
+    TransformSummary,
+)
 from policy_rate_monitor.providers import InMemoryProvider
 from policy_rate_monitor.web import create_app
 
@@ -92,14 +96,15 @@ class StagedLater(InMemoryProvider):
         self.staged = False
 
     @override
-    def transform(self) -> None:
+    def transform(self) -> TransformSummary:
         self.staged = True
+        return super().transform()
 
     @override
     def observations(self, series_keys: Sequence[str] | None = None) -> Table:
         if not self.staged:
-            msg = "data/staged/observations.parquet does not exist: run transform first"
-            raise MissingInputError(msg)
+            msg = "data/staged/observations.parquet does not exist"
+            raise MissingInputError(msg, step="transform")
         return super().observations(series_keys)
 
 
@@ -127,10 +132,10 @@ class SlowTransform(StagedLater):
         self.started = threading.Event()
 
     @override
-    def transform(self) -> None:
+    def transform(self) -> TransformSummary:
         self.started.set()
         self.release.wait(timeout=10)
-        super().transform()
+        return super().transform()
 
 
 class Growing(InMemoryProvider):
@@ -141,8 +146,9 @@ class Growing(InMemoryProvider):
         self.transformed = False
 
     @override
-    def transform(self) -> None:
+    def transform(self) -> TransformSummary:
         self.transformed = True
+        return super().transform()
 
     @override
     def list_series(self) -> list[str]:

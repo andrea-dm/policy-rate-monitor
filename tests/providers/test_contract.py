@@ -22,6 +22,7 @@ if TYPE_CHECKING:
         DataQualityIssue,
         SeriesMetadata,
         SourceRelease,
+        TransformSummary,
     )
 
 pytestmark = pytest.mark.unit
@@ -93,7 +94,7 @@ def test_a_provider_missing_a_method_cannot_be_created() -> None:
             raise NotImplementedError
 
         @override
-        def transform(self) -> None:
+        def transform(self) -> TransformSummary:
             raise NotImplementedError
 
         @override
